@@ -1,0 +1,28 @@
+package build
+import mill.*
+import mill.scalalib.*
+
+object core extends ScalaModule:
+  def scalaVersion = "3.7.4"
+  def mvnDeps = Seq(
+    mvn"io.circe::circe-core:0.14.10",
+    mvn"io.circe::circe-generic:0.14.10",
+    mvn"io.circe::circe-parser:0.14.10"
+  )
+  object test extends ScalaTests with TestModule.Munit:
+    def mvnDeps = Seq(mvn"org.scalameta::munit:1.0.0")
+
+object exporters extends ScalaModule:
+  def scalaVersion = "3.7.4"
+  def moduleDeps = Seq(core)
+  object test extends ScalaTests with TestModule.Munit:
+    def mvnDeps = Seq(mvn"org.scalameta::munit:1.0.0")
+
+object web extends ScalaModule:
+  def scalaVersion = "3.7.4"
+  def moduleDeps = Seq(core, exporters)
+  def mvnDeps = Seq(
+    mvn"com.lihaoyi::cask:0.10.2",
+    mvn"com.lihaoyi::scalatags:0.13.1"
+  )
+  def mainClass = Some("ics205.web.Main")
