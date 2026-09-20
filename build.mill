@@ -22,7 +22,13 @@ object web extends ScalaModule:
   def scalaVersion = "3.7.4"
   def moduleDeps = Seq(core, exporters)
   def mvnDeps = Seq(
-    mvn"com.lihaoyi::cask:0.10.2",
+    mvn"com.softwaremill.sttp.tapir::tapir-http4s-server:1.11.44",
+    mvn"org.http4s::http4s-ember-server:0.23.30",
+    mvn"com.typesafe.scala-logging::scala-logging:3.9.5",
+    mvn"org.apache.logging.log4j:log4j-slf4j2-impl:2.25.3",
+    mvn"org.apache.logging.log4j:log4j-core:2.25.3",
+    mvn"com.fasterxml.jackson.core:jackson-databind:2.20.1",
+    mvn"com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.20.1",
     mvn"com.lihaoyi::scalatags:0.13.1"
   )
   def mainClass = Some("ics205.web.Main")

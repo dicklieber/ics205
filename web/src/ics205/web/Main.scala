@@ -1,25 +1,40 @@
 package ics205.web
 
+import cats.effect.{IO, IOApp}
+import com.comcast.ip4s.*
+import com.typesafe.scalalogging.LazyLogging
+import org.http4s.ember.server.EmberServerBuilder
 import scalatags.Text.all.*
+import sttp.tapir.*
+import sttp.tapir.server.http4s.Http4sServerInterpreter
 
-object Main extends cask.MainRoutes:
+object Main extends IOApp.Simple with LazyLogging:
 
-  @cask.get("/")
-  def index() =
-    cask.Response(
+  def index(): String =
     doctype("html")(
       html(
         head(
           meta(charset := "utf-8"),
           scalatags.Text.tags2.title("ICS-205")
         ),
-          body(
-            h1("ICS-205"),
-            p("Incident Radio Communications Plan")
-          )
+        body(
+          h1("ICS-205"),
+          p("Incident Radio Communications Plan")
+        )
       )
-      ).render,
-      headers = Seq("Content-Type" -> "text/html; charset=utf-8")
-    )
+    ).render
 
-  initialize()
+  private val indexEndpoint = endpoint.get
+    .in("")
+    .out(htmlBodyUtf8)
+    .serverLogicSuccess[IO](_ => IO(index()))
+
+  def run: IO[Unit] =
+    EmberServerBuilder.default[IO]
+      .withHost(host"localhost")
+      .withPort(port"8080")
+      .withHttpApp(Http4sServerInterpreter[IO]().toRoutes(indexEndpoint).orNotFound)
+      .build
+      .use(server =>
+        IO(logger.info(s"ICS-205 listening at ${server.baseUri}")) *> IO.never
+      )

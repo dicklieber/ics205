@@ -7,7 +7,7 @@ plans and exporting radio-programming data.
 
 - `core` — domain model and amateur band-plan logic
 - `exporters` — radio-programmer exporters
-- `web` — Cask/Scalatags thin-client UI
+- `web` — Tapir/http4s server with a Scalatags thin-client UI
 
 ## Build
 
@@ -18,3 +18,5 @@ plans and exporting radio-programming data.
 ## Run
 
     mill web.run
+
+Open http://localhost:8080.
