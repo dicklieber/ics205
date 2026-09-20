@@ -7,6 +7,7 @@ import mill.scalalib.*
 object core extends ScalaModule:
   def scalaVersion = "3.7.4"
   def mvnDeps = Seq(
+    mvn"jakarta.inject:jakarta.inject-api:2.0.1",
     mvn"io.circe::circe-core:0.14.10",
     mvn"io.circe::circe-generic:0.14.10",
     mvn"io.circe::circe-parser:0.14.10"
@@ -34,6 +35,9 @@ object web extends ScalaModule with BuildInfo:
   }
   def moduleDeps = Seq(core, exporters)
   def mvnDeps = Seq(
+    mvn"net.codingwell::scala-guice:7.0.0",
+    mvn"com.google.inject:guice:7.0.0",
+    mvn"com.google.inject.extensions:guice-assistedinject:7.0.0",
     mvn"com.softwaremill.sttp.tapir::tapir-http4s-server:1.11.44",
     mvn"org.http4s::http4s-ember-server:0.23.30",
     mvn"com.typesafe.scala-logging::scala-logging:3.9.5",
@@ -44,3 +48,5 @@ object web extends ScalaModule with BuildInfo:
     mvn"com.lihaoyi::scalatags:0.13.1"
   )
   def mainClass = Some("ics205.web.Main")
+  object test extends ScalaTests with TestModule.Munit:
+    def mvnDeps = Seq(mvn"org.scalameta::munit:1.0.0")

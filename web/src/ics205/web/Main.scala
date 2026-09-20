@@ -2,13 +2,22 @@ package ics205.web
 
 import cats.effect.{IO, IOApp}
 import com.comcast.ip4s.*
+import com.google.inject.Guice
 import com.typesafe.scalalogging.LazyLogging
+import ics205.Ics205Store
+import jakarta.inject.Inject
 import org.http4s.ember.server.EmberServerBuilder
 import scalatags.Text.all.*
 import sttp.tapir.*
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 
-object Main extends IOApp.Simple with LazyLogging:
+object Main extends IOApp.Simple:
+  def run: IO[Unit] =
+    IO(Guice.createInjector(new ApplicationModule))
+      .flatMap(injector => IO(injector.getInstance(classOf[WebApplication])))
+      .flatMap(_.run)
+
+class WebApplication @Inject() (val store: Ics205Store) extends LazyLogging:
 
   def index(): String =
     doctype("html")(

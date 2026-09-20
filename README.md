@@ -14,6 +14,7 @@ plans and exporting radio-programming data.
     mill core.test
     mill exporters.test
     mill web.compile
+    mill web.test
 
 The web module generates `ics205.web.BuildInfo` with `name`, `version`,
 `scalaVersion`, and `millVersion` fields. The application version is read from
@@ -25,3 +26,8 @@ These build details are logged when the server starts.
     mill web.run
 
 Open http://localhost:8080.
+
+`Main` creates a Guice injector using `ApplicationModule` and starts the injected
+`WebApplication`. Add application bindings in `ApplicationModule` and use
+`jakarta.inject.Inject` on constructors. `Ics205Store` is annotated with
+`jakarta.inject.Singleton`, so consumers in the same injector share one store.
