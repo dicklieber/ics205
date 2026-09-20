@@ -1,7 +1,7 @@
 package ics205.web
 
 import cats.effect.IO
-import ics205.Ics205Store
+import ics205.store.Ics205Store
 import jakarta.inject.{Inject, Singleton}
 import scalatags.Text.all.*
 import sttp.tapir.*

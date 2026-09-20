@@ -1,6 +1,7 @@
 package ics205.model
 
 import java.time.LocalDateTime
+import io.circe.Codec
 
 case class Ics205(
     formatVersion: String = "1.0",
@@ -10,10 +11,10 @@ case class Ics205(
     specialInstructions: Option[String] = None,
     preparedBy: Option[PreparedBy] = None,
     prepared: Option[LocalDateTime] = None
-)
+) derives Codec.AsObject
 
-case class OperationalPeriod(from: LocalDateTime, to: LocalDateTime)
-case class PreparedBy(name: String, callsign: Option[String] = None)
+case class OperationalPeriod(from: LocalDateTime, to: LocalDateTime) derives Codec.AsObject
+case class PreparedBy(name: String, callsign: Option[String] = None) derives Codec.AsObject
 
 case class Ics205Channel(
     id: String,
@@ -29,4 +30,4 @@ case class Ics205Channel(
     receiveSignaling: Option[Signaling] = None,
     digital: Option[DigitalParameters] = None,
     remarks: Option[String] = None
-)
+) derives Codec.AsObject

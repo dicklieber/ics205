@@ -16,7 +16,7 @@ plans and exporting radio-programming data.
     mill web.compile
     mill web.test
 
-The web module generates `ics205.web.BuildInfo` with `name`, `version`,
+The core module generates `ics205.BuildInfo` with `name`, `appName`, `productName`, `version`,
 `scalaVersion`, and `millVersion` fields. The application version is read from
 `version.txt`; changes to that file automatically refresh the build info.
 These build details are logged when the server starts.
@@ -42,3 +42,9 @@ is needed. Add other package roots to `packagesOnly` in `ApplicationModule` if n
 `IndexEndpoints` serves `/`. `MetricsEndpoints` serves `/metrics` in Prometheus
 text format using Dropwizard's shared `default` registry and the `ics205_` prefix.
 Register application or JVM metrics in that registry to expose them.
+`core` owns the Dropwizard dependencies, registry access, timers, and Prometheus
+rendering in `ics205.metrics`. The web module handles HTTP timing boundaries and
+serves the rendered metrics using `ApplicationMetrics.default`.
+The `http.transactions` timer measures request handling through response-body
+completion, including failed or canceled requests and unmatched routes. It is
+exported under `ics205_http_transactions` with durations in seconds.

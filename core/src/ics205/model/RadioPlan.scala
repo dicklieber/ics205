@@ -1,20 +1,22 @@
 package ics205.model
 
-enum RadioMode:
+import io.circe.Codec
+
+enum RadioMode derives Codec.AsObject:
   case Fm
   case Am
   case Digital
 
-enum Bandwidth:
+enum Bandwidth derives Codec.AsObject:
   case Narrow
   case Wide
 
-enum Signaling:
+enum Signaling derives Codec.AsObject:
   case Ctcss(hz: BigDecimal)
   case Dcs(code: Int)
   case Nac(code: String)
 
-enum DigitalParameters:
+enum DigitalParameters derives Codec.AsObject:
   case Dmr(colorCode: Int, timeSlot: Int, talkGroup: Int)
   case DStar(
       urCall: Option[String] = None,

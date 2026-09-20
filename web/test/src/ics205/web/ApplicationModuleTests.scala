@@ -1,9 +1,9 @@
 package ics205.web
 
 import com.google.inject.Guice
-import ics205.Ics205Store
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import ics205.store.Ics205Store
 import jakarta.inject.Inject
 import org.http4s.{Method, Request, Status, Uri}
 import sttp.tapir.*

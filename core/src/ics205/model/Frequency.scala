@@ -1,6 +1,8 @@
 package ics205.model
 
-case class Frequency(mhz: BigDecimal):
+import io.circe.Codec
+
+case class Frequency(mhz: BigDecimal) derives Codec.AsObject:
   def +(other: Frequency): Frequency = Frequency(mhz + other.mhz)
   def -(other: Frequency): Frequency = Frequency(mhz - other.mhz)
   override def toString: String = mhz.toString

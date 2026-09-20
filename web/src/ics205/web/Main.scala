@@ -4,6 +4,8 @@ import cats.effect.{IO, IOApp}
 import com.comcast.ip4s.*
 import com.google.inject.Guice
 import com.typesafe.scalalogging.LazyLogging
+import ics205.BuildInfo
+import ics205.metrics.ApplicationMetrics
 import jakarta.inject.Inject
 import org.http4s.ember.server.EmberServerBuilder
 import sttp.tapir.server.http4s.Http4sServerInterpreter
@@ -25,7 +27,10 @@ class WebApplication @Inject() (endpointsSet: java.util.Set[ApiEndpoints]) exten
         logger.debug(s"Adding endpoints from ${group.getClass.getName}")
         group.endpoints
       }
-    Http4sServerInterpreter[IO]().toRoutes(allEndpoints).orNotFound
+    HttpTransactionMetrics(
+      Http4sServerInterpreter[IO]().toRoutes(allEndpoints).orNotFound,
+      ApplicationMetrics.default
+    )
 
   def run: IO[Unit] =
     EmberServerBuilder.default[IO]
