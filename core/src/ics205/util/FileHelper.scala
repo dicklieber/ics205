@@ -1,17 +1,17 @@
 /*
  * Copyright (c) 2026. Dick Lieber, WA9NNN
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
+ * This program is free software: you can redistribute it and/or modify 
+ * it under the terms of the GNU General Public License as published by 
+ * the Free Software Foundation, either version 3 of the License, or    
+ * (at your option) any later version.                                  
+ *                                                                      
+ * This program is distributed in the hope that it will be useful,      
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of       
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the        
+ * GNU General Public License for more details.                         
+ *                                                                      
+ * You should have received a copy of the GNU General Public License    
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
@@ -60,6 +60,7 @@ class FileHelper extends LazyLogging:
     sys.env.get("PORT").filter(_.nonEmpty) match
       case Some(port) => base / port
       case None       => base
+  logger.info(s"Data directory: $directory")
 
   def loadOrDefault[T: Decoder](fileName: String)(default: => T): T =
 
@@ -84,7 +85,7 @@ class FileHelper extends LazyLogging:
 
   def save[T: Encoder](fileName: String, value: T): Unit =
     val path = directory / fileName
-    val json = value.asJson.printWith(Printer.indented("  "))
+    val json = value.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true))
     os.write.over(path, json, createFolders = true)
 
   def remove(fileName: String): Unit =
