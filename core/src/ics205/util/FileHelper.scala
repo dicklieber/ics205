@@ -16,7 +16,7 @@
  *
  */
 
-package ics205.io
+package ics205.util
 
 import com.typesafe.scalalogging.LazyLogging
 import ics205.BuildInfo

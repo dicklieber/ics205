@@ -1,6 +1,6 @@
 package ics205.store
 
-import ics205.io.FileHelper
+import ics205.util.FileHelper
 import ics205.model.{Ics205, OperationalPeriod}
 
 import java.time.LocalDateTime
