@@ -55,17 +55,17 @@ enum Scan:
 case class RadioPlan(name: String, memories: Seq[RadioMemory])
 
 case class RadioMemory(
-    sourceChannelId: String,
-    channelName: String,
-    assignment: String,
-    preferredName: Option[String] = None,
-    frequency: TxOffsetDir,
-    mode: RadioMode = RadioMode.Fm,
-    bandwidth: Option[Bandwidth] = None,
-    transmitSignaling: Option[Signaling] = None,
-    receiveSignaling: Option[Signaling] = None,
-    digital: Option[DigitalParameters] = None,
-    power: Option[Power] = None,
-    scan: Scan = Scan.Include,
-    comment: Option[String] = None
+                        sourceChannelId: String,
+                        channelName: String,
+                        assignment: String,
+                        preferredName: Option[String] = None,
+                        frequency: RxWithOffset,
+                        mode: RadioMode = RadioMode.Fm,
+                        bandwidth: Option[Bandwidth] = None,
+                        transmitSignaling: Option[Signaling] = None,
+                        receiveSignaling: Option[Signaling] = None,
+                        digital: Option[DigitalParameters] = None,
+                        power: Option[Power] = None,
+                        scan: Scan = Scan.Include,
+                        comment: Option[String] = None
 )

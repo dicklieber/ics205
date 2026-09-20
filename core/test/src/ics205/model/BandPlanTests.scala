@@ -18,16 +18,28 @@
 
 package ics205.model
 
-class BandPlanTests extends munit.FunSuite:
-  test("plus offset"):
-    val f = TxOffsetDir(Frequency(BigDecimal("442.725")), Frequency(BigDecimal("5.000")), Direction.Plus)
-    assertEquals(f.rx, Frequency(BigDecimal("442.725")))
-    assertEquals(f.tx, Frequency(BigDecimal("447.725")))
+class RxWithOffsetTests extends munit.FunSuite:
+  test("RxWithOffset adds a positive offset to the receive frequency"):
+    val f = RxWithOffset(mhz"442.725", mhz"5.000")
+    assertEquals(f.rx, mhz"442.725")
+    assertEquals(f.tx, mhz"447.725")
+    assert(!f.isSimplex)
 
-  test("minus offset"):
-    val f = TxOffsetDir(Frequency(BigDecimal("147.750")), Frequency(BigDecimal("0.600")), Direction.Minus)
-    assertEquals(f.tx, Frequency(BigDecimal("147.150")))
+  test("RxWithOffset lowers the transmit frequency for a negative offset"):
+    val f = RxWithOffset(mhz"147.750", mhz"-0.600")
+    assertEquals(f.rx, mhz"147.750")
+    assertEquals(f.tx, mhz"147.150")
+    assert(!f.isSimplex)
 
-  test("simplex"):
-    val f = TxOffsetDir(Frequency(BigDecimal("441.050")), Frequency(BigDecimal("5.000")), Direction.Simplex)
+  test("RxWithOffset defaults to simplex when the offset is omitted"):
+    val f = RxWithOffset(mhz"146.520")
+    assertEquals(f.offset, mhz"0")
+    assertEquals(f.rx, mhz"146.520")
     assertEquals(f.rx, f.tx)
+    assert(f.isSimplex)
+
+  test("RxWithOffset treats an explicit decimal zero offset as simplex"):
+    val f = RxWithOffset(mhz"441.050", mhz"0.000")
+    assertEquals(f.rx, mhz"441.050")
+    assertEquals(f.tx, mhz"441.050")
+    assert(f.isSimplex)

@@ -41,7 +41,7 @@ class Ics205StoreTests extends munit.FunSuite:
       function = "Dispatch",
       name = "Repeater",
       assignment = "All teams",
-      frequency = Frequency(BigDecimal("146.520")),
+      frequency = RxWithOffset(mhz"146.520"),
       mode = RadioMode.Digital,
       bandwidth = Some(Bandwidth.Narrow),
       transmitSignaling = Some(Signaling.Ctcss(BigDecimal("100.0"))),
@@ -80,10 +80,7 @@ class Ics205StoreTests extends munit.FunSuite:
       val sparse = plan.copy(
         operationalPeriod = OperationalPeriod(),
         preparedBy = None,
-        channels = Seq(plan.channels.head.copy(
-          remarks = None,
-          digital = Some(DigitalParameters.P25())
-        ))
+        channels = Seq(plan.channels.head.copy(digital = Some(DigitalParameters.P25()), remarks = None))
       )
       store.save(sparse)
       val json = io.circe.parser.parse(os.read(directory / "ics205.json")).toOption.get
