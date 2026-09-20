@@ -1,3 +1,5 @@
+package ics205.web
+
 /*
  * Copyright (c) 2026. Dick Lieber, WA9NNN
  *

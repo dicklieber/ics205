@@ -4,12 +4,11 @@ import cats.effect.{IO, IOApp}
 import com.comcast.ip4s.*
 import com.google.inject.Guice
 import com.typesafe.scalalogging.LazyLogging
-import ics205.Ics205Store
 import jakarta.inject.Inject
 import org.http4s.ember.server.EmberServerBuilder
-import scalatags.Text.all.*
-import sttp.tapir.*
 import sttp.tapir.server.http4s.Http4sServerInterpreter
+
+import scala.jdk.CollectionConverters.*
 
 object Main extends IOApp.Simple:
   def run: IO[Unit] =
@@ -17,32 +16,22 @@ object Main extends IOApp.Simple:
       .flatMap(injector => IO(injector.getInstance(classOf[WebApplication])))
       .flatMap(_.run)
 
-class WebApplication @Inject() (val store: Ics205Store) extends LazyLogging:
+class WebApplication @Inject() (endpointsSet: java.util.Set[ApiEndpoints]) extends LazyLogging:
 
-  def index(): String =
-    doctype("html")(
-      html(
-        head(
-          meta(charset := "utf-8"),
-          scalatags.Text.tags2.title("ICS-205")
-        ),
-        body(
-          h1("ICS-205"),
-          p("Incident Radio Communications Plan")
-        )
-      )
-    ).render
-
-  private val indexEndpoint = endpoint.get
-    .in("")
-    .out(htmlBodyUtf8)
-    .serverLogicSuccess[IO](_ => IO(index()))
+  val httpApp: org.http4s.HttpApp[IO] =
+    val allEndpoints = endpointsSet.asScala.toList
+      .sortBy(_.getClass.getName)
+      .flatMap { group =>
+        logger.debug(s"Adding endpoints from ${group.getClass.getName}")
+        group.endpoints
+      }
+    Http4sServerInterpreter[IO]().toRoutes(allEndpoints).orNotFound
 
   def run: IO[Unit] =
     EmberServerBuilder.default[IO]
       .withHost(host"localhost")
       .withPort(port"8080")
-      .withHttpApp(Http4sServerInterpreter[IO]().toRoutes(indexEndpoint).orNotFound)
+      .withHttpApp(httpApp)
       .build
       .use(server =>
         IO(logger.info(
