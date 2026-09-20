@@ -1,0 +1,13 @@
+Configuration:
+  name: ICS205
+  Appenders:
+    Console:
+      name: Console
+      target: SYSTEM_OUT
+      PatternLayout:
+        pattern: "%style{%d{HH:mm:ss.SSS}}{dim} %style{[%t]}{magenta} %highlight{%-5level} %style{%logger{36}}{cyan} - %msg%n"
+  Loggers:
+    Root:
+      level: info
+      AppenderRef:
+        ref: Console

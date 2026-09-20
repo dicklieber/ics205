@@ -1,5 +1,7 @@
+//| mvnDeps: ["com.lihaoyi::mill-contrib-buildinfo:$MILL_VERSION"]
 package build
 import mill.*
+import mill.contrib.buildinfo.BuildInfo
 import mill.scalalib.*
 
 object core extends ScalaModule:
@@ -18,8 +20,18 @@ object exporters extends ScalaModule:
   object test extends ScalaTests with TestModule.Munit:
     def mvnDeps = Seq(mvn"org.scalameta::munit:1.0.0")
 
-object web extends ScalaModule:
+object web extends ScalaModule with BuildInfo:
   def scalaVersion = "3.7.4"
+  def versionFile = Task.Source(moduleDir / os.up / "version.txt")
+  def buildInfoPackageName = "ics205.web"
+  def buildInfoMembers = Task {
+    Seq(
+      BuildInfo.Value("name", "ICS-205"),
+      BuildInfo.Value("version", os.read(versionFile().path).trim),
+      BuildInfo.Value("scalaVersion", scalaVersion()),
+      BuildInfo.Value("millVersion", mill.constants.BuildInfo.millVersion)
+    )
+  }
   def moduleDeps = Seq(core, exporters)
   def mvnDeps = Seq(
     mvn"com.softwaremill.sttp.tapir::tapir-http4s-server:1.11.44",

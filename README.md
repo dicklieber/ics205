@@ -15,6 +15,11 @@ plans and exporting radio-programming data.
     mill exporters.test
     mill web.compile
 
+The web module generates `ics205.web.BuildInfo` with `name`, `version`,
+`scalaVersion`, and `millVersion` fields. The application version is read from
+`version.txt`; changes to that file automatically refresh the build info.
+These build details are logged when the server starts.
+
 ## Run
 
     mill web.run

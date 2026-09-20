@@ -36,5 +36,8 @@ object Main extends IOApp.Simple with LazyLogging:
       .withHttpApp(Http4sServerInterpreter[IO]().toRoutes(indexEndpoint).orNotFound)
       .build
       .use(server =>
-        IO(logger.info(s"ICS-205 listening at ${server.baseUri}")) *> IO.never
+        IO(logger.info(
+          s"${BuildInfo.name} ${BuildInfo.version} listening at ${server.baseUri} " +
+            s"(Scala ${BuildInfo.scalaVersion}, Mill ${BuildInfo.millVersion})"
+        )) *> IO.never
       )
