@@ -27,6 +27,14 @@ These build details are logged when the server starts.
 
 Open http://localhost:8080.
 
+The index renders the stored plan using `Ics205Page.render(plan: Ics205)` and
+Scalatags, following the first page of the reference PDF. Print in landscape
+on US Letter paper; plans continue in groups of eight channels.
+RX frequency and signed offset are in MHz, with bandwidth in a separate column.
+RX and TX signaling use explicit labels (`CTCSS 100 Hz`, `DCS 023`, `NAC 293`);
+unspecified values remain blank. Digital parameters appear in Remarks, and the
+preparer's callsign appears beside their name. Signature remains blank for signing.
+
 `Main` creates a Guice injector using `ApplicationModule` and starts the injected
 `WebApplication`. Add application bindings in `ApplicationModule` and use
 `jakarta.inject.Inject` on constructors. `Ics205Store` is annotated with

@@ -1,0 +1,195 @@
+/*
+ * Copyright (c) 2026. Dick Lieber, WA9NNN
+ *
+ * This program is free software: you can redistribute it and/or modify 
+ * it under the terms of the GNU General Public License as published by 
+ * the Free Software Foundation, either version 3 of the License, or    
+ * (at your option) any later version.                                  
+ *                                                                      
+ * This program is distributed in the hope that it will be useful,      
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of       
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the        
+ * GNU General Public License for more details.                         
+ *                                                                      
+ * You should have received a copy of the GNU General Public License    
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+package ics205.web
+
+import ics205.model.*
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import scalatags.Text.all.*
+
+/** Printable adaptation of the first page of the ICS 205 form. */
+object Ics205Page:
+  private val dateFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy")
+  private val timeFormat = DateTimeFormatter.ofPattern("HH:mm")
+  private val rowsPerPage = 8
+  private val columns = Seq(
+    "Zone / Grp.", "Ch #", "Function", "Channel Name / Trunked Radio System Talkgroup",
+    "Assignment", "RX Freq (MHz)", "Offset (MHz)", "Bandwidth",
+    "RX Signaling", "TX Signaling", "Mode", "Remarks"
+  )
+
+  def render(plan: Ics205): String =
+    val pages = if plan.channels.isEmpty then Seq(Seq.empty[Ics205Channel])
+                else plan.channels.grouped(rowsPerPage).toSeq
+    doctype("html")(
+      html(lang := "en")(
+        head(
+          meta(charset := "utf-8"),
+          meta(name := "viewport", content := "width=device-width, initial-scale=1"),
+          scalatags.Text.tags2.title(s"ICS 205 — ${plan.incidentName}"),
+          scalatags.Text.tags2.style(raw(css))
+        ),
+        body(pages.zipWithIndex.map { case (channels, index) =>
+          formPage(plan, channels, index + 1)
+        })
+      )
+    ).render
+
+  private def formPage(plan: Ics205, channels: Seq[Ics205Channel], pageNumber: Int): Frag =
+    val preparedBy = plan.preparedBy.map(p =>
+      (Seq(p.name) ++ p.callsign.toSeq).filter(_.nonEmpty).mkString(" / ")
+    ).getOrElse("")
+    div(cls := "sheet")(
+      h1("Incident Radio Communications Plan (ICS 205)"),
+      div(cls := "form")(
+        div(cls := "metadata")(
+          div(cls := "field")(
+            strong("1. Incident Name:"),
+            div(cls := "value incident-name")(plan.incidentName)
+          ),
+          div(cls := "field")(
+            strong("2. Date/Time Prepared:"),
+            div("Date: ", plan.prepared.format(dateFormat)),
+            div("Time: ", plan.prepared.format(timeFormat))
+          ),
+          div(cls := "field")(
+            strong("3. Operational Period:"),
+            div(cls := "period")(
+              period("From", plan.operationalPeriod.from),
+              period("To", plan.operationalPeriod.to)
+            )
+          )
+        ),
+        div(cls := "section-label")(strong("4. Basic Radio Channel Use:")),
+        table(cls := "channels", attr("aria-label") := "Basic Radio Channel Use")(
+          colgroup(Seq(4, 3, 8, 16, 8, 8, 7, 7, 8, 8, 5, 18).map(
+            width => col(style := s"width: ${width}%")
+          )),
+          thead(tr(columns.map(label => th(attr("scope") := "col")(label)))),
+          tbody(
+            channels.map(channelRow),
+            (channels.size until rowsPerPage).map(_ =>
+              tr(cls := "channel-row")(columns.map(_ => td()))
+            )
+          )
+        ),
+        div(cls := "instructions")(
+          strong("5. Special Instructions:"),
+          div(cls := "value")(plan.specialInstructions)
+        ),
+        div(cls := "prepared-by")(
+          span(strong("6. Prepared by "), "(Communications Unit Leader)"),
+          span(cls := "name-line")("Name / Callsign: ", span(cls := "entry")(preparedBy)),
+          span(cls := "signature")("Signature: ", span(cls := "entry")())
+        ),
+        div(cls := "footer")(
+          strong("ICS 205"),
+          span("IAP Page ", pageNumber.toString),
+          span("Date/Time: ", plan.prepared.format(dateFormat), " ", plan.prepared.format(timeFormat))
+        )
+      )
+    )
+
+  private def period(label: String, value: Option[LocalDateTime]): Frag =
+    div(
+      div(s"Date ${label}: ", value.map(_.format(dateFormat)).getOrElse("")),
+      div(s"Time ${label}: ", value.map(_.format(timeFormat)).getOrElse(""))
+    )
+
+  private def channelRow(channel: Ics205Channel): Frag =
+    val offset = channel.frequency.offset.mhz
+    val offsetText = if offset > 0 then s"+${decimal(offset)}" else decimal(offset)
+    val modeText = channel.mode match
+      case RadioMode.Fm => "FM"
+      case RadioMode.Am => "AM"
+      case RadioMode.Digital => "Digital"
+    val remarks = (channel.remarks.toSeq ++ channel.digital.map(digitalText).toSeq).mkString("\n")
+    tr(cls := "channel-row", attr("data-channel-id") := channel.id)(
+      Seq(
+        channel.zoneGroup.getOrElse(""), channel.channelNumber.getOrElse(""),
+        channel.function, channel.name, channel.assignment,
+        decimal(channel.frequency.rx.mhz), offsetText,
+        channel.bandwidth.map(_.toString).getOrElse(""),
+        channel.receiveSignaling.map(signalingText).getOrElse(""),
+        channel.transmitSignaling.map(signalingText).getOrElse(""),
+        modeText, remarks
+      ).map(value => td(cls := "value")(value))
+    )
+
+  private def decimal(value: BigDecimal): String = value.bigDecimal.stripTrailingZeros.toPlainString
+
+  // Type prefixes distinguish tone frequencies, DCS codes, and NAC identifiers.
+  // Missing signaling stays blank: absence in the model does not imply "off".
+  private def signalingText(signaling: Signaling): String = signaling match
+    case Signaling.Ctcss(hz) => s"CTCSS ${decimal(hz)} Hz"
+    case Signaling.Dcs(code) => f"DCS ${code}%03d"
+    case Signaling.Nac(code) => s"NAC ${code}"
+
+  private def digitalText(parameters: DigitalParameters): String = parameters match
+    case DigitalParameters.Dmr(colorCode, timeSlot, talkGroup) =>
+      s"DMR: CC ${colorCode}, TS ${timeSlot}, TG ${talkGroup}"
+    case DigitalParameters.DStar(urCall, rpt1, rpt2) =>
+      (Seq("D-STAR") ++ urCall.map("UR: " + _) ++ rpt1.map("RPT1: " + _) ++ rpt2.map("RPT2: " + _))
+        .mkString("; ")
+    case DigitalParameters.P25(nac, talkGroup) =>
+      (Seq("P25") ++ nac.map("NAC: " + _) ++ talkGroup.map("TG: " + _)).mkString("; ")
+
+  private val css = """
+    @page { size: letter landscape; margin: 0.45in; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e9e9e9; color: #000; font: 10pt Arial, Helvetica, sans-serif; }
+    .sheet { width: 10.1in; margin: 24px auto; padding: 0.12in 0; background: white; }
+    h1 { margin: 0 0 6px; text-align: center; text-transform: uppercase; font-size: 15pt; }
+    .form { border: 2px solid black; }
+    .metadata { display: grid; grid-template-columns: 32% 34% 34%; border-bottom: 2px solid black; }
+    .field { padding: 4px 6px; min-height: 0.65in; line-height: 1.5; }
+    .field + .field { border-left: 2px solid black; }
+    .field strong { display: block; }
+    .period { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .value { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .incident-name { font-size: 12pt; }
+    .section-label { padding: 4px 6px; }
+    .channels { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8pt; }
+    .channels th, .channels td { border: 1px solid black; padding: 4px; overflow-wrap: anywhere; }
+    .channels th:first-child, .channels td:first-child { border-left: 0; }
+    .channels th:last-child, .channels td:last-child { border-right: 0; }
+    .channels th { height: 0.5in; font-weight: normal; vertical-align: bottom; }
+    .channel-row { height: 0.45in; }
+    .channels td { vertical-align: top; }
+    .instructions { min-height: 1.35in; padding: 4px 6px; border-top: 1px solid black; }
+    .instructions .value { margin-top: 6px; }
+    .prepared-by { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 6px; border-top: 2px solid black; }
+    .name-line { flex: 1; }
+    .signature { flex: 1; display: flex; gap: 6px; }
+    .entry { display: inline-block; min-width: 60px; border-bottom: 1px solid black; overflow-wrap: anywhere; }
+    .signature .entry { flex: 1; }
+    .footer { display: grid; grid-template-columns: 20% 20% 60%; border-top: 1px solid black; }
+    .footer > * { padding: 4px 6px; }
+    .footer > * + * { border-left: 1px solid black; }
+    @media screen {
+      .sheet { box-shadow: 0 2px 12px #0002; padding: 0.25in; width: 10.6in; }
+    }
+    @media print {
+      body { background: white; }
+      .sheet { width: 100%; margin: 0; padding: 0; break-after: page; }
+      .sheet:last-child { break-after: auto; }
+      tr, .metadata, .prepared-by, .footer { break-inside: avoid; }
+      thead { display: table-header-group; }
+    }
+  """

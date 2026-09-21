@@ -19,33 +19,15 @@
 package ics205.web
 
 import cats.effect.IO
-import ics205.model.{Ics205, PreparedBy}
 import ics205.store.Ics205Store
 import jakarta.inject.{Inject, Singleton}
-import scalatags.Text.all.*
 import sttp.tapir.*
 import sttp.tapir.server.ServerEndpoint
 
 @Singleton
 class IndexEndpoints @Inject() (val store: Ics205Store) extends ApiEndpoints:
 
-  private val initial: Ics205 = store.ics205()
-  val updated = initial.copy(preparedBy = Option(PreparedBy("Dick", Option("WA9NNN"))))
-  store.save(updated)
-
-  def index(): String =
-    doctype("html")(
-      html(
-        head(
-          meta(charset := "utf-8"),
-          scalatags.Text.tags2.title("ICS-205")
-        ),
-        body(
-          h1("ICS-205"),
-          p("Incident Radio Communications Plan")
-        )
-      )
-    ).render
+  def index(): String = Ics205Page.render(store.ics205())
 
   private val indexEndpoint = endpoint.get
     .in("")
