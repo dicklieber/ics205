@@ -37,8 +37,7 @@ paper; plans continue in groups of eight channels.
 RX frequency and signed offset are in MHz, with bandwidth in a separate column.
 RX and TX signaling have separate type selectors and value fields; unspecified
 values remain blank. The printed form uses explicit labels (`CTCSS 100 Hz`,
-`DCS 023`, `NAC 293`). Expand **Digital settings** in a row to edit DMR, D-STAR,
-or P25 parameters; these appear alongside Remarks in print. The preparer's
+`DCS 023`, `NAC 293`). Remarks are plain text. The preparer's
 callsign appears beside their name. Signature remains blank for signing.
 
 `Main` creates a Guice injector using `ApplicationModule` and starts the injected

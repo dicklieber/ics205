@@ -103,17 +103,8 @@ textarea {
     padding: 8px;
 }
 
-details {
-    margin-top: 6px;
-}
 
-summary {
-    cursor: pointer;
-}
 
-details label {
-    margin-top: 4px;
-}
 
 .prepared-by > label {
     flex: 1;

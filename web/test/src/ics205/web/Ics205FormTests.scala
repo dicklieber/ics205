@@ -19,17 +19,15 @@ class Ics205FormTests extends munit.FunSuite:
       Ics205Channel("a", Some("Zone"), Some("1"), "Command", "Repeater", "All",
         RxWithOffset(mhz"146.940", mhz"-0.600"), bandwidth = Some(Bandwidth.Narrow),
         receiveSignaling = Some(Signaling.Dcs(23)), transmitSignaling = Some(Signaling.Ctcss(BigDecimal("100.0"))),
-        digital = Some(DigitalParameters.Dmr(1, 2, 123)), remarks = Some("Monitor")),
+        remarks = "Monitor"),
       Ics205Channel("b", function = "Tactical", name = "Simplex", assignment = "Teams",
         frequency = RxWithOffset(mhz"446.00625"), mode = RadioMode.Digital,
-        receiveSignaling = Some(Signaling.Nac("F7E")),
-        digital = Some(DigitalParameters.DStar(Some("CQCQCQ"), Some("RPT1"), Some("RPT2")))),
-      Ics205Channel("c", function = "", name = "", assignment = "", frequency = RxWithOffset(mhz"155.5"),
-        digital = Some(DigitalParameters.P25(Some("293"), Some(42))))
+        receiveSignaling = Some(Signaling.Nac("F7E"))),
+      Ics205Channel("c", function = "", name = "", assignment = "", frequency = RxWithOffset(mhz"155.5"))
     )
   )
 
-  test("form fields round trip every model field, precision, and digital variant"):
+  test("form fields round trip every model field, precision, and empty remarks"):
     assertEquals(Ics205Form.decode(Ics205Form.fields(base), base), Right(base))
     val blank = base.copy(channels = Seq.empty, preparedBy = None, operationalPeriod = OperationalPeriod())
     assertEquals(Ics205Form.decode(Ics205Form.fields(blank), base), Right(blank))
@@ -44,7 +42,6 @@ class Ics205FormTests extends munit.FunSuite:
       "row.0.rx" -> "oops", "row.0.offset" -> "-999",
       "row.0.rxSignalValue" -> "089", "row.1.rxSignalValue" -> "XYZ",
       "row.0.txSignalValue" -> "-1", "row.0.mode" -> "Unknown",
-      "row.0.colorCode" -> "16", "row.0.timeSlot" -> "3",
       "row.0.id" -> "b", "prepared" -> "bad", "to" -> prepared.minusDays(1).toString
     ).foreach { (key, value) =>
       assert(Ics205Form.decode(fields.updated(key, value), base).isLeft, s"$key=$value")

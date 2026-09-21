@@ -20,6 +20,8 @@ package ics205.store
 
 import ics205.util.FileHelper
 import ics205.model.*
+import io.circe.Json
+import io.circe.syntax.*
 
 import java.time.LocalDateTime
 
@@ -46,8 +48,7 @@ class Ics205StoreTests extends munit.FunSuite:
       bandwidth = Some(Bandwidth.Narrow),
       transmitSignaling = Some(Signaling.Ctcss(BigDecimal("100.0"))),
       receiveSignaling = Some(Signaling.Dcs(23)),
-      digital = Some(DigitalParameters.Dmr(1, 2, 123)),
-      remarks = Some("Test channel"))),
+      remarks = "Test channel")),
     specialInstructions = "Monitor dispatch",
     preparedBy = Some(PreparedBy("Operator", Some("WA9NNN"))),
     prepared = now)
@@ -80,15 +81,15 @@ class Ics205StoreTests extends munit.FunSuite:
       val sparse = plan.copy(
         operationalPeriod = OperationalPeriod(),
         preparedBy = None,
-        channels = Seq(plan.channels.head.copy(digital = Some(DigitalParameters.P25()), remarks = None))
+        channels = Seq(plan.channels.head.copy(remarks = ""))
       )
       store.save(sparse)
       val json = io.circe.parser.parse(os.read(directory / "ics205.json")).toOption.get
       assert(!json.hcursor.keys.get.toSet.contains("preparedBy"))
       assertEquals(json.hcursor.downField("operationalPeriod").focus, Some(io.circe.Json.obj()))
       val channel = json.hcursor.downField("channels").downArray
-      assert(!channel.keys.get.toSet.contains("remarks"))
-      assertEquals(channel.downField("digital").downField("P25").focus, Some(io.circe.Json.obj()))
+      assertEquals(channel.get[String]("remarks"), Right(""))
+      assert(!channel.keys.get.toSet.contains("digital"))
       assertEquals(new Ics205Store(helper(directory)).ics205(), store.ics205())
     }
 
@@ -106,3 +107,15 @@ class Ics205StoreTests extends munit.FunSuite:
       intercept[java.io.IOException] { store.save(plan) }
       assertEquals(store.ics205(), original)
     }
+
+
+  test("legacy channel JSON ignores digital parameters and defaults absent or null remarks"):
+    val expected = plan.channels.head.copy(remarks = "")
+    val legacy = expected.asJson.mapObject(_.remove("remarks").add(
+      "digital", Json.obj("Dmr" -> Json.obj(
+        "colorCode" -> Json.fromInt(1), "timeSlot" -> Json.fromInt(2), "talkGroup" -> Json.fromInt(123)
+      ))
+    ))
+    assertEquals(legacy.as[Ics205Channel], Right(expected))
+    assertEquals(legacy.mapObject(_.add("remarks", Json.Null)).as[Ics205Channel], Right(expected))
+    assert(!expected.asJson.hcursor.keys.get.toSet.contains("digital"))

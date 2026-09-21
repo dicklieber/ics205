@@ -119,7 +119,6 @@ object Ics205Page:
       case RadioMode.Fm => "FM"
       case RadioMode.Am => "AM"
       case RadioMode.Digital => "Digital"
-    val remarks = (channel.remarks.toSeq ++ channel.digital.map(digitalText).toSeq).mkString("\n")
     tr(cls := "channel-row", attr("data-channel-id") := channel.id)(
       Seq(
         channel.zoneGroup.getOrElse(""), channel.channelNumber.getOrElse(""),
@@ -128,7 +127,7 @@ object Ics205Page:
         channel.bandwidth.map(_.toString).getOrElse(""),
         channel.receiveSignaling.map(signalingText).getOrElse(""),
         channel.transmitSignaling.map(signalingText).getOrElse(""),
-        modeText, remarks
+        modeText, channel.remarks
       ).map(value => td(cls := "value")(value))
     )
 
@@ -140,12 +139,3 @@ object Ics205Page:
     case Signaling.Ctcss(hz) => s"CTCSS ${decimal(hz)} Hz"
     case Signaling.Dcs(code) => f"DCS ${code}%03d"
     case Signaling.Nac(code) => s"NAC ${code}"
-
-  private def digitalText(parameters: DigitalParameters): String = parameters match
-    case DigitalParameters.Dmr(colorCode, timeSlot, talkGroup) =>
-      s"DMR: CC ${colorCode}, TS ${timeSlot}, TG ${talkGroup}"
-    case DigitalParameters.DStar(urCall, rpt1, rpt2) =>
-      (Seq("D-STAR") ++ urCall.map("UR: " + _) ++ rpt1.map("RPT1: " + _) ++ rpt2.map("RPT2: " + _))
-        .mkString("; ")
-    case DigitalParameters.P25(nac, talkGroup) =>
-      (Seq("P25") ++ nac.map("NAC: " + _) ++ talkGroup.map("TG: " + _)).mkString("; ")

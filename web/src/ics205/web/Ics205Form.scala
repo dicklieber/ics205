@@ -35,14 +35,6 @@ private[web] object Ics205Form:
       "callsign" -> plan.preparedBy.flatMap(_.callsign).getOrElse(""),
       "rowCount" -> plan.channels.size.toString
     ) ++ plan.channels.zipWithIndex.flatMap { (channel, index) =>
-      val digital = channel.digital match
-        case Some(DigitalParameters.Dmr(cc, ts, tg)) =>
-          Map("digitalType" -> "DMR", "colorCode" -> cc.toString, "timeSlot" -> ts.toString, "talkGroup" -> tg.toString)
-        case Some(DigitalParameters.DStar(ur, r1, r2)) =>
-          Map("digitalType" -> "D-STAR", "urCall" -> ur.getOrElse(""), "rpt1" -> r1.getOrElse(""), "rpt2" -> r2.getOrElse(""))
-        case Some(DigitalParameters.P25(nac, tg)) =>
-          Map("digitalType" -> "P25", "nac" -> nac.getOrElse(""), "talkGroup" -> tg.fold("")(_.toString))
-        case None => Map.empty[String, String]
       (Map(
         "id" -> channel.id, "zoneGroup" -> channel.zoneGroup.getOrElse(""),
         "channelNumber" -> channel.channelNumber.getOrElse(""), "function" -> channel.function,
@@ -51,9 +43,9 @@ private[web] object Ics205Form:
         "offset" -> channel.frequency.offset.mhz.bigDecimal.toPlainString,
         "bandwidth" -> channel.bandwidth.fold("")(_.toString),
         "mode" -> channel.mode.toString,
-        "remarks" -> channel.remarks.getOrElse("")
+        "remarks" -> channel.remarks
       ) ++ signalingFields("rxSignal", channel.receiveSignaling) ++
-        signalingFields("txSignal", channel.transmitSignaling) ++ digital)
+        signalingFields("txSignal", channel.transmitSignaling))
         .map((key, value) => s"row.$index.$key" -> value)
     }
 
@@ -86,7 +78,6 @@ private[web] object Ics205Form:
         def get(key: String): String = text(prefix + key)
         def opt(key: String): Option[String] = optional(prefix + key)
         def number(key: String): BigDecimal = parse(s"$label $key")(BigDecimal(get(key)))
-        def int(key: String): Int = parse(s"$label $key")(get(key).toInt)
         def signal(key: String): Option[Signaling] =
           val value = get(key + "Value").trim
           get(key + "Type") match
@@ -107,23 +98,6 @@ private[web] object Ics205Form:
         val rx = number("rx")
         val offset = number("offset")
         if rx <= 0 || rx + offset <= 0 then fail(s"$label: RX and derived TX frequencies must be positive.")
-        val digital = get("digitalType") match
-          case "" => None
-          case "DMR" =>
-            val cc = int("colorCode")
-            val ts = int("timeSlot")
-            val tg = int("talkGroup")
-            if cc < 0 || cc > 15 || (ts != 1 && ts != 2) || tg < 0 then
-              fail(s"$label: DMR requires color code 0–15, time slot 1 or 2, and a nonnegative talkgroup.")
-            Some(DigitalParameters.Dmr(cc, ts, tg))
-          case "D-STAR" => Some(DigitalParameters.DStar(opt("urCall"), opt("rpt1"), opt("rpt2")))
-          case "P25" =>
-            val nac = opt("nac")
-            if nac.exists(v => !v.matches("(?i)[0-9a-f]{3}")) then fail(s"$label: P25 NAC requires three hexadecimal digits.")
-            val tg = opt("talkGroup").map(_ => int("talkGroup"))
-            if tg.exists(_ < 0) then fail(s"$label: talkgroup must be nonnegative.")
-            Some(DigitalParameters.P25(nac, tg))
-          case _ => fail(s"$label: unknown digital system.")
         val id = get("id")
         if id.isEmpty then fail(s"$label: missing channel ID.")
         Ics205Channel(
@@ -133,7 +107,7 @@ private[web] object Ics205Form:
           mode = parse(s"$label mode")(RadioMode.valueOf(get("mode"))),
           bandwidth = opt("bandwidth").map(value => parse(s"$label bandwidth")(Bandwidth.valueOf(value))),
           transmitSignaling = signal("txSignal"), receiveSignaling = signal("rxSignal"),
-          digital = digital, remarks = opt("remarks")
+          remarks = get("remarks")
         )
       }
       if channels.map(_.id).distinct.size != channels.size then fail("Channel IDs must be unique.")

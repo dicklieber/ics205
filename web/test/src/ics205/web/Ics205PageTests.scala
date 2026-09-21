@@ -12,7 +12,7 @@ class Ics205PageTests extends munit.FunSuite:
     bandwidth = Some(Bandwidth.Narrow),
     receiveSignaling = Some(Signaling.Dcs(23)),
     transmitSignaling = Some(Signaling.Ctcss(BigDecimal("100.0"))),
-    remarks = Some("Monitor")
+    remarks = "Monitor"
   )
   private val plan = Ics205(
     incidentName = "Exercise",
@@ -50,7 +50,7 @@ class Ics205PageTests extends munit.FunSuite:
       incidentName = "<script>alert(1)</script>",
       preparedBy = None, operationalPeriod = OperationalPeriod(),
       channels = Seq(channel.copy(
-        remarks = Some("<b>unsafe</b>"), bandwidth = None,
+        remarks = "<b>unsafe</b>", bandwidth = None,
         receiveSignaling = None, transmitSignaling = None
       ))
     ))
@@ -61,17 +61,12 @@ class Ics205PageTests extends munit.FunSuite:
     assert(!html.contains("null"))
     assert(!html.contains("CTCSS"))
 
-  test("retains digital settings in remarks and labels NAC explicitly"):
-    val channels = Seq(
+  test("renders plain remarks and labels NAC explicitly"):
+    val html = Ics205Page.renderPrintable(plan.copy(channels = Seq(
       channel.copy(mode = RadioMode.Digital, receiveSignaling = Some(Signaling.Nac("293")),
-        digital = Some(DigitalParameters.Dmr(1, 2, 3100))),
-      channel.copy(digital = Some(DigitalParameters.DStar(Some("CQCQCQ"), Some("RPT A"), Some("RPT G")))),
-      channel.copy(digital = Some(DigitalParameters.P25(Some("F7E"), Some(42))))
-    )
-    val html = Ics205Page.renderPrintable(plan.copy(channels = channels))
-    Seq("NAC 293", "Digital", "Monitor\nDMR: CC 1, TS 2, TG 3100",
-      "D-STAR; UR: CQCQCQ; RPT1: RPT A; RPT2: RPT G",
-      "P25; NAC: F7E; TG: 42").foreach(value => assert(html.contains(value), value))
+        remarks = "Monitor\nCommand")
+    )))
+    Seq("NAC 293", "Digital", "Monitor\nCommand").foreach(value => assert(html.contains(value), value))
 
   test("pads empty forms to eight rows and paginates without losing channels"):
     val empty = Ics205Page.renderPrintable(plan.copy(channels = Seq.empty))

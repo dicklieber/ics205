@@ -59,7 +59,7 @@ private[web] object Ics205Editor:
                 table(cls := "channels", attr("aria-label") := "Editable radio channels")(
                   thead(tr(Seq("Zone / Grp.", "Ch #", "Function", "Channel Name / Talkgroup", "Assignment",
                     "RX Freq (MHz)", "Offset (MHz)", "Bandwidth", "RX Signaling", "TX Signaling", "Mode",
-                    "Remarks / Digital settings", "Row controls").map(text => th(attr("scope") := "col")(text)))),
+                    "Remarks", "Row controls").map(text => th(attr("scope") := "col")(text)))),
                   tbody(id := "channel-rows")((0 until count).map(index => row(values, index.toString)))
                 )
               ),
@@ -106,8 +106,6 @@ private[web] object Ics205Editor:
         choose(prefix + "Type", caption + " type", Seq("" -> "—", "CTCSS" -> "CTCSS", "DCS" -> "DCS", "NAC" -> "NAC")),
         edit(prefix + "Value", caption + " value")
       )
-    def digitalField(key: String, caption: String, systems: String): Frag =
-      label(attr("data-systems") := systems)(caption, edit(key, caption))
     tr(cls := "channel-row")(
       td(input(tpe := "hidden", name := prefix + "id", attr("data-field") := "id", value := current("id")),
         edit("zoneGroup", "Zone / Group")),
@@ -121,17 +119,7 @@ private[web] object Ics205Editor:
       td(signal("rxSignal", "RX signaling")), td(signal("txSignal", "TX signaling")),
       td(choose("mode", "Mode", Seq("Fm" -> "FM", "Am" -> "AM", "Digital" -> "Digital"))),
       td(
-        textarea(name := prefix + "remarks", attr("data-field") := "remarks", attr("aria-label") := "Remarks", rows := 2)(current("remarks")),
-        tag("details")(tag("summary")("Digital settings"),
-          choose("digitalType", "Digital system", Seq("" -> "—", "DMR" -> "DMR", "D-STAR" -> "D-STAR", "P25" -> "P25")),
-          digitalField("colorCode", "Color code", "DMR"),
-          digitalField("timeSlot", "Time slot", "DMR"),
-          digitalField("talkGroup", "Talkgroup", "DMR P25"),
-          digitalField("urCall", "UR call", "D-STAR"),
-          digitalField("rpt1", "RPT1", "D-STAR"),
-          digitalField("rpt2", "RPT2", "D-STAR"),
-          digitalField("nac", "NAC", "P25")
-        )
+        textarea(name := prefix + "remarks", attr("data-field") := "remarks", attr("aria-label") := "Remarks", rows := 2)(current("remarks"))
       ),
       td(cls := "row-controls")(
         button(tpe := "button", attr("data-action") := "up", attr("aria-label") := "Move channel up")("↑"),
@@ -139,8 +127,6 @@ private[web] object Ics205Editor:
         button(tpe := "button", attr("data-action") := "delete")("Delete")
       )
     )
-
-
 
   private val editorScript = """
     (() => {
@@ -159,10 +145,6 @@ private[web] object Ics205Editor:
           row.querySelector('[data-action=down]').disabled = index === list.length - 1;
           row.querySelectorAll('[data-action]').forEach(button => {
             button.setAttribute('aria-label', button.dataset.action + ' channel ' + (index + 1));
-          });
-          const system = row.querySelector('[data-field=digitalType]').value;
-          row.querySelectorAll('[data-systems]').forEach(label => {
-            label.hidden = !label.dataset.systems.split(' ').includes(system);
           });
         });
         document.getElementById('row-count').value = list.length;

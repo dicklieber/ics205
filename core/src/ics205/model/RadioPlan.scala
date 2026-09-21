@@ -34,15 +34,6 @@ enum Signaling derives Codec.AsObject:
   case Dcs(code: Int)
   case Nac(code: String)
 
-enum DigitalParameters derives Codec.AsObject:
-  case Dmr(colorCode: Int, timeSlot: Int, talkGroup: Int)
-  case DStar(
-      urCall: Option[String] = None,
-      rpt1: Option[String] = None,
-      rpt2: Option[String] = None
-  )
-  case P25(nac: Option[String] = None, talkGroup: Option[Int] = None)
-
 enum Power:
   case Low
   case Medium
@@ -63,5 +54,4 @@ case class RadioMemory(sourceChannelId: String,
                        bandwidth: Option[Bandwidth] = None,
                        transmitSignaling: Option[Signaling] = None,
                        receiveSignaling: Option[Signaling] = None,
-                       digital: Option[DigitalParameters] = None,
-                       remarks: Option[String] = None)
+                       remarks: String = "")
