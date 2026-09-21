@@ -29,10 +29,14 @@ enum Bandwidth derives Codec.AsObject:
   case Narrow
   case Wide
 
-enum Signaling derives Codec.AsObject:
-  case Ctcss(hz: BigDecimal)
-  case Dcs(code: Int)
-  case Nac(code: String)
+enum CtcssMode derives Codec.AsObject:
+  case None
+  case Tone
+  case TSQL
+
+/** CTCSS frequency is in Hz. None disables it, Tone encodes TX, TSQL also decodes RX. */
+case class Ctcss(frequency: Option[CtcssFrequency] = None,
+                 mode: CtcssMode = CtcssMode.None) derives Codec.AsObject
 
 enum Power:
   case Low
@@ -52,6 +56,5 @@ case class RadioMemory(sourceChannelId: String,
                        frequency: RxWithOffset,
                        mode: RadioMode = RadioMode.Fm,
                        bandwidth: Option[Bandwidth] = None,
-                       transmitSignaling: Option[Signaling] = None,
-                       receiveSignaling: Option[Signaling] = None,
+                       ctcss: Ctcss = Ctcss(),
                        remarks: String = "")

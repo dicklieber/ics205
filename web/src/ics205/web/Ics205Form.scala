@@ -35,7 +35,7 @@ private[web] object Ics205Form:
       "callsign" -> plan.preparedBy.flatMap(_.callsign).getOrElse(""),
       "rowCount" -> plan.channels.size.toString
     ) ++ plan.channels.zipWithIndex.flatMap { (channel, index) =>
-      (Map(
+      Map(
         "id" -> channel.id, "zoneGroup" -> channel.zoneGroup.getOrElse(""),
         "channelNumber" -> channel.channelNumber.getOrElse(""), "function" -> channel.function,
         "name" -> channel.name, "assignment" -> channel.assignment,
@@ -43,19 +43,12 @@ private[web] object Ics205Form:
         "offset" -> channel.frequency.offset.mhz.bigDecimal.toPlainString,
         "bandwidth" -> channel.bandwidth.fold("")(_.toString),
         "mode" -> channel.mode.toString,
-        "remarks" -> channel.remarks
-      ) ++ signalingFields("rxSignal", channel.receiveSignaling) ++
-        signalingFields("txSignal", channel.transmitSignaling))
+        "remarks" -> channel.remarks,
+        "ctcssMode" -> channel.ctcss.mode.toString,
+        "ctcssFrequency" -> channel.ctcss.frequency.fold("")(_.hz.bigDecimal.toPlainString)
+      )
         .map((key, value) => s"row.$index.$key" -> value)
     }
-
-  private def signalingFields(prefix: String, value: Option[Signaling]): Map[String, String] =
-    val (kind, code) = value match
-      case None => ("", "")
-      case Some(Signaling.Ctcss(hz)) => ("CTCSS", hz.toString)
-      case Some(Signaling.Dcs(code)) => ("DCS", f"$code%03d")
-      case Some(Signaling.Nac(code)) => ("NAC", code)
-    Map(s"${prefix}Type" -> kind, s"${prefix}Value" -> code)
 
   def decode(data: Map[String, String], original: Ics205): Either[String, Ics205] =
     def text(key: String): String = data.getOrElse(key, "")
@@ -78,23 +71,11 @@ private[web] object Ics205Form:
         def get(key: String): String = text(prefix + key)
         def opt(key: String): Option[String] = optional(prefix + key)
         def number(key: String): BigDecimal = parse(s"$label $key")(BigDecimal(get(key)))
-        def signal(key: String): Option[Signaling] =
-          val value = get(key + "Value").trim
-          get(key + "Type") match
-            case "" =>
-              if value.nonEmpty then fail(s"$label: choose a signaling type for $value.")
-              None
-            case "CTCSS" =>
-              val hz = parse(s"$label CTCSS tone")(BigDecimal(value))
-              if hz <= 0 then fail(s"$label: CTCSS tone must be positive.")
-              Some(Signaling.Ctcss(hz))
-            case "DCS" =>
-              if !value.matches("[0-7]{3}") then fail(s"$label: DCS requires three octal digits, such as 023.")
-              Some(Signaling.Dcs(value.toInt))
-            case "NAC" =>
-              if !value.matches("(?i)[0-9a-f]{3}") then fail(s"$label: NAC requires three hexadecimal digits.")
-              Some(Signaling.Nac(value))
-            case _ => fail(s"$label: unknown signaling type.")
+        val ctcssMode = parse(s"$label CTCSS mode")(CtcssMode.valueOf(get("ctcssMode")))
+        val ctcssFrequency = if ctcssMode == CtcssMode.None then None
+          else Some(CtcssFrequency.fromHz(number("ctcssFrequency")).getOrElse(
+            fail(s"$label: select a standard CTCSS frequency for Tone or TSQL.")
+          ))
         val rx = number("rx")
         val offset = number("offset")
         if rx <= 0 || rx + offset <= 0 then fail(s"$label: RX and derived TX frequencies must be positive.")
@@ -106,7 +87,7 @@ private[web] object Ics205Form:
           frequency = RxWithOffset(Frequency(rx), Frequency(offset)),
           mode = parse(s"$label mode")(RadioMode.valueOf(get("mode"))),
           bandwidth = opt("bandwidth").map(value => parse(s"$label bandwidth")(Bandwidth.valueOf(value))),
-          transmitSignaling = signal("txSignal"), receiveSignaling = signal("rxSignal"),
+          ctcss = Ctcss(ctcssFrequency, ctcssMode),
           remarks = get("remarks")
         )
       }

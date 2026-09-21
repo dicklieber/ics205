@@ -42,8 +42,7 @@ case class Ics205Channel(id: String,
                          frequency: RxWithOffset,
                          mode: RadioMode = RadioMode.Fm,
                          bandwidth: Option[Bandwidth] = None,
-                         transmitSignaling: Option[Signaling] = None,
-                         receiveSignaling: Option[Signaling] = None,
+                         ctcss: Ctcss = Ctcss(),
                          remarks: String = "")
 
 object Ics205Channel:

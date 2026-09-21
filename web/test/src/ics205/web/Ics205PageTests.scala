@@ -10,8 +10,7 @@ class Ics205PageTests extends munit.FunSuite:
     function = "Command", name = "Repeater", assignment = "Operations",
     frequency = RxWithOffset(mhz"146.94", mhz"-0.6"),
     bandwidth = Some(Bandwidth.Narrow),
-    receiveSignaling = Some(Signaling.Dcs(23)),
-    transmitSignaling = Some(Signaling.Ctcss(BigDecimal("100.0"))),
+    ctcss = Ctcss(Some(CtcssFrequency.Hz100_0), CtcssMode.Tone),
     remarks = "Monitor"
   )
   private val plan = Ics205(
@@ -21,13 +20,13 @@ class Ics205PageTests extends munit.FunSuite:
     preparedBy = Some(PreparedBy("Alex", Some("W9ABC"))), prepared = prepared
   )
 
-  test("maps the form and keeps receive and transmit signaling in separate columns"):
+  test("maps the form with a single CTCSS column"):
     val html = Ics205Page.renderPrintable(plan)
     val row = html.split("<tr class=\"channel-row\" data-channel-id=\"repeater\">")(1).split("</tr>")(0)
     val cells = "<td[^>]*>(.*?)</td>".r.findAllMatchIn(row).map(_.group(1)).toSeq
     assertEquals(cells, Seq(
       "Local", "1", "Command", "Repeater", "Operations", "146.94", "-0.6",
-      "Narrow", "DCS 023", "CTCSS 100 Hz", "FM", "Monitor"
+      "Narrow", "Tone 100 Hz", "FM", "Monitor"
     ))
     Seq("Exercise", "09/20/2026", "14:05", "18:05", "Alex / W9ABC",
       "Check in\nEvery hour", "Signature:", "Bandwidth", "Offset (MHz)").foreach(value =>
@@ -51,22 +50,21 @@ class Ics205PageTests extends munit.FunSuite:
       preparedBy = None, operationalPeriod = OperationalPeriod(),
       channels = Seq(channel.copy(
         remarks = "<b>unsafe</b>", bandwidth = None,
-        receiveSignaling = None, transmitSignaling = None
+        ctcss = Ctcss()
       ))
     ))
     assert(!html.contains("<script>"))
     assert(html.contains("&lt;script&gt;"))
     assert(html.contains("&lt;b&gt;unsafe&lt;/b&gt;"))
-    assert(!html.contains("None"))
     assert(!html.contains("null"))
-    assert(!html.contains("CTCSS"))
+    assert(!html.contains("Tone 100 Hz"))
 
-  test("renders plain remarks and labels NAC explicitly"):
+  test("renders plain remarks and TSQL"):
     val html = Ics205Page.renderPrintable(plan.copy(channels = Seq(
-      channel.copy(mode = RadioMode.Digital, receiveSignaling = Some(Signaling.Nac("293")),
+      channel.copy(mode = RadioMode.Digital, ctcss = Ctcss(Some(CtcssFrequency.Hz88_5), CtcssMode.TSQL),
         remarks = "Monitor\nCommand")
     )))
-    Seq("NAC 293", "Digital", "Monitor\nCommand").foreach(value => assert(html.contains(value), value))
+    Seq("TSQL 88.5 Hz", "Digital", "Monitor\nCommand").foreach(value => assert(html.contains(value), value))
 
   test("pads empty forms to eight rows and paginates without losing channels"):
     val empty = Ics205Page.renderPrintable(plan.copy(channels = Seq.empty))

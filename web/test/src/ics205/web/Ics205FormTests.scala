@@ -18,11 +18,11 @@ class Ics205FormTests extends munit.FunSuite:
     channels = Seq(
       Ics205Channel("a", Some("Zone"), Some("1"), "Command", "Repeater", "All",
         RxWithOffset(mhz"146.940", mhz"-0.600"), bandwidth = Some(Bandwidth.Narrow),
-        receiveSignaling = Some(Signaling.Dcs(23)), transmitSignaling = Some(Signaling.Ctcss(BigDecimal("100.0"))),
+        ctcss = Ctcss(Some(CtcssFrequency.Hz100_0), CtcssMode.Tone),
         remarks = "Monitor"),
       Ics205Channel("b", function = "Tactical", name = "Simplex", assignment = "Teams",
         frequency = RxWithOffset(mhz"446.00625"), mode = RadioMode.Digital,
-        receiveSignaling = Some(Signaling.Nac("F7E"))),
+        ctcss = Ctcss(Some(CtcssFrequency.Hz88_5), CtcssMode.TSQL)),
       Ics205Channel("c", function = "", name = "", assignment = "", frequency = RxWithOffset(mhz"155.5"))
     )
   )
@@ -40,8 +40,8 @@ class Ics205FormTests extends munit.FunSuite:
     val fields = Ics205Form.fields(base)
     Seq(
       "row.0.rx" -> "oops", "row.0.offset" -> "-999",
-      "row.0.rxSignalValue" -> "089", "row.1.rxSignalValue" -> "XYZ",
-      "row.0.txSignalValue" -> "-1", "row.0.mode" -> "Unknown",
+      "row.0.ctcssMode" -> "Unknown", "row.1.ctcssFrequency" -> "XYZ",
+      "row.0.ctcssFrequency" -> "-1", "row.0.mode" -> "Unknown",
       "row.0.id" -> "b", "prepared" -> "bad", "to" -> prepared.minusDays(1).toString
     ).foreach { (key, value) =>
       assert(Ics205Form.decode(fields.updated(key, value), base).isLeft, s"$key=$value")
@@ -90,3 +90,17 @@ class Ics205FormTests extends munit.FunSuite:
       assertEquals(store.ics205().channels, Seq.empty)
     finally os.remove.all(tempDirectory)
 
+
+
+  test("None needs no frequency; Tone and TSQL require a standard frequency"):
+    val fields = Ics205Form.fields(base)
+    val none = fields.updated("row.0.ctcssMode", "None") - "row.0.ctcssFrequency"
+    assertEquals(Ics205Form.decode(none, base).toOption.get.channels.head.ctcss, Ctcss())
+    assertEquals(Ics205Form.decode(none.updated("row.0.ctcssFrequency", "ignored"), base)
+      .toOption.get.channels.head.ctcss, Ctcss())
+    Seq("Tone", "TSQL").foreach { mode =>
+      Seq("", "0", "-1", "100.1", "300").foreach { frequency =>
+        assert(Ics205Form.decode(fields.updated("row.0.ctcssMode", mode)
+          .updated("row.0.ctcssFrequency", frequency), base).isLeft)
+      }
+    }

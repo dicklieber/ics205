@@ -31,7 +31,7 @@ object Ics205Page:
   private val columns = Seq(
     "Zone / Grp.", "Ch #", "Function", "Channel Name / Trunked Radio System Talkgroup",
     "Assignment", "RX Freq (MHz)", "Offset (MHz)", "Bandwidth",
-    "RX Signaling", "TX Signaling", "Mode", "Remarks"
+    "CTCSS", "Mode", "Remarks"
   )
 
   def render(plan: Ics205): String = Ics205Editor.render(plan)
@@ -125,17 +125,13 @@ object Ics205Page:
         channel.function, channel.name, channel.assignment,
         decimal(channel.frequency.rx.mhz), offsetText,
         channel.bandwidth.map(_.toString).getOrElse(""),
-        channel.receiveSignaling.map(signalingText).getOrElse(""),
-        channel.transmitSignaling.map(signalingText).getOrElse(""),
+        ctcssText(channel.ctcss),
         modeText, channel.remarks
       ).map(value => td(cls := "value")(value))
     )
 
   private def decimal(value: BigDecimal): String = value.bigDecimal.stripTrailingZeros.toPlainString
 
-  // Type prefixes distinguish tone frequencies, DCS codes, and NAC identifiers.
-  // Missing signaling stays blank: absence in the model does not imply "off".
-  private def signalingText(signaling: Signaling): String = signaling match
-    case Signaling.Ctcss(hz) => s"CTCSS ${decimal(hz)} Hz"
-    case Signaling.Dcs(code) => f"DCS ${code}%03d"
-    case Signaling.Nac(code) => s"NAC ${code}"
+  private def ctcssText(ctcss: Ctcss): String = ctcss.mode match
+    case CtcssMode.None => "None"
+    case mode => ctcss.frequency.fold(mode.toString)(frequency => s"${mode} ${decimal(frequency.hz)} Hz")

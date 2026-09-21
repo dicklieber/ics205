@@ -29,7 +29,7 @@ button:disabled {
     font-size: 9pt;
 }
 
-#status, #row-status {
+#status, #row-status, #clipboard-status {
     margin-left: 12px;
 }
 
@@ -78,7 +78,7 @@ textarea {
     width: 12%;
 }
 
-.channels th:nth-child(12) {
+.channels th:nth-child(11) {
     width: 16%;
 }
 
@@ -94,13 +94,50 @@ textarea {
     appearance: none;
 }
 
+.ctcss-controls {
+    display: flex;
+    gap: 4px;
+}
+
+.ctcss-controls select {
+    flex: 1;
+}
+
+.channels th:nth-child(9) {
+    width: 15%;
+}
+
+.channels th:last-child {
+    width: 12%;
+}
+
+.channels .row-controls {
+    white-space: nowrap;
+}
+
 .row-controls button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    height: 26px;
     padding: 3px 6px;
-    margin-bottom: 3px;
+}
+
+.channels td {
+    vertical-align: middle;
+}
+
+.channels textarea {
+    display: block;
 }
 
 .row-toolbar {
     padding: 8px;
+}
+
+.row-toolbar button + button {
+    margin-left: 6px;
 }
 
 

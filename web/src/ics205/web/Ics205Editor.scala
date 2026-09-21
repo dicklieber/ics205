@@ -18,7 +18,7 @@
 
 package ics205.web
 
-import ics205.model.Ics205
+import ics205.model.{CtcssFrequency, Ics205}
 import scalatags.Text.all.*
 
 private[web] object Ics205Editor:
@@ -58,15 +58,17 @@ private[web] object Ics205Editor:
               div(cls := "table-scroll")(
                 table(cls := "channels", attr("aria-label") := "Editable radio channels")(
                   thead(tr(Seq("Zone / Grp.", "Ch #", "Function", "Channel Name / Talkgroup", "Assignment",
-                    "RX Freq (MHz)", "Offset (MHz)", "Bandwidth", "RX Signaling", "TX Signaling", "Mode",
+                    "RX Freq (MHz)", "Offset (MHz)", "Bandwidth", "CTCSS", "Mode",
                     "Remarks", "Row controls").map(text => th(attr("scope") := "col")(text)))),
                   tbody(id := "channel-rows")((0 until count).map(index => row(values, index.toString)))
                 )
               ),
               div(cls := "row-toolbar")(
                 button(tpe := "button", id := "add-row")("Add channel"),
+                button(tpe := "button", id := "paste-row", disabled)("Paste channel"),
+                span(id := "clipboard-status", attr("role") := "status")(),
                 span(id := "row-status", attr("role") := "status")(),
-                p("Offset is in MHz; use 0 for simplex. CTCSS uses Hz, DCS uses three octal digits (023), and NAC uses three hexadecimal digits (293).")
+                p("Offset is in MHz; use 0 for simplex. CTCSS is in Hz: None disables it, Tone transmits a tone, and TSQL uses the tone for transmit and receive squelch.")
               ),
               input(tpe := "hidden", name := "rowCount", id := "row-count", value := count.toString),
               div(cls := "instructions")(
@@ -82,7 +84,7 @@ private[web] object Ics205Editor:
             )
           )
         ),
-        tag("template")(id := "channel-template")(row(Map("row.NEW.offset" -> "0", "row.NEW.mode" -> "Fm"), "NEW")),
+        tag("template")(id := "channel-template")(row(Map("row.NEW.offset" -> "0", "row.NEW.mode" -> "Fm", "row.NEW.ctcssMode" -> "None"), "NEW")),
         script(raw(editorScript))
       )
     )).render
@@ -101,11 +103,6 @@ private[web] object Ics205Editor:
           option(value := keyValue, if keyValue == current(key) then selected else cls := "")(captionValue)
         }
       )
-    def signal(prefix: String, caption: String): Frag =
-      div(
-        choose(prefix + "Type", caption + " type", Seq("" -> "—", "CTCSS" -> "CTCSS", "DCS" -> "DCS", "NAC" -> "NAC")),
-        edit(prefix + "Value", caption + " value")
-      )
     tr(cls := "channel-row")(
       td(input(tpe := "hidden", name := prefix + "id", attr("data-field") := "id", value := current("id")),
         edit("zoneGroup", "Zone / Group")),
@@ -116,15 +113,28 @@ private[web] object Ics205Editor:
       td(edit("rx", "RX frequency in MHz", true)),
       td(edit("offset", "Offset in MHz", true)),
       td(choose("bandwidth", "Bandwidth", Seq("" -> "—", "Narrow" -> "Narrow", "Wide" -> "Wide"))),
-      td(signal("rxSignal", "RX signaling")), td(signal("txSignal", "TX signaling")),
+      td(div(cls := "ctcss-controls")(
+        choose("ctcssMode", "CTCSS mode", Seq("None" -> "None", "Tone" -> "Tone", "TSQL" -> "TSQL")),
+        choose("ctcssFrequency", "CTCSS frequency in Hz",
+          Seq("" -> "Select tone") ++ CtcssFrequency.values.toSeq.map(tone =>
+            tone.hz.bigDecimal.toPlainString -> s"${tone.hz} Hz"
+          ))
+      )),
       td(choose("mode", "Mode", Seq("Fm" -> "FM", "Am" -> "AM", "Digital" -> "Digital"))),
       td(
-        textarea(name := prefix + "remarks", attr("data-field") := "remarks", attr("aria-label") := "Remarks", rows := 2)(current("remarks"))
+        textarea(name := prefix + "remarks", attr("data-field") := "remarks", attr("aria-label") := "Remarks", rows := 1)(current("remarks"))
       ),
       td(cls := "row-controls")(
         button(tpe := "button", attr("data-action") := "up", attr("aria-label") := "Move channel up")("↑"),
         button(tpe := "button", attr("data-action") := "down", attr("aria-label") := "Move channel down")("↓"),
-        button(tpe := "button", attr("data-action") := "delete")("Delete")
+        button(tpe := "button", attr("data-action") := "copy",
+          attr("aria-label") := "Copy channel", title := "Copy channel")(
+          img(src := "/icons/copy.svg", alt := "", width := 16, height := 16)
+        ),
+        button(tpe := "button", attr("data-action") := "delete",
+          attr("aria-label") := "Delete channel", title := "Delete channel")(
+          img(src := "/icons/trash.svg", alt := "", width := 16, height := 16)
+        )
       )
     )
 
@@ -133,6 +143,9 @@ private[web] object Ics205Editor:
       const form = document.getElementById('plan-form');
       const rows = document.getElementById('channel-rows');
       const status = document.getElementById('status');
+      const paste = document.getElementById('paste-row');
+      const clipboardStatus = document.getElementById('clipboard-status');
+      let copiedChannel = null;
       let dirty = form.dataset.unsaved === 'true';
       function changed() { dirty = true; status.textContent = 'Unsaved changes'; }
       function refresh() {
@@ -141,6 +154,11 @@ private[web] object Ics205Editor:
           row.querySelectorAll('[data-field]').forEach(control => {
             control.name = 'row.' + index + '.' + control.dataset.field;
           });
+          const frequency = row.querySelector('[data-field=ctcssFrequency]');
+          const enabled = row.querySelector('[data-field=ctcssMode]').value !== 'None';
+          frequency.hidden = !enabled;
+          frequency.disabled = !enabled;
+          frequency.required = enabled;
           row.querySelector('[data-action=up]').disabled = index === 0;
           row.querySelector('[data-action=down]').disabled = index === list.length - 1;
           row.querySelectorAll('[data-action]').forEach(button => {
@@ -150,19 +168,40 @@ private[web] object Ics205Editor:
         document.getElementById('row-count').value = list.length;
         document.getElementById('row-status').textContent = list.length + (list.length === 1 ? ' channel' : ' channels');
       }
-      document.getElementById('add-row').addEventListener('click', () => {
+      function insertChannel(values = {}) {
         const row = document.getElementById('channel-template').content.firstElementChild.cloneNode(true);
+        row.querySelectorAll('[data-field]').forEach(control => {
+          if (control.dataset.field !== 'id' && Object.hasOwn(values, control.dataset.field)) {
+            control.value = values[control.dataset.field];
+          }
+        });
         row.querySelector('[data-field=id]').value = crypto.randomUUID();
         rows.append(row);
         refresh();
         changed();
         row.querySelector('[data-field=name]').focus();
+      }
+      document.getElementById('add-row').addEventListener('click', () => insertChannel());
+      paste.addEventListener('click', () => {
+        if (!copiedChannel) return;
+        insertChannel(copiedChannel);
+        clipboardStatus.textContent = 'Channel pasted at the end. Save plan to keep it.';
       });
       rows.addEventListener('click', event => {
         const button = event.target.closest('[data-action]');
         if (!button) return;
         const row = button.closest('tr');
         const action = button.dataset.action;
+        if (action === 'copy') {
+          copiedChannel = Object.fromEntries(
+            [...row.querySelectorAll('[data-field]')]
+              .filter(control => control.dataset.field !== 'id')
+              .map(control => [control.dataset.field, control.value])
+          );
+          paste.disabled = false;
+          clipboardStatus.textContent = 'Channel copied. Use Paste channel to add a copy.';
+          return;
+        }
         if (action === 'up' && row.previousElementSibling) rows.insertBefore(row, row.previousElementSibling);
         if (action === 'down' && row.nextElementSibling) rows.insertBefore(row.nextElementSibling, row);
         if (action === 'delete') {
