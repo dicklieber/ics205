@@ -60,6 +60,16 @@ class ApplicationModuleTests extends munit.FunSuite:
     val (index, indexBody, metrics, discovered, discoveredBody, missing) = responses
     assertEquals(index.status, Status.Ok)
     assert(indexBody.contains("Incident Radio Communications Plan"))
+    assert(!indexBody.contains("<style"))
+    Seq("/css/ics205.css", "/css/ics205-editor.css").foreach { path =>
+      assert(indexBody.contains(s"""href="$path""""))
+      val response = app.run(Request[IO](Method.GET, Uri.unsafeFromString(path))).unsafeRunSync()
+      assertEquals(response.status, Status.Ok)
+      assert(response.headers.headers.exists(h =>
+        h.name.toString.equalsIgnoreCase("Content-Type") && h.value.startsWith("text/css")
+      ))
+      assert(response.as[String].unsafeRunSync().contains("@media print"))
+    }
     assertEquals(metrics.status, Status.Ok)
     assert(metrics.headers.headers.exists(h =>
       h.name.toString.equalsIgnoreCase("Content-Type") &&

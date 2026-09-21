@@ -22,7 +22,7 @@ class Ics205PageTests extends munit.FunSuite:
   )
 
   test("maps the form and keeps receive and transmit signaling in separate columns"):
-    val html = Ics205Page.render(plan)
+    val html = Ics205Page.renderPrintable(plan)
     val row = html.split("<tr class=\"channel-row\" data-channel-id=\"repeater\">")(1).split("</tr>")(0)
     val cells = "<td[^>]*>(.*?)</td>".r.findAllMatchIn(row).map(_.group(1)).toSeq
     assertEquals(cells, Seq(
@@ -37,7 +37,7 @@ class Ics205PageTests extends munit.FunSuite:
     assert(!html.contains("146.34"))
 
   test("renders signed positive and zero offsets without rounding receive frequency"):
-    val html = Ics205Page.render(plan.copy(channels = Seq(
+    val html = Ics205Page.renderPrintable(plan.copy(channels = Seq(
       channel.copy(frequency = RxWithOffset(mhz"446.00625", mhz"5")),
       channel.copy(frequency = RxWithOffset(mhz"146.52"))
     )))
@@ -46,7 +46,7 @@ class Ics205PageTests extends munit.FunSuite:
     assert(html.contains(">0</td>"))
 
   test("escapes user data and leaves absent fields blank"):
-    val html = Ics205Page.render(plan.copy(
+    val html = Ics205Page.renderPrintable(plan.copy(
       incidentName = "<script>alert(1)</script>",
       preparedBy = None, operationalPeriod = OperationalPeriod(),
       channels = Seq(channel.copy(
@@ -68,15 +68,15 @@ class Ics205PageTests extends munit.FunSuite:
       channel.copy(digital = Some(DigitalParameters.DStar(Some("CQCQCQ"), Some("RPT A"), Some("RPT G")))),
       channel.copy(digital = Some(DigitalParameters.P25(Some("F7E"), Some(42))))
     )
-    val html = Ics205Page.render(plan.copy(channels = channels))
+    val html = Ics205Page.renderPrintable(plan.copy(channels = channels))
     Seq("NAC 293", "Digital", "Monitor\nDMR: CC 1, TS 2, TG 3100",
       "D-STAR; UR: CQCQCQ; RPT1: RPT A; RPT2: RPT G",
       "P25; NAC: F7E; TG: 42").foreach(value => assert(html.contains(value), value))
 
   test("pads empty forms to eight rows and paginates without losing channels"):
-    val empty = Ics205Page.render(plan.copy(channels = Seq.empty))
+    val empty = Ics205Page.renderPrintable(plan.copy(channels = Seq.empty))
     assertEquals("class=\"channel-row\"".r.findAllIn(empty).size, 8)
-    val many = Ics205Page.render(plan.copy(channels =
+    val many = Ics205Page.renderPrintable(plan.copy(channels =
       (1 to 17).map(i => channel.copy(id = s"channel-$i"))
     ))
     assertEquals("class=\"sheet\"".r.findAllIn(many).size, 3)

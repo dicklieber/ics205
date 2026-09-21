@@ -34,7 +34,9 @@ object Ics205Page:
     "RX Signaling", "TX Signaling", "Mode", "Remarks"
   )
 
-  def render(plan: Ics205): String =
+  def render(plan: Ics205): String = Ics205Editor.render(plan)
+
+  def renderPrintable(plan: Ics205): String =
     val pages = if plan.channels.isEmpty then Seq(Seq.empty[Ics205Channel])
                 else plan.channels.grouped(rowsPerPage).toSeq
     doctype("html")(
@@ -43,7 +45,7 @@ object Ics205Page:
           meta(charset := "utf-8"),
           meta(name := "viewport", content := "width=device-width, initial-scale=1"),
           scalatags.Text.tags2.title(s"ICS 205 — ${plan.incidentName}"),
-          scalatags.Text.tags2.style(raw(css))
+          link(rel := "stylesheet", href := "/css/ics205.css")
         ),
         body(pages.zipWithIndex.map { case (channels, index) =>
           formPage(plan, channels, index + 1)
@@ -78,9 +80,7 @@ object Ics205Page:
         ),
         div(cls := "section-label")(strong("4. Basic Radio Channel Use:")),
         table(cls := "channels", attr("aria-label") := "Basic Radio Channel Use")(
-          colgroup(Seq(4, 3, 8, 16, 8, 8, 7, 7, 8, 8, 5, 18).map(
-            width => col(style := s"width: ${width}%")
-          )),
+          colgroup(columns.map(_ => col())),
           thead(tr(columns.map(label => th(attr("scope") := "col")(label)))),
           tbody(
             channels.map(channelRow),
@@ -149,47 +149,3 @@ object Ics205Page:
         .mkString("; ")
     case DigitalParameters.P25(nac, talkGroup) =>
       (Seq("P25") ++ nac.map("NAC: " + _) ++ talkGroup.map("TG: " + _)).mkString("; ")
-
-  private val css = """
-    @page { size: letter landscape; margin: 0.45in; }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #e9e9e9; color: #000; font: 10pt Arial, Helvetica, sans-serif; }
-    .sheet { width: 10.1in; margin: 24px auto; padding: 0.12in 0; background: white; }
-    h1 { margin: 0 0 6px; text-align: center; text-transform: uppercase; font-size: 15pt; }
-    .form { border: 2px solid black; }
-    .metadata { display: grid; grid-template-columns: 32% 34% 34%; border-bottom: 2px solid black; }
-    .field { padding: 4px 6px; min-height: 0.65in; line-height: 1.5; }
-    .field + .field { border-left: 2px solid black; }
-    .field strong { display: block; }
-    .period { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-    .value { white-space: pre-wrap; overflow-wrap: anywhere; }
-    .incident-name { font-size: 12pt; }
-    .section-label { padding: 4px 6px; }
-    .channels { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8pt; }
-    .channels th, .channels td { border: 1px solid black; padding: 4px; overflow-wrap: anywhere; }
-    .channels th:first-child, .channels td:first-child { border-left: 0; }
-    .channels th:last-child, .channels td:last-child { border-right: 0; }
-    .channels th { height: 0.5in; font-weight: normal; vertical-align: bottom; }
-    .channel-row { height: 0.45in; }
-    .channels td { vertical-align: top; }
-    .instructions { min-height: 1.35in; padding: 4px 6px; border-top: 1px solid black; }
-    .instructions .value { margin-top: 6px; }
-    .prepared-by { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 6px; border-top: 2px solid black; }
-    .name-line { flex: 1; }
-    .signature { flex: 1; display: flex; gap: 6px; }
-    .entry { display: inline-block; min-width: 60px; border-bottom: 1px solid black; overflow-wrap: anywhere; }
-    .signature .entry { flex: 1; }
-    .footer { display: grid; grid-template-columns: 20% 20% 60%; border-top: 1px solid black; }
-    .footer > * { padding: 4px 6px; }
-    .footer > * + * { border-left: 1px solid black; }
-    @media screen {
-      .sheet { box-shadow: 0 2px 12px #0002; padding: 0.25in; width: 10.6in; }
-    }
-    @media print {
-      body { background: white; }
-      .sheet { width: 100%; margin: 0; padding: 0; break-after: page; }
-      .sheet:last-child { break-after: auto; }
-      tr, .metadata, .prepared-by, .footer { break-inside: avoid; }
-      thead { display: table-header-group; }
-    }
-  """

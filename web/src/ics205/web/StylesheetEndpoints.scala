@@ -16,27 +16,24 @@
  *
  */
 
-package ics205.store
+package ics205.web
 
-import com.typesafe.scalalogging.LazyLogging
-import ics205.model.{Ics205, OperationalPeriod}
-import ics205.util.FileHelper
-import jakarta.inject.{Inject, Singleton}
+import cats.effect.IO
+import jakarta.inject.Singleton
+import scala.io.Source
+import scala.util.Using
+import sttp.tapir.*
+import sttp.tapir.server.ServerEndpoint
 
-import java.time.LocalDateTime
-
+/** Serve only the public stylesheets from packaged classpath resources. */
 @Singleton
-class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
-  private val fileName = "ics205.json"
-
-  private var current: Ics205 = fileHelper.loadOrDefault[Ics205](fileName) {
-    Ics205(incidentName = "", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
-  }
-
-  def ics205(): Ics205 = synchronized { current }
-
-  def save(value: Ics205, refreshPrepared: Boolean = true): Unit = synchronized {
-    val preparedNow = if refreshPrepared then value.copy(prepared = LocalDateTime.now()) else value
-    fileHelper.save(fileName, preparedNow)
-    current = preparedNow
-  }
+class StylesheetEndpoints extends ApiEndpoints:
+  override val endpoints: List[ServerEndpoint[Any, IO]] =
+    List("ics205.css", "ics205-editor.css").map { fileName =>
+      lazy val css = Using.resource(Source.fromResource(s"css/$fileName", getClass.getClassLoader))(_.mkString)
+      endpoint.get
+        .in("css" / fileName)
+        .out(stringBody)
+        .out(header("Content-Type", "text/css; charset=utf-8"))
+        .serverLogicSuccess[IO](_ => IO.blocking(css))
+    }
