@@ -49,3 +49,6 @@ object Ics205Channel:
   // Older saved channels may omit remarks; use the model default when decoding.
   private given Configuration = Configuration.default.withDefaults
   given Codec.AsObject[Ics205Channel] = ConfiguredCodec.derived[Ics205Channel]
+
+
+  
