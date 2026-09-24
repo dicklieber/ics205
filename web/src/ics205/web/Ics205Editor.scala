@@ -18,12 +18,14 @@
 
 package ics205.web
 
+import ics205.auth.AuthenticatedUser
 import ics205.model.{CtcssFrequency, Ics205}
 import scalatags.Text.all.*
 
 private[web] object Ics205Editor:
   def render(plan: Ics205, submitted: Option[Map[String, String]] = None,
-             error: Option[String] = None, saved: Boolean = false): String =
+             error: Option[String] = None, saved: Boolean = false,
+             currentUser: Option[AuthenticatedUser] = None): String =
     val values = submitted.getOrElse(Ics205Form.fields(plan))
     val count = values.get("rowCount").flatMap(_.toIntOption).filter(n => n >= 0 && n <= 1000).getOrElse(0)
     def field(key: String, caption: String, kind: String = "text"): Frag =
@@ -41,8 +43,12 @@ private[web] object Ics205Editor:
           div(cls := "toolbar")(
             button(tpe := "submit")("Save plan"),
             button(tpe := "submit", attr("formaction") := "/preview", attr("formtarget") := "_blank")("Print preview"),
-login            a(href := "/admin/users", style := "margin-left: 10px; color: #0052cc; text-decoration: none; font-weight: bold;")("User Management"),
-            a(href := "/login", style := "margin-left: 10px; color: #0052cc; text-decoration: none;")("Log in"),
+            a(href := "/admin/users", style := "margin-left: 10px; color: #0052cc; text-decoration: none; font-weight: bold;")("User Management"),
+            currentUser match
+              case Some(user) =>
+                span(style := "margin-left: 10px; color: #5e6c84; font-size: 9.5pt;")(s"Logged in as: ", strong(user.username))
+              case None =>
+                a(href := "/login", style := "margin-left: 10px; color: #0052cc; text-decoration: none;")("Log in"),
             a(href := "/logout", style := "margin-left: 10px; color: #5e6c84; text-decoration: none;")("Log out"),
             span(id := "status", attr("role") := "status")(if saved then "Plan saved." else ""),
             p("Changes are saved with Save plan. Print preview includes your current edits.")

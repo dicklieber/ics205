@@ -18,20 +18,41 @@
 
 package ics205.auth
 
-import io.circe.Codec
+import io.circe.{Codec, Decoder, Encoder, HCursor, Json, JsonObject}
 import io.circe.derivation.{Configuration, ConfiguredCodec}
 
 case class User(
   id: String,
   username: String,
   passwordHash: String,
-  roles: Set[String],
+  role: RolePermissions,
   enabled: Boolean = true
-)
+):
+  def roles: Set[String] = Set(role.toString.toLowerCase)
 
 object User:
-  private given Configuration = Configuration.default.withDefaults
-  given Codec.AsObject[User] = ConfiguredCodec.derived[User]
+  given Codec.AsObject[User] = Codec.AsObject.from(
+    (c: HCursor) => {
+      for
+        id <- c.downField("id").as[String]
+        username <- c.downField("username").as[String]
+        passwordHash <- c.downField("passwordHash").as[String]
+        role <- c.downField("role").as[RolePermissions].orElse(
+          c.downField("roles").as[Seq[String]].map(roles =>
+            roles.headOption.flatMap(RolePermissions.fromString).getOrElse(RolePermissions.User)
+          ).orElse(Right(RolePermissions.User))
+        )
+        enabled <- c.downField("enabled").as[Option[Boolean]].map(_.getOrElse(true))
+      yield User(id, username, passwordHash, role, enabled)
+    },
+    (u: User) => JsonObject(
+      "id" -> Json.fromString(u.id),
+      "username" -> Json.fromString(u.username),
+      "passwordHash" -> Json.fromString(u.passwordHash),
+      "role" -> Json.fromString(u.role.toString.toLowerCase),
+      "enabled" -> Json.fromBoolean(u.enabled)
+    )
+  )
 
 case class UserDatabase(
   users: Seq[User] = Seq.empty

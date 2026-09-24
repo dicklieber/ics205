@@ -18,7 +18,7 @@
 
 package ics205.web.admin
 
-import ics205.auth.{AuthenticatedUser, User}
+import ics205.auth.{AuthenticatedUser, RolePermissions, User}
 import scalatags.Text.all.*
 
 object UserAdminPage:
@@ -46,7 +46,7 @@ object UserAdminPage:
             div(cls := "admin-header")(
               div(
                 h1("User Administration"),
-                p(s"Logged in as: ", strong(currentUser.username), s" (${currentUser.roles.mkString(", ")})")
+                p(s"Logged in as: ", strong(currentUser.username), s" (${currentUser.role})")
               ),
               div(cls := "nav-links")(
                 a(href := "/")("← Back to Radio Plan"),
@@ -69,7 +69,7 @@ object UserAdminPage:
                   tr(
                     th("Username"),
                     th("User ID"),
-                    th("Roles"),
+                    th("Role"),
                     th("Status"),
                     th("Actions")
                   )
@@ -82,11 +82,7 @@ object UserAdminPage:
                       tr(
                         td(strong(user.username)),
                         td(span(style := "font-family: monospace; font-size: 9pt; color: #5e6c84;")(user.id)),
-                        td(
-                          user.roles.toSeq.sorted.map(role =>
-                            span(cls := "badge badge-role")(role)
-                          )
-                        ),
+                        td(span(cls := "badge badge-role")(user.role.toString)),
                         td(
                           if user.enabled then
                             span(cls := "badge badge-active")("Active")
@@ -144,15 +140,31 @@ object UserAdminPage:
                 ),
 
                 div(cls := "form-group")(
-                  label(attr("for") := "roles")("Roles"),
-                  input(
-                    tpe := "text",
-                    id := "roles",
-                    name := "roles",
-                    value := editingUser.map(_.roles.mkString(", ")).getOrElse("user"),
-                    placeholder := "e.g. admin, editor, user, viewer"
+                  label(attr("for") := "role")("Role"),
+                  select(
+                    id := "role",
+                    name := "role"
+                  )(
+                    RolePermissions.values.map { r =>
+                      option(
+                        value := r.toString.toLowerCase,
+                        if editingUser.exists(_.role == r) || (editingUser.isEmpty && r == RolePermissions.User) then selected else cls := ""
+                      )(r.toString)
+                    }
                   ),
-                  p(cls := "form-help")("Comma-separated list of roles (e.g., admin, editor, user, viewer).")
+                  p(cls := "form-help")("Select a single role for this user."),
+                  div(cls := "role-permissions-info", style := "margin-top: 8px; padding: 10px; background: #f4f5f7; border: 1px solid #ebecf0; border-radius: 4px; font-size: 9pt;")(
+                    strong("Role Permissions Reference:"),
+                    ul(style := "margin: 6px 0 0 0; padding-left: 20px;")(
+                      RolePermissions.values.map { r =>
+                        li(
+                          strong(r.toString),
+                          ": ",
+                          span(style := "color: #42526e;")(r.permissions.map(_.toString).toSeq.sorted.mkString(", "))
+                        )
+                      }
+                    )
+                  )
                 ),
 
                 div(cls := "form-group")(

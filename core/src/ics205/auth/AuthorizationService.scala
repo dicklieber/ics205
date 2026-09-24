@@ -23,7 +23,7 @@ object AuthorizationService:
     user: AuthenticatedUser,
     permission: Permission
   ): Either[AuthError, AuthenticatedUser] =
-    if RolePermissions.hasPermission(user.roles, permission) then
+    if user.hasPermission(permission) then
       Right(user)
     else
       Left(Forbidden(s"User '${user.username}' is not authorized for permission '${permission}'"))

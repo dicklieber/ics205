@@ -65,9 +65,24 @@ class Ics205FormTests extends munit.FunSuite:
       val helper = new FileHelper:
         override val directory: os.Path = tempDirectory
       val store = new Ics205Store(helper)
-      val app = Http4sServerInterpreter[IO]().toRoutes(new IndexEndpoints(store).endpoints).orNotFound
+      val userStore = new ics205.store.UserStore(helper)
+      val sessionStore = new ics205.store.InMemJsonSessionStore(helper)
+      val passwordService = new ics205.auth.ScalaPassPasswordService
+      val authService = new ics205.auth.AuthenticationService(userStore, passwordService, sessionStore)
+      val config = ics205.auth.AuthConfig()
+      userStore.add(ics205.auth.User("u1", "testuser", passwordService.hash("testpass"), ics205.auth.RolePermissions.Admin, enabled = true))
+      val session = sessionStore.create("u1")
+      val app = Http4sServerInterpreter[IO]().toRoutes(new IndexEndpoints(store, authService, config).endpoints).orNotFound
+
+      // Unauthenticated request redirects to /login
+      val unauthed = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/"))
+        .withEntity(UrlForm(Ics205Form.fields(base).toSeq*))).unsafeRunSync()
+      assertEquals(unauthed.status, Status.SeeOther)
+      assertEquals(unauthed.headers.get(org.typelevel.ci.CIString("Location")).map(_.head.value), Some("/login"))
+
       def post(path: String, fields: Map[String, String]) =
         app.run(Request[IO](Method.POST, Uri.unsafeFromString(path))
+          .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}"))
           .withEntity(UrlForm(fields.toSeq*))).unsafeRunSync()
       val fields = Ics205Form.fields(base)
       val preview = post("/preview", fields)

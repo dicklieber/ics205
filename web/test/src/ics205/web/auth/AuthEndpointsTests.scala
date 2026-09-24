@@ -57,6 +57,40 @@ class AuthEndpointsTests extends munit.FunSuite:
     finally
       os.remove.all(tempDir)
 
+  test("GET / without session redirects to /login"):
+    withContext { (tempDir, userStore, sessionStore, _, authService, security, authEndpoints, _) =>
+      val icsStore = new ics205.store.Ics205Store(new FileHelper(tempDir))
+      val indexEndpoints = new ics205.web.IndexEndpoints(icsStore, authService, security.config)
+      val app = Http4sServerInterpreter[IO]().toRoutes(authEndpoints.endpoints ++ indexEndpoints.endpoints).orNotFound
+
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/"))
+      val res = app.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+      assertEquals(res.headers.get(CIString("Location")).map(_.head.value), Some("/login"))
+    }
+
+  test("GET / with valid session renders editor"):
+    withContext { (tempDir, userStore, sessionStore, passwordService, authService, security, authEndpoints, _) =>
+      val hash = passwordService.hash("mypassword")
+      userStore.add(User("u1", "alice", hash, RolePermissions.Admin, enabled = true))
+      val session = sessionStore.create("u1")
+
+      val icsStore = new ics205.store.Ics205Store(new FileHelper(tempDir))
+      val indexEndpoints = new ics205.web.IndexEndpoints(icsStore, authService, security.config)
+      val app = Http4sServerInterpreter[IO]().toRoutes(authEndpoints.endpoints ++ indexEndpoints.endpoints).orNotFound
+
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val (res, body) = (for
+        r <- app.run(req)
+        b <- r.as[String]
+      yield (r, b)).unsafeRunSync()
+
+      assertEquals(res.status, Status.Ok)
+      assert(body.contains("Incident Radio Communications Plan"))
+      assert(body.contains("alice"))
+    }
+
   test("GET /login renders HTML login page with form and messages"):
     withContext { (_, _, _, _, _, _, _, app) =>
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/login?msg=Logged+out&err=Invalid+credentials"))
@@ -76,7 +110,7 @@ class AuthEndpointsTests extends munit.FunSuite:
   test("POST /login with form data authenticates user, sets session cookie, and redirects to target"):
     withContext { (_, userStore, sessionStore, passwordService, _, _, _, app) =>
       val hash = passwordService.hash("mypassword")
-      userStore.add(User("u1", "alice", hash, Set("admin"), enabled = true))
+      userStore.add(User("u1", "alice", hash, RolePermissions.Admin, enabled = true))
 
       val formData = "username=alice&password=mypassword&redirect=%2Fadmin%2Fusers"
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/login"))
@@ -102,7 +136,7 @@ class AuthEndpointsTests extends munit.FunSuite:
   test("POST /login with invalid form data redirects to /login with error"):
     withContext { (_, userStore, _, passwordService, _, _, _, app) =>
       val hash = passwordService.hash("mypassword")
-      userStore.add(User("u1", "alice", hash, Set("admin"), enabled = true))
+      userStore.add(User("u1", "alice", hash, RolePermissions.Admin, enabled = true))
 
       val formData = "username=alice&password=wrong&redirect=%2Fadmin%2Fusers"
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/login"))
@@ -119,7 +153,7 @@ class AuthEndpointsTests extends munit.FunSuite:
 
   test("GET /logout clears session, expires cookie, and redirects to /login"):
     withContext { (_, userStore, sessionStore, _, _, _, _, app) =>
-      userStore.add(User("u1", "alice", "hash", Set("admin"), enabled = true))
+      userStore.add(User("u1", "alice", "hash", RolePermissions.Admin, enabled = true))
       val session = sessionStore.create("u1")
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/logout"))
@@ -140,7 +174,7 @@ class AuthEndpointsTests extends munit.FunSuite:
   test("successful login returns 200, sets session cookie with proper flags, and returns AuthenticatedUser"):
     withContext { (_, userStore, sessionStore, passwordService, _, _, _, app) =>
       val hash = passwordService.hash("mypassword")
-      userStore.add(User("u1", "alice", hash, Set("admin", "editor"), enabled = true))
+      userStore.add(User("u1", "alice", hash, RolePermissions.Admin, enabled = true))
 
       val reqBody = """{"username":"alice","password":"mypassword"}"""
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/login"))
@@ -163,13 +197,13 @@ class AuthEndpointsTests extends munit.FunSuite:
 
       val json = parse(body).toOption.get
       assertEquals(json.hcursor.downField("user").downField("username").as[String], Right("alice"))
-      assertEquals(json.hcursor.downField("user").downField("roles").as[Set[String]], Right(Set("admin", "editor")))
+      assertEquals(json.hcursor.downField("user").downField("role").as[String], Right("admin"))
     }
 
   test("failed login with bad username or password returns 401 without cookie"):
     withContext { (_, userStore, _, passwordService, _, _, _, app) =>
       val hash = passwordService.hash("mypassword")
-      userStore.add(User("u1", "alice", hash, Set("admin"), enabled = true))
+      userStore.add(User("u1", "alice", hash, RolePermissions.Admin, enabled = true))
 
       // Bad password
       val badPassReq = Request[IO](Method.POST, Uri.unsafeFromString("/login"))
@@ -192,7 +226,7 @@ class AuthEndpointsTests extends munit.FunSuite:
   test("disabled user login returns 401"):
     withContext { (_, userStore, _, passwordService, _, _, _, app) =>
       val hash = passwordService.hash("mypassword")
-      userStore.add(User("u1", "alice", hash, Set("admin"), enabled = false))
+      userStore.add(User("u1", "alice", hash, RolePermissions.Admin, enabled = false))
 
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/login"))
         .withEntity("""{"username":"alice","password":"mypassword"}""")
@@ -204,7 +238,7 @@ class AuthEndpointsTests extends munit.FunSuite:
 
   test("logout invalidates session and clears session cookie"):
     withContext { (_, userStore, sessionStore, _, _, _, _, app) =>
-      userStore.add(User("u1", "alice", "hash", Set("admin"), enabled = true))
+      userStore.add(User("u1", "alice", "hash", RolePermissions.Admin, enabled = true))
       val session = sessionStore.create("u1")
 
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/logout"))
@@ -225,7 +259,7 @@ class AuthEndpointsTests extends munit.FunSuite:
 
   test("protected endpoint requires valid session cookie"):
     withContext { (_, userStore, sessionStore, _, _, _, _, app) =>
-      userStore.add(User("u1", "alice", "hash", Set("admin"), enabled = true))
+      userStore.add(User("u1", "alice", "hash", RolePermissions.Admin, enabled = true))
       val session = sessionStore.create("u1")
 
       // No cookie -> 401
@@ -250,8 +284,8 @@ class AuthEndpointsTests extends munit.FunSuite:
 
   test("permission-guarded endpoints allow authorized roles and return 403 Forbidden for unauthorized roles"):
     withContext { (_, userStore, sessionStore, _, _, _, _, app) =>
-      userStore.add(User("u-admin", "adminUser", "hash", Set("admin"), enabled = true))
-      userStore.add(User("u-editor", "editorUser", "hash", Set("editor"), enabled = true))
+      userStore.add(User("u-admin", "adminUser", "hash", RolePermissions.Admin, enabled = true))
+      userStore.add(User("u-editor", "editorUser", "hash", RolePermissions.Editor, enabled = true))
 
       val adminSession = sessionStore.create("u-admin")
       val editorSession = sessionStore.create("u-editor")
@@ -273,7 +307,7 @@ class AuthEndpointsTests extends munit.FunSuite:
 
   test("role changes in UserStore take effect immediately for existing session"):
     withContext { (_, userStore, sessionStore, _, _, _, _, app) =>
-      val user = User("u-user", "bob", "hash", Set("viewer"), enabled = true)
+      val user = User("u-user", "bob", "hash", RolePermissions.Viewer, enabled = true)
       userStore.add(user)
       val session = sessionStore.create("u-user")
 
@@ -285,7 +319,7 @@ class AuthEndpointsTests extends munit.FunSuite:
       assertEquals(res1.status, Status.Forbidden)
 
       // Promote bob to admin in UserStore
-      userStore.update(user.copy(roles = Set("admin")))
+      userStore.update(user.copy(role = RolePermissions.Admin))
 
       // Same session now succeeds
       val res2 = app.run(
@@ -297,7 +331,7 @@ class AuthEndpointsTests extends munit.FunSuite:
 
   test("disabling user in UserStore invalidates active session immediately"):
     withContext { (_, userStore, sessionStore, _, _, _, _, app) =>
-      val user = User("u-user", "bob", "hash", Set("admin"), enabled = true)
+      val user = User("u-user", "bob", "hash", RolePermissions.Admin, enabled = true)
       userStore.add(user)
       val session = sessionStore.create("u-user")
 

@@ -83,10 +83,6 @@ object LoginPage:
                   button(tpe := "submit", cls := "btn btn-primary", style := "width: 100%; padding: 10px; font-size: 11pt;")("Log in")
                 )
               )
-            ),
-
-            div(style := "text-align: center; margin-top: 16px;")(
-              a(href := "/", style := "color: #0052cc; text-decoration: none; font-size: 9.5pt;")("← Back to Public Radio Plan")
             )
           )
         )

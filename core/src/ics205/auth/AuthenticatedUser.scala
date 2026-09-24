@@ -24,8 +24,10 @@ import io.circe.derivation.{Configuration, ConfiguredCodec}
 case class AuthenticatedUser(
   id: String,
   username: String,
-  roles: Set[String]
-)
+  role: RolePermissions
+):
+  def roles: Set[String] = Set(role.toString.toLowerCase)
+  def hasPermission(permission: Permission): Boolean = role.hasPermission(permission)
 
 object AuthenticatedUser:
   private given Configuration = Configuration.default.withDefaults

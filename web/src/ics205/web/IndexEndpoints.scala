@@ -19,53 +19,92 @@
 package ics205.web
 
 import cats.effect.IO
+import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService}
 import ics205.store.Ics205Store
 import jakarta.inject.{Inject, Singleton}
-import sttp.tapir.*
 import sttp.model.StatusCode
+import sttp.tapir.*
 import sttp.tapir.server.ServerEndpoint
 
 @Singleton
-class IndexEndpoints @Inject() (val store: Ics205Store) extends ApiEndpoints:
+class IndexEndpoints @Inject() (
+  val store: Ics205Store,
+  authService: AuthenticationService,
+  config: AuthConfig
+) extends ApiEndpoints:
+
+  def this(store: Ics205Store) = this(
+    store,
+    new AuthenticationService(
+      new ics205.store.UserStore(new ics205.util.FileHelper),
+      new ics205.auth.ScalaPassPasswordService,
+      new ics205.store.InMemJsonSessionStore(new ics205.util.FileHelper)
+    ),
+    ics205.auth.AuthConfig()
+  )
 
   def index(): String = Ics205Page.render(store.ics205())
 
-  private val indexEndpoint = endpoint.get
+  private val indexEndpoint: ServerEndpoint[Any, IO] = endpoint.get
     .in("")
+    .in(cookie[Option[String]](config.cookieName))
     .in(query[Option[String]]("saved"))
-    .out(htmlBodyUtf8)
-    .serverLogicSuccess[IO](saved => IO(Ics205Editor.render(store.ics205(), saved = saved.contains("1"))))
+    .out(statusCode.and(header[Option[String]]("Location")).and(htmlBodyUtf8))
+    .serverLogicSuccess[IO] { (sessionIdOpt, saved) =>
+      IO.blocking {
+        sessionIdOpt.flatMap(id => authService.authenticateSession(id).toOption) match
+          case Some(user) =>
+            (StatusCode.Ok, None, Ics205Editor.render(store.ics205(), saved = saved.contains("1"), currentUser = Some(user)))
+          case None =>
+            (StatusCode.SeeOther, Some("/login"), "")
+      }
+    }
 
-  private val saveEndpoint = endpoint.post
+  private val saveEndpoint: ServerEndpoint[Any, IO] = endpoint.post
     .in("")
+    .in(cookie[Option[String]](config.cookieName))
     .in(formBody[Map[String, String]])
-    .errorOut(statusCode.and(htmlBodyUtf8))
+    .errorOut(statusCode.and(header[Option[String]]("Location")).and(htmlBodyUtf8))
     .out(statusCode.and(header[String]("Location")))
-    .serverLogic[IO](data => IO.blocking {
-      val current = store.ics205()
-      Ics205Form.decode(data, current) match
-        case Left(message) =>
-          Left((StatusCode.UnprocessableEntity, Ics205Editor.render(current, Some(data), Some(message))))
-        case Right(plan) =>
-          try
-            store.save(plan, refreshPrepared = false)
-            Right((StatusCode.SeeOther, "/?saved=1"))
-          catch
-            case _: java.io.IOException =>
-              Left((StatusCode.InternalServerError, Ics205Editor.render(current, Some(data),
-                Some("The plan could not be saved. Check that the data directory is writable and try again."))))
-    })
+    .serverLogic[IO] { (sessionIdOpt, data) =>
+      IO.blocking {
+        sessionIdOpt.flatMap(id => authService.authenticateSession(id).toOption) match
+          case None =>
+            Left((StatusCode.SeeOther, Some("/login"), ""))
+          case Some(user) =>
+            val current = store.ics205()
+            Ics205Form.decode(data, current) match
+              case Left(message) =>
+                Left((StatusCode.UnprocessableEntity, None, Ics205Editor.render(current, Some(data), Some(message), currentUser = Some(user))))
+              case Right(plan) =>
+                try
+                  store.save(plan, refreshPrepared = false)
+                  Right((StatusCode.SeeOther, "/?saved=1"))
+                catch
+                  case _: java.io.IOException =>
+                    Left((StatusCode.InternalServerError, None, Ics205Editor.render(current, Some(data),
+                      Some("The plan could not be saved. Check that the data directory is writable and try again."), currentUser = Some(user))))
+      }
+    }
 
-  private val previewEndpoint = endpoint.post
+  private val previewEndpoint: ServerEndpoint[Any, IO] = endpoint.post
     .in("preview")
+    .in(cookie[Option[String]](config.cookieName))
     .in(formBody[Map[String, String]])
-    .out(statusCode.and(htmlBodyUtf8))
-    .serverLogicSuccess[IO](data => IO {
-      val current = store.ics205()
-      Ics205Form.decode(data, current) match
-        case Left(message) =>
-          (StatusCode.UnprocessableEntity, Ics205Editor.render(current, Some(data), Some(message)))
-        case Right(plan) => (StatusCode.Ok, Ics205Page.renderPrintable(plan))
-    })
+    .out(statusCode.and(header[Option[String]]("Location")).and(htmlBodyUtf8))
+    .serverLogicSuccess[IO] { (sessionIdOpt, data) =>
+      IO.blocking {
+        sessionIdOpt.flatMap(id => authService.authenticateSession(id).toOption) match
+          case None =>
+            (StatusCode.SeeOther, Some("/login"), "")
+          case Some(user) =>
+            val current = store.ics205()
+            Ics205Form.decode(data, current) match
+              case Left(message) =>
+                (StatusCode.UnprocessableEntity, None, Ics205Editor.render(current, Some(data), Some(message), currentUser = Some(user)))
+              case Right(plan) =>
+                (StatusCode.Ok, None, Ics205Page.renderPrintable(plan))
+      }
+    }
 
   override val endpoints: List[ServerEndpoint[Any, IO]] = List(indexEndpoint, saveEndpoint, previewEndpoint)

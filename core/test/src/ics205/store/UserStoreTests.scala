@@ -18,7 +18,7 @@
 
 package ics205.store
 
-import ics205.auth.{AuthConfig, User}
+import ics205.auth.{AuthConfig, RolePermissions, User}
 import ics205.util.FileHelper
 
 class UserStoreTests extends munit.FunSuite:
@@ -34,7 +34,7 @@ class UserStoreTests extends munit.FunSuite:
     id = "user-1",
     username = "admin",
     passwordHash = "hash123",
-    roles = Set("admin"),
+    role = RolePermissions.Admin,
     enabled = true
   )
 
@@ -67,10 +67,10 @@ class UserStoreTests extends munit.FunSuite:
       val store = new UserStore(helper(dir))
       assertEquals(store.add(testUser), Right(testUser))
 
-      val dupName = User("user-2", "ADMIN", "hash2", Set("user"))
+      val dupName = User("user-2", "ADMIN", "hash2", RolePermissions.User)
       assert(store.add(dupName).isLeft)
 
-      val dupId = User("user-1", "other", "hash3", Set("user"))
+      val dupId = User("user-1", "other", "hash3", RolePermissions.User)
       assert(store.add(dupId).isLeft)
     }
 
@@ -78,7 +78,7 @@ class UserStoreTests extends munit.FunSuite:
     withDirectory { dir =>
       val store = new UserStore(helper(dir))
       store.add(testUser)
-      val updated = testUser.copy(roles = Set("admin", "editor"), enabled = false)
+      val updated = testUser.copy(role = RolePermissions.Editor, enabled = false)
       assertEquals(store.update(updated), Right(updated))
       assertEquals(store.findById("user-1"), Some(updated))
 
@@ -103,4 +103,26 @@ class UserStoreTests extends munit.FunSuite:
       os.write(dir / "users.json", "{ malformed json content }")
       val store = new UserStore(helper(dir))
       assertEquals(store.all(), Seq.empty)
+    }
+
+  test("loads users from legacy JSON with roles array"):
+    withDirectory { dir =>
+      val legacyJson =
+        """{
+          |  "users": [
+          |    {
+          |      "id": "legacy-1",
+          |      "username": "legacyuser",
+          |      "passwordHash": "hash",
+          |      "roles": ["editor", "viewer"],
+          |      "enabled": true
+          |    }
+          |  ]
+          |}""".stripMargin
+      os.write(dir / "users.json", legacyJson)
+      val store = new UserStore(helper(dir))
+      val user = store.findById("legacy-1")
+      assert(user.isDefined)
+      assertEquals(user.get.username, "legacyuser")
+      assertEquals(user.get.role, RolePermissions.Editor)
     }

@@ -33,7 +33,7 @@ object UserAdminCli:
     println("=== ICS-205 User Creation Tool ===")
 
     var parsedUsername: Option[String] = None
-    var parsedRoles: Option[Set[String]] = None
+    var parsedRole: Option[RolePermissions] = None
     var parsedPassword: Option[String] = None
 
     var i = 0
@@ -45,9 +45,8 @@ object UserAdminCli:
         case "--password" if i + 1 < args.length =>
           parsedPassword = Some(args(i + 1))
           i += 2
-        case "--roles" if i + 1 < args.length =>
-          val r = args(i + 1).split(",").map(_.trim).filter(_.nonEmpty).toSet
-          parsedRoles = Some(r)
+        case "--role" | "--roles" if i + 1 < args.length =>
+          parsedRole = RolePermissions.fromString(args(i + 1).trim)
           i += 2
         case "--create-user" | "-u" if i + 1 < args.length && !args(i + 1).startsWith("-") =>
           if parsedUsername.isEmpty then
@@ -79,16 +78,19 @@ object UserAdminCli:
       System.err.println("Error: Username cannot be empty.")
       sys.exit(1)
 
-    val roles = parsedRoles.getOrElse {
-      val rolesInput = if console != null then
-        val input = console.readLine("Roles (comma-separated, default 'admin'): ")
+    val role = parsedRole.getOrElse {
+      val roleInput = if console != null then
+        val input = console.readLine(s"Role [${RolePermissions.values.mkString(", ")}] (default 'Admin'): ")
         if input == null then "" else input.trim
       else
-        val line = scala.io.StdIn.readLine("Roles (comma-separated, default 'admin'): ")
+        val line = scala.io.StdIn.readLine(s"Role [${RolePermissions.values.mkString(", ")}] (default 'Admin'): ")
         if line == null then "" else line.trim
 
-      if rolesInput.isEmpty then Set("admin")
-      else rolesInput.split(",").map(_.trim).filter(_.nonEmpty).toSet
+      if roleInput.isEmpty then RolePermissions.Admin
+      else RolePermissions.fromString(roleInput).getOrElse {
+        println(s"Unknown role '$roleInput', defaulting to 'Admin'")
+        RolePermissions.Admin
+      }
     }
 
     val password = parsedPassword.getOrElse {
@@ -115,13 +117,13 @@ object UserAdminCli:
       id = UUID.randomUUID().toString,
       username = username,
       passwordHash = hash,
-      roles = roles,
+      role = role,
       enabled = true
     )
 
     userStore.add(user) match
       case Right(u) =>
-        println(s"User '${u.username}' (id: ${u.id}) created successfully with roles: ${u.roles.mkString(", ")}")
+        println(s"User '${u.username}' (id: ${u.id}) created successfully with role: ${u.role}")
       case Left(err) =>
         System.err.println(s"Error creating user: $err")
         sys.exit(1)

@@ -48,8 +48,19 @@ class ApplicationModuleTests extends munit.FunSuite:
   test("discovered endpoint groups are served by the web application"):
     val injector = Guice.createInjector(new ApplicationModule)
     val app = injector.getInstance(classOf[WebApplication]).httpApp
+    val userStore = injector.getInstance(classOf[ics205.store.UserStore])
+    val sessionStore = injector.getInstance(classOf[ics205.store.SessionStore])
+    userStore.add(ics205.auth.User("test-id", "admin", "hash", ics205.auth.RolePermissions.Admin, enabled = true))
+    val session = sessionStore.create("test-id")
+
+    // Unauthenticated connection to / redirects to /login
+    val unauthed = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/"))).unsafeRunSync()
+    assertEquals(unauthed.status, Status.SeeOther)
+    assertEquals(unauthed.headers.get(org.typelevel.ci.CIString("Location")).map(_.head.value), Some("/login"))
+
     val responses = (for
-      index <- app.run(Request[IO](Method.GET, Uri.unsafeFromString("/")))
+      index <- app.run(Request[IO](Method.GET, Uri.unsafeFromString("/"))
+        .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}")))
       indexBody <- index.as[String]
       metrics <- app.run(Request[IO](Method.GET, Uri.unsafeFromString("/metrics")))
       discovered <- app.run(Request[IO](Method.GET, Uri.unsafeFromString("/test-discovery")))

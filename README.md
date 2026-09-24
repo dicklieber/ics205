@@ -77,13 +77,13 @@ User and session databases are stored in the application data directory (resolve
         "id": "c1f7a0b3-1234-4a56-b789-0123456789ab",
         "username": "admin",
         "passwordHash": "$argon2id$v=19$m=65536,t=3,p=4$...",
-        "roles": ["admin"],
+        "role": "admin",
         "enabled": true
       }
     ]
   }
   ```
-  Passwords are never stored in plaintext and are hashed using ScalaPass (Argon2id). Lookups by username are case-insensitive.
+  Passwords are never stored in plaintext and are hashed using ScalaPass (Argon2id). Lookups by username are case-insensitive. Each user belongs to a single `Role` (defined by the `RolePermissions` enum).
 
 - **Sessions file**: `sessions.json` (configurable via `AUTH_SESSIONS_FILE` or `AuthConfig.sessionFileName`)
   ```json
@@ -115,7 +115,7 @@ Session tokens are transmitted using an HTTP-only cookie named `session` (config
 
 ### Role Resolution for Existing Sessions
 
-Sessions store **only** the `userId` and timestamp metadata; roles and permissions are **never stored in the session**. On every authenticated request, `AuthenticationService` resolves the user's current roles and enabled status directly from `UserStore`. Modifying a user's roles or setting `enabled = false` takes effect immediately for all active sessions without requiring re-login or session invalidation.
+Sessions store **only** the `userId` and timestamp metadata; roles and permissions are **never stored in the session**. On every authenticated request, `AuthenticationService` resolves the user's current role and enabled status directly from `UserStore`. Modifying a user's role or setting `enabled = false` takes effect immediately for all active sessions without requiring re-login or session invalidation.
 
 ### Creating the Initial User
 
@@ -127,13 +127,13 @@ mill -i web.run -- --create-user
 
 Or run the CLI directly:
 ```bash
-# Prompts interactively for Username, Roles, and Password (without echoing password)
+# Prompts interactively for Username, Role, and Password (without echoing password)
 mill -i core.runMain ics205.auth.UserAdminCli
 ```
 
 Non-interactive user creation is also supported by passing arguments:
 ```bash
-mill core.runMain ics205.auth.UserAdminCli --username admin --roles admin --password secret
+mill core.runMain ics205.auth.UserAdminCli --username admin --role admin --password secret
 ```
 
 ### User Login and Logout UI
@@ -147,9 +147,9 @@ mill core.runMain ics205.auth.UserAdminCli --username admin --roles admin --pass
 
 Users with `Permission.EditUsers` (such as those with the `admin` role) can manage accounts via the web browser at `/admin/users`:
 
-- **View users**: View all accounts, IDs, assigned roles, and active/disabled status.
-- **Create user**: Add new accounts with username, password, roles, and enabled status. Passwords are automatically hashed via ScalaPass (Argon2id).
-- **Edit user**: Change usernames, modify roles, enable/disable accounts, and optionally reset passwords.
+- **View users**: View all accounts, IDs, assigned role, and active/disabled status.
+- **Create user**: Add new accounts with username, password, role select dropdown, and enabled status. Passwords are automatically hashed via ScalaPass (Argon2id).
+- **Edit user**: Change usernames, select role from dropdown, enable/disable accounts, and optionally reset passwords.
 - **Delete user**: Remove user accounts with confirmation.
 
 The page is guarded by `AuthSecurity.authorizedEndpoint(Permission.EditUsers)` returning `401 Unauthorized` for unauthenticated requests and `403 Forbidden` for users lacking the permission.

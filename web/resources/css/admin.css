@@ -88,7 +88,6 @@ table.users-table th {
     background-color: #f4f5f7;
     color: #5e6c84;
     font-size: 9.5pt;
-    text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
@@ -143,7 +142,17 @@ table.users-table tr:hover {
     background-color: #fafbfc;
 }
 
-.form-group input:focus {
+.form-group select {
+    padding: 8px 10px;
+    border: 1px solid #dfe1e6;
+    border-radius: 4px;
+    font-size: 10.5pt;
+    background-color: #fafbfc;
+    width: auto;
+}
+
+.form-group input:focus,
+.form-group select:focus {
     outline: none;
     border-color: #4c9aff;
     background-color: #ffffff;

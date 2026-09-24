@@ -19,7 +19,7 @@
 package ics205.web.admin
 
 import cats.effect.IO
-import ics205.auth.{PasswordService, Permission, User}
+import ics205.auth.{PasswordService, Permission, RolePermissions, User}
 import ics205.store.UserStore
 import ics205.web.ApiEndpoints
 import ics205.web.auth.AuthSecurity
@@ -73,8 +73,8 @@ class UserAdminEndpoints @Inject()(
         IO.blocking {
           val username = formData.getOrElse("username", "").trim
           val password = formData.getOrElse("password", "")
-          val rolesInput = formData.getOrElse("roles", "")
-          val roles = rolesInput.split(",").map(_.trim).filter(_.nonEmpty).toSet
+          val roleInput = formData.getOrElse("role", formData.getOrElse("roles", "user")).trim
+          val role = RolePermissions.fromString(roleInput).getOrElse(RolePermissions.User)
           val enabled = formData.get("enabled").contains("true")
 
           if username.isEmpty then
@@ -87,7 +87,7 @@ class UserAdminEndpoints @Inject()(
               id = UUID.randomUUID().toString,
               username = username,
               passwordHash = passwordHash,
-              roles = if roles.isEmpty then Set("user") else roles,
+              role = role,
               enabled = enabled
             )
             userStore.add(newUser) match
@@ -109,8 +109,8 @@ class UserAdminEndpoints @Inject()(
           val id = formData.getOrElse("id", "")
           val username = formData.getOrElse("username", "").trim
           val password = formData.getOrElse("password", "")
-          val rolesInput = formData.getOrElse("roles", "")
-          val roles = rolesInput.split(",").map(_.trim).filter(_.nonEmpty).toSet
+          val roleInput = formData.getOrElse("role", formData.getOrElse("roles", "user")).trim
+          val role = RolePermissions.fromString(roleInput).getOrElse(RolePermissions.User)
           val enabled = formData.get("enabled").contains("true")
 
           if id.isEmpty then
@@ -126,7 +126,7 @@ class UserAdminEndpoints @Inject()(
                 val updated = existing.copy(
                   username = username,
                   passwordHash = passwordHash,
-                  roles = if roles.isEmpty then Set("user") else roles,
+                  role = role,
                   enabled = enabled
                 )
                 userStore.update(updated) match

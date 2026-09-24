@@ -18,6 +18,8 @@
 
 package ics205.auth
 
+import io.circe.{Codec, Decoder, Encoder}
+
 enum Permission:
   case ViewUsers
   case EditUsers
@@ -25,29 +27,43 @@ enum Permission:
   case ViewPlans
   case EditPlans
 
+enum RolePermissions(val permissions: Set[Permission]):
+  case Admin extends RolePermissions(Set(
+    Permission.ViewUsers,
+    Permission.EditUsers,
+    Permission.ConfigureSystem,
+    Permission.ViewPlans,
+    Permission.EditPlans
+  ))
+  case Editor extends RolePermissions(Set(
+    Permission.ViewPlans,
+    Permission.EditPlans
+  ))
+  case User extends RolePermissions(Set(
+    Permission.ViewPlans
+  ))
+  case Viewer extends RolePermissions(Set(
+    Permission.ViewPlans
+  ))
+
+  def hasPermission(permission: Permission): Boolean =
+    permissions.contains(permission)
+
 object RolePermissions:
-  val roleToPermissions: Map[String, Set[Permission]] = Map(
-    "admin" -> Set(
-      Permission.ViewUsers,
-      Permission.EditUsers,
-      Permission.ConfigureSystem,
-      Permission.ViewPlans,
-      Permission.EditPlans
-    ),
-    "editor" -> Set(
-      Permission.ViewPlans,
-      Permission.EditPlans
-    ),
-    "user" -> Set(
-      Permission.ViewPlans
-    ),
-    "viewer" -> Set(
-      Permission.ViewPlans
-    )
+  def fromString(name: String): Option[RolePermissions] =
+    values.find(_.toString.equalsIgnoreCase(name.trim))
+
+  def hasPermission(role: RolePermissions, permission: Permission): Boolean =
+    role.hasPermission(permission)
+
+  def hasPermission(roleName: String, permission: Permission): Boolean =
+    fromString(roleName).exists(_.hasPermission(permission))
+
+
+  given Codec[RolePermissions] = Codec.from(
+    Decoder.decodeString.emap(str => fromString(str).toRight(s"Unknown role: $str")),
+    Encoder.encodeString.contramap(_.toString.toLowerCase)
   )
 
-  def permissionsForRoles(roles: Set[String]): Set[Permission] =
-    roles.flatMap(role => roleToPermissions.getOrElse(role.toLowerCase, Set.empty))
-
-  def hasPermission(roles: Set[String], permission: Permission): Boolean =
-    permissionsForRoles(roles).contains(permission)
+type Role = RolePermissions
+val Role: RolePermissions.type = RolePermissions

@@ -19,10 +19,10 @@
 package ics205.auth
 
 class AuthorizationServiceTests extends munit.FunSuite:
-  private val admin = AuthenticatedUser("1", "admin", Set("admin"))
-  private val editor = AuthenticatedUser("2", "editor", Set("editor"))
-  private val viewer = AuthenticatedUser("3", "viewer", Set("viewer"))
-  private val guest = AuthenticatedUser("4", "guest", Set("unknown-role"))
+  private val admin = AuthenticatedUser("1", "admin", RolePermissions.Admin)
+  private val editor = AuthenticatedUser("2", "editor", RolePermissions.Editor)
+  private val user = AuthenticatedUser("3", "user", RolePermissions.User)
+  private val viewer = AuthenticatedUser("4", "viewer", RolePermissions.Viewer)
 
   test("admin has all system permissions"):
     assertEquals(AuthorizationService.authorize(admin, Permission.ViewUsers), Right(admin))
@@ -37,11 +37,9 @@ class AuthorizationServiceTests extends munit.FunSuite:
     assert(AuthorizationService.authorize(editor, Permission.ViewUsers).isLeft)
     assert(AuthorizationService.authorize(editor, Permission.ConfigureSystem).isLeft)
 
-  test("viewer has view permission but not edit permission"):
+  test("viewer and user have view permission but not edit permission"):
     assertEquals(AuthorizationService.authorize(viewer, Permission.ViewPlans), Right(viewer))
     assert(AuthorizationService.authorize(viewer, Permission.EditPlans).isLeft)
     assert(AuthorizationService.authorize(viewer, Permission.ViewUsers).isLeft)
-
-  test("unrecognized role has no permissions"):
-    assert(AuthorizationService.authorize(guest, Permission.ViewPlans).isLeft)
-    assert(AuthorizationService.authorize(guest, Permission.ViewUsers).isLeft)
+    assertEquals(AuthorizationService.authorize(user, Permission.ViewPlans), Right(user))
+    assert(AuthorizationService.authorize(user, Permission.EditPlans).isLeft)
