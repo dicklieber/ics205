@@ -136,6 +136,24 @@ Non-interactive user creation is also supported by passing arguments:
 mill core.runMain ics205.auth.UserAdminCli --username admin --roles admin --password secret
 ```
 
+### User Login and Logout UI
+
+- **Login Page (`GET /login`)**: HTML login form for authenticating in the browser. Supports optional `?redirect=/path` parameter to return the user to their requested destination after authentication, as well as `?err=...` and `?msg=...` notices.
+- **Form Login (`POST /login`)**: Accepts `username`, `password`, and optional `redirect` via URL-encoded form body. On success, sets the session cookie and redirects via HTTP 303.
+- **JSON Login (`POST /login`)**: Accepts JSON body `{"username": "...", "password": "..."}` for API clients.
+- **Logout (`GET /logout` and `POST /logout`)**: Invalidates the active session in `SessionStore`, clears the browser cookie, and redirects to `/login?msg=Logged+out+successfully.` (or returns JSON response for POST API requests).
+
+### User Administration UI
+
+Users with `Permission.EditUsers` (such as those with the `admin` role) can manage accounts via the web browser at `/admin/users`:
+
+- **View users**: View all accounts, IDs, assigned roles, and active/disabled status.
+- **Create user**: Add new accounts with username, password, roles, and enabled status. Passwords are automatically hashed via ScalaPass (Argon2id).
+- **Edit user**: Change usernames, modify roles, enable/disable accounts, and optionally reset passwords.
+- **Delete user**: Remove user accounts with confirmation.
+
+The page is guarded by `AuthSecurity.authorizedEndpoint(Permission.EditUsers)` returning `401 Unauthorized` for unauthenticated requests and `403 Forbidden` for users lacking the permission.
+
 ### Protecting Tapir Endpoints
 
 Inject `AuthSecurity` into your endpoint class.

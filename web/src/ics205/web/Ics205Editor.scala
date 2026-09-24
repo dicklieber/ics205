@@ -41,6 +41,9 @@ private[web] object Ics205Editor:
           div(cls := "toolbar")(
             button(tpe := "submit")("Save plan"),
             button(tpe := "submit", attr("formaction") := "/preview", attr("formtarget") := "_blank")("Print preview"),
+login            a(href := "/admin/users", style := "margin-left: 10px; color: #0052cc; text-decoration: none; font-weight: bold;")("User Management"),
+            a(href := "/login", style := "margin-left: 10px; color: #0052cc; text-decoration: none;")("Log in"),
+            a(href := "/logout", style := "margin-left: 10px; color: #5e6c84; text-decoration: none;")("Log out"),
             span(id := "status", attr("role") := "status")(if saved then "Plan saved." else ""),
             p("Changes are saved with Save plan. Print preview includes your current edits.")
           ),

@@ -23,7 +23,7 @@ import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, Author
 import jakarta.inject.{Inject, Singleton}
 import sttp.model.StatusCode
 import sttp.model.headers.Cookie.SameSite
-import sttp.model.headers.CookieValueWithMeta
+import sttp.model.headers.{CookieValueWithMeta, CookieWithMeta}
 import sttp.tapir.*
 import sttp.tapir.server.PartialServerEndpoint
 
@@ -32,6 +32,32 @@ class AuthSecurity @Inject()(
   val authService: AuthenticationService,
   val config: AuthConfig
 ):
+
+  def sessionCookieWithMeta(sessionId: String): CookieWithMeta =
+    CookieWithMeta.unsafeApply(
+      name = config.cookieName,
+      value = sessionId,
+      expires = Some(java.time.Instant.now().plus(config.sessionLifetime)),
+      maxAge = Some(config.sessionLifetime.toSeconds),
+      domain = None,
+      path = Some("/"),
+      secure = config.secureCookie,
+      httpOnly = true,
+      sameSite = Some(SameSite.Lax)
+    )
+
+  def expiredCookieWithMeta(): CookieWithMeta =
+    CookieWithMeta.unsafeApply(
+      name = config.cookieName,
+      value = "",
+      expires = Some(java.time.Instant.ofEpochMilli(0)),
+      maxAge = Some(0),
+      domain = None,
+      path = Some("/"),
+      secure = config.secureCookie,
+      httpOnly = true,
+      sameSite = Some(SameSite.Lax)
+    )
 
   def sessionCookieMeta(sessionId: String): CookieValueWithMeta =
     CookieValueWithMeta.unsafeApply(

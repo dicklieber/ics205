@@ -57,6 +57,86 @@ class AuthEndpointsTests extends munit.FunSuite:
     finally
       os.remove.all(tempDir)
 
+  test("GET /login renders HTML login page with form and messages"):
+    withContext { (_, _, _, _, _, _, _, app) =>
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/login?msg=Logged+out&err=Invalid+credentials"))
+      val (response, body) = (for
+        res <- app.run(req)
+        b <- res.as[String]
+      yield (res, b)).unsafeRunSync()
+
+      assertEquals(response.status, Status.Ok)
+      assert(body.contains("<form method=\"post\" action=\"/login\">"))
+      assert(body.contains("name=\"username\""))
+      assert(body.contains("name=\"password\""))
+      assert(body.contains("Logged out"))
+      assert(body.contains("Invalid credentials"))
+    }
+
+  test("POST /login with form data authenticates user, sets session cookie, and redirects to target"):
+    withContext { (_, userStore, sessionStore, passwordService, _, _, _, app) =>
+      val hash = passwordService.hash("mypassword")
+      userStore.add(User("u1", "alice", hash, Set("admin"), enabled = true))
+
+      val formData = "username=alice&password=mypassword&redirect=%2Fadmin%2Fusers"
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/login"))
+        .withEntity(formData)
+        .putHeaders(Header.Raw(CIString("Content-Type"), "application/x-www-form-urlencoded"))
+
+      val res = app.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+      assertEquals(res.headers.get(CIString("Location")).map(_.head.value), Some("/admin/users"))
+
+      val cookieHeader = res.headers.get(CIString("Set-Cookie")).map(_.head.value)
+      assert(cookieHeader.isDefined)
+      val cookieStr = cookieHeader.get
+      assert(cookieStr.contains("session="))
+      assert(cookieStr.contains("HttpOnly"))
+      assert(cookieStr.contains("Path=/"))
+
+      // Session was stored
+      val sessionId = cookieStr.split(";").head.replace("session=", "").trim
+      assert(sessionStore.find(sessionId).isDefined)
+    }
+
+  test("POST /login with invalid form data redirects to /login with error"):
+    withContext { (_, userStore, _, passwordService, _, _, _, app) =>
+      val hash = passwordService.hash("mypassword")
+      userStore.add(User("u1", "alice", hash, Set("admin"), enabled = true))
+
+      val formData = "username=alice&password=wrong&redirect=%2Fadmin%2Fusers"
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/login"))
+        .withEntity(formData)
+        .putHeaders(Header.Raw(CIString("Content-Type"), "application/x-www-form-urlencoded"))
+
+      val res = app.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+      val location = res.headers.get(CIString("Location")).map(_.head.value).getOrElse("")
+      assert(location.startsWith("/login?err="))
+      assert(location.contains("redirect=%2Fadmin%2Fusers"))
+      assert(res.headers.get(CIString("Set-Cookie")).isEmpty)
+    }
+
+  test("GET /logout clears session, expires cookie, and redirects to /login"):
+    withContext { (_, userStore, sessionStore, _, _, _, _, app) =>
+      userStore.add(User("u1", "alice", "hash", Set("admin"), enabled = true))
+      val session = sessionStore.create("u1")
+
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/logout"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+
+      val res = app.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+      val location = res.headers.get(CIString("Location")).map(_.head.value).getOrElse("")
+      assert(location.startsWith("/login?msg="))
+      assertEquals(sessionStore.find(session.id), None)
+
+      val cookieHeader = res.headers.get(CIString("Set-Cookie")).map(_.head.value)
+      assert(cookieHeader.isDefined)
+      val cookieStr = cookieHeader.get
+      assert(cookieStr.contains("Max-Age=0") || cookieStr.contains("Expires="))
+    }
+
   test("successful login returns 200, sets session cookie with proper flags, and returns AuthenticatedUser"):
     withContext { (_, userStore, sessionStore, passwordService, _, _, _, app) =>
       val hash = passwordService.hash("mypassword")
