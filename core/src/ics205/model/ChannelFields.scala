@@ -26,6 +26,7 @@ enum ChannelField(extract: Ics205Channel => String):
   case Function extends ChannelField(_.function)
   case Name extends ChannelField(_.name)
   case Assignment extends ChannelField(_.assignment)
+  case RadioChannelName extends ChannelField(_.name)
   case Rx extends ChannelField(_.frequency.rx.toString)
   case Tx extends ChannelField(_.frequency.tx.toString)
   case Offset extends ChannelField(_.frequency.offset.toString)
