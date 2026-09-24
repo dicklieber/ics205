@@ -119,16 +119,21 @@ Sessions store **only** the `userId` and timestamp metadata; roles and permissio
 
 ### Creating the Initial User
 
-Run the built-in user administration tool:
+Run the built-in user administration tool interactively using Mill's `-i` (`--interactive`) flag:
 
 ```bash
-mill web.run -- --create-user
+mill -i web.run -- --create-user
 ```
 
 Or run the CLI directly:
 ```bash
 # Prompts interactively for Username, Roles, and Password (without echoing password)
-mill core.runMain ics205.auth.UserAdminCli
+mill -i core.runMain ics205.auth.UserAdminCli
+```
+
+Non-interactive user creation is also supported by passing arguments:
+```bash
+mill core.runMain ics205.auth.UserAdminCli --username admin --roles admin --password secret
 ```
 
 ### Protecting Tapir Endpoints

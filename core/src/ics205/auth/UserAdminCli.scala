@@ -31,32 +31,80 @@ object UserAdminCli:
     val passwordService = new ScalaPassPasswordService()
 
     println("=== ICS-205 User Creation Tool ===")
+
+    var parsedUsername: Option[String] = None
+    var parsedRoles: Option[Set[String]] = None
+    var parsedPassword: Option[String] = None
+
+    var i = 0
+    while i < args.length do
+      args(i) match
+        case "--username" if i + 1 < args.length =>
+          parsedUsername = Some(args(i + 1).trim)
+          i += 2
+        case "--password" if i + 1 < args.length =>
+          parsedPassword = Some(args(i + 1))
+          i += 2
+        case "--roles" if i + 1 < args.length =>
+          val r = args(i + 1).split(",").map(_.trim).filter(_.nonEmpty).toSet
+          parsedRoles = Some(r)
+          i += 2
+        case "--create-user" | "-u" if i + 1 < args.length && !args(i + 1).startsWith("-") =>
+          if parsedUsername.isEmpty then
+            parsedUsername = Some(args(i + 1).trim)
+            i += 2
+          else
+            i += 1
+        case _ =>
+          i += 1
+
     val console = System.console()
 
-    val username = if console != null then
-      console.readLine("Username: ").trim
-    else
-      val line = scala.io.StdIn.readLine("Username: ")
-      if line == null then "" else line.trim
+    val username = parsedUsername.getOrElse {
+      if console != null then
+        val input = console.readLine("Username: ")
+        if input == null then
+          System.err.println("Error: Standard input is unavailable. If invoking via Mill, use the -i flag: mill -i core.runMain ics205.auth.UserAdminCli")
+          sys.exit(1)
+        input.trim
+      else
+        val line = scala.io.StdIn.readLine("Username: ")
+        if line == null then
+          System.err.println("Error: Standard input is unavailable. If invoking via Mill, use the -i flag: mill -i core.runMain ics205.auth.UserAdminCli")
+          sys.exit(1)
+        line.trim
+    }
 
     if username.isEmpty then
       System.err.println("Error: Username cannot be empty.")
       sys.exit(1)
 
-    val rolesInput = if console != null then
-      console.readLine("Roles (comma-separated, default 'admin'): ").trim
-    else
-      val line = scala.io.StdIn.readLine("Roles (comma-separated, default 'admin'): ")
-      if line == null then "" else line.trim
+    val roles = parsedRoles.getOrElse {
+      val rolesInput = if console != null then
+        val input = console.readLine("Roles (comma-separated, default 'admin'): ")
+        if input == null then "" else input.trim
+      else
+        val line = scala.io.StdIn.readLine("Roles (comma-separated, default 'admin'): ")
+        if line == null then "" else line.trim
 
-    val roles = if rolesInput.isEmpty then Set("admin") else rolesInput.split(",").map(_.trim).filter(_.nonEmpty).toSet
+      if rolesInput.isEmpty then Set("admin")
+      else rolesInput.split(",").map(_.trim).filter(_.nonEmpty).toSet
+    }
 
-    val password = if console != null then
-      val chars = console.readPassword("Password: ")
-      if chars == null then "" else new String(chars)
-    else
-      val line = scala.io.StdIn.readLine("Password: ")
-      if line == null then "" else line
+    val password = parsedPassword.getOrElse {
+      if console != null then
+        val chars = console.readPassword("Password: ")
+        if chars == null then
+          System.err.println("Error: Standard input is unavailable. If invoking via Mill, use the -i flag: mill -i core.runMain ics205.auth.UserAdminCli")
+          sys.exit(1)
+        new String(chars)
+      else
+        val line = scala.io.StdIn.readLine("Password: ")
+        if line == null then
+          System.err.println("Error: Standard input is unavailable. If invoking via Mill, use the -i flag: mill -i core.runMain ics205.auth.UserAdminCli")
+          sys.exit(1)
+        line
+    }
 
     if password.isEmpty then
       System.err.println("Error: Password cannot be empty.")
