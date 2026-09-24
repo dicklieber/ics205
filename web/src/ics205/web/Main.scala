@@ -18,11 +18,12 @@
 
 package ics205.web
 
-import cats.effect.{IO, IOApp}
+import cats.effect.{ExitCode, IO, IOApp}
 import com.comcast.ip4s.*
 import com.google.inject.Guice
 import com.typesafe.scalalogging.LazyLogging
 import ics205.BuildInfo
+import ics205.auth.UserAdminCli
 import ics205.metrics.ApplicationMetrics
 import jakarta.inject.Inject
 import org.http4s.ember.server.EmberServerBuilder
@@ -30,11 +31,15 @@ import sttp.tapir.server.http4s.Http4sServerInterpreter
 
 import scala.jdk.CollectionConverters.*
 
-object Main extends IOApp.Simple:
-  def run: IO[Unit] =
-    IO(Guice.createInjector(new ApplicationModule))
-      .flatMap(injector => IO(injector.getInstance(classOf[WebApplication])))
-      .flatMap(_.run)
+object Main extends IOApp:
+  override def run(args: List[String]): IO[ExitCode] =
+    if args.contains("--create-user") || args.contains("-u") then
+      IO.blocking(UserAdminCli.main(args.toArray)).as(ExitCode.Success)
+    else
+      IO(Guice.createInjector(new ApplicationModule))
+        .flatMap(injector => IO(injector.getInstance(classOf[WebApplication])))
+        .flatMap(_.run)
+        .as(ExitCode.Success)
 
 class WebApplication @Inject() (endpointsSet: java.util.Set[ApiEndpoints]) extends LazyLogging:
 

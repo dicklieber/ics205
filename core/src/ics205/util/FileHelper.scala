@@ -25,6 +25,7 @@ import io.circe.syntax.*
 import io.circe.{Decoder, Encoder, Printer}
 
 import java.nio.file.{NoSuchFileException, Paths}
+import jakarta.inject.Inject
 
 object FileHelper:
   private def appHome(appName: String, productName: String): os.Path =
@@ -44,7 +45,11 @@ object FileHelper:
 /** A utility class for handling file-related operations, such as reading and writing JSON-encoded
   * data to files, and managing application-specific directory paths.
   */
-class FileHelper extends LazyLogging:
+class FileHelper(customDir: Option[os.Path] = None) extends LazyLogging:
+
+  @Inject() def this() = this(None)
+
+  def this(customPath: os.Path) = this(Some(customPath))
 
   /** One application-owned directory tree for all FdSwarm files.
     *
@@ -55,11 +60,12 @@ class FileHelper extends LazyLogging:
     *
     * If PORT is set, append it as a child directory so multiple local test nodes do not share files.
     */
-  val directory: os.Path =
+  val directory: os.Path = customDir.getOrElse {
     val base = FileHelper.appHome(BuildInfo.appName, BuildInfo.productName)
     sys.env.get("PORT").filter(_.nonEmpty) match
       case Some(port) => base / port
       case None       => base
+  }
   logger.info(s"Data directory: $directory")
 
   def loadOrDefault[T: Decoder](fileName: String)(default: => T): T =
