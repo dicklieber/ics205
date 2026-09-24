@@ -19,7 +19,7 @@
 package ics205.web
 
 import cats.effect.IO
-import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService}
+import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, Permission}
 import ics205.store.Ics205Store
 import jakarta.inject.{Inject, Singleton}
 import sttp.model.StatusCode
@@ -72,18 +72,22 @@ class IndexEndpoints @Inject() (
           case None =>
             Left((StatusCode.SeeOther, Some("/login"), ""))
           case Some(user) =>
-            val current = store.ics205()
-            Ics205Form.decode(data, current) match
-              case Left(message) =>
-                Left((StatusCode.UnprocessableEntity, None, Ics205Editor.render(current, Some(data), Some(message), currentUser = Some(user))))
-              case Right(plan) =>
-                try
-                  store.save(plan, refreshPrepared = false)
-                  Right((StatusCode.SeeOther, "/?saved=1"))
-                catch
-                  case _: java.io.IOException =>
-                    Left((StatusCode.InternalServerError, None, Ics205Editor.render(current, Some(data),
-                      Some("The plan could not be saved. Check that the data directory is writable and try again."), currentUser = Some(user))))
+            if !user.hasPermission(Permission.EditPlans) then
+              val current = store.ics205()
+              Left((StatusCode.Forbidden, None, Ics205Editor.render(current, error = Some("You do not have permission to edit plans."), currentUser = Some(user))))
+            else
+              val current = store.ics205()
+              Ics205Form.decode(data, current) match
+                case Left(message) =>
+                  Left((StatusCode.UnprocessableEntity, None, Ics205Editor.render(current, Some(data), Some(message), currentUser = Some(user))))
+                case Right(plan) =>
+                  try
+                    store.save(plan, refreshPrepared = false)
+                    Right((StatusCode.SeeOther, "/?saved=1"))
+                  catch
+                    case _: java.io.IOException =>
+                      Left((StatusCode.InternalServerError, None, Ics205Editor.render(current, Some(data),
+                        Some("The plan could not be saved. Check that the data directory is writable and try again."), currentUser = Some(user))))
       }
     }
 

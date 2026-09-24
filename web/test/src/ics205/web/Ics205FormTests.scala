@@ -119,3 +119,65 @@ class Ics205FormTests extends munit.FunSuite:
           .updated("row.0.ctcssFrequency", frequency), base).isLeft)
       }
     }
+
+  test("Ics205Editor renders editable controls for user with EditPlans permission"):
+    val editorUser = ics205.auth.AuthenticatedUser("u-editor", "editor1", ics205.auth.RolePermissions.Editor)
+    val html = Ics205Editor.render(base, currentUser = Some(editorUser))
+    assert(!html.contains("readonly"))
+    assert(html.contains(">Save plan</button>"))
+    assert(!html.contains("disabled=\"disabled\">Save plan</button>"))
+    assert(html.contains(">Add channel</button>"))
+    assert(html.contains("<template id=\"channel-template\">"))
+    assert(html.contains("const form = document.getElementById('plan-form');"))
+
+  test("Ics205Editor renders read-only controls for user without EditPlans permission"):
+    val viewerUser = ics205.auth.AuthenticatedUser("u-viewer", "viewer1", ics205.auth.RolePermissions.Viewer)
+    val html = Ics205Editor.render(base, currentUser = Some(viewerUser))
+    assert(html.contains("readonly=\"readonly\""))
+    assert(html.contains("disabled=\"disabled\">Save plan</button>"))
+    assert(html.contains("disabled=\"disabled\">Add channel</button>"))
+    assert(html.contains("data-action=\"up\""))
+    assert(html.contains("data-action=\"down\""))
+    assert(html.contains("data-action=\"copy\""))
+    assert(html.contains("data-action=\"delete\""))
+    assert(!html.contains("<template id=\"channel-template\">"))
+    assert(!html.contains("const form = document.getElementById('plan-form');"))
+
+  test("POST / without EditPlans permission returns 403 Forbidden and does not save"):
+    val tempDirectory = os.temp.dir()
+    try
+      val helper = new FileHelper:
+        override val directory: os.Path = tempDirectory
+      val store = new Ics205Store(helper)
+      val userStore = new ics205.store.UserStore(helper)
+      val sessionStore = new ics205.store.InMemJsonSessionStore(helper)
+      val passwordService = new ics205.auth.ScalaPassPasswordService
+      val authService = new ics205.auth.AuthenticationService(userStore, passwordService, sessionStore)
+      val config = ics205.auth.AuthConfig()
+
+      // Add a viewer user (no EditPlans permission)
+      userStore.add(ics205.auth.User("u-viewer", "viewer1", passwordService.hash("pass"), ics205.auth.RolePermissions.Viewer, enabled = true))
+      val viewerSession = sessionStore.create("u-viewer")
+
+      // Add an editor user (has EditPlans permission)
+      userStore.add(ics205.auth.User("u-editor", "editor1", passwordService.hash("pass"), ics205.auth.RolePermissions.Editor, enabled = true))
+      val editorSession = sessionStore.create("u-editor")
+
+      val app = Http4sServerInterpreter[IO]().toRoutes(new IndexEndpoints(store, authService, config).endpoints).orNotFound
+
+      val fields = Ics205Form.fields(base.copy(incidentName = "New Incident Name"))
+
+      // Viewer attempt -> 403 Forbidden
+      val viewerRes = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/"))
+        .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${viewerSession.id}"))
+        .withEntity(UrlForm(fields.toSeq*))).unsafeRunSync()
+      assertEquals(viewerRes.status, Status.Forbidden)
+      assert(!os.exists(tempDirectory / "ics205.json"))
+
+      // Editor attempt -> 303 SeeOther and persists
+      val editorRes = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/"))
+        .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${editorSession.id}"))
+        .withEntity(UrlForm(fields.toSeq*))).unsafeRunSync()
+      assertEquals(editorRes.status, Status.SeeOther)
+      assertEquals(store.ics205().incidentName, "New Incident Name")
+    finally os.remove.all(tempDirectory)
