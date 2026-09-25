@@ -109,7 +109,7 @@ private[web] object Ics205Editor:
       input(name := prefix + key, attr("data-field") := key, attr("aria-label") := caption,
         tpe := (if numeric then "number" else "text"), value := current(key),
         if numeric then step := "any" else cls := "",
-        if !canEdit then readonly else (if key == "rx" || key == "offset" then required else cls := ""))
+        if !canEdit then readonly else if key == "rx" || key == "offset" then required else cls := "")
     def choose(key: String, caption: String, choices: Seq[(String, String)], isHidden: Boolean = false): Frag =
       select(name := prefix + key, attr("data-field") := key, attr("aria-label") := caption,
         if isHidden then hidden else cls := "",

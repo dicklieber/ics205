@@ -38,23 +38,3 @@ enum CtcssMode derives Codec.AsObject:
 case class Ctcss(frequency: Option[CtcssFrequency] = None,
                  mode: CtcssMode = CtcssMode.None) derives Codec.AsObject
 
-enum Power:
-  case Low
-  case Medium
-  case High
-
-enum Scan:
-  case Include
-  case Skip
-
-case class RadioPlan(name: String, memories: Seq[RadioMemory])
-
-case class RadioMemory(sourceChannelId: String,
-                       channelName: String,
-                       assignment: String,
-                       preferredName: Option[String] = None,
-                       frequency: RxWithOffset,
-                       mode: RadioMode = RadioMode.Fm,
-                       bandwidth: Option[Bandwidth] = None,
-                       ctcss: Ctcss = Ctcss(),
-                       remarks: String = "")

@@ -18,6 +18,8 @@
 
 package ics205.model
 
+import io.circe.Codec
+
 /** The simple fields of an [[Ics205Channel]], with frequency flattened into rx, tx and offset. */
 enum ChannelField(extract: Ics205Channel => String):
   case Id extends ChannelField(_.id)
@@ -37,6 +39,14 @@ enum ChannelField(extract: Ics205Channel => String):
   case Remarks extends ChannelField(_.remarks)
 
   def value(channel: Ics205Channel): String = extract(channel)
+
+object ChannelField:
+  given Codec[ChannelField] = Codec.from(
+    io.circe.Decoder.decodeString.emap { str =>
+      scala.util.Try(ChannelField.valueOf(str)).toEither.left.map(_ => s"Invalid ChannelField: $str")
+    },
+    io.circe.Encoder.encodeString.contramap(_.toString)
+  )
 
 class ChannelFields(ics205Channel: Ics205Channel):
   def apply(field: ChannelField): String = field.value(ics205Channel)
