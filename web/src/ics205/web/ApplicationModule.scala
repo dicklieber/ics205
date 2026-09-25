@@ -19,13 +19,19 @@
 package ics205.web
 
 import com.google.inject.AbstractModule
+import com.google.inject.name.Names
+import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.{AuthConfig, AuthenticationService, PasswordService, ScalaPassPasswordService}
 import ics205.store.{Ics205Store, InMemJsonSessionStore, SessionStore, UserStore}
 import ics205.util.FileHelper
 import ics205.web.auth.AuthSecurity
 import net.codingwell.scalaguice.ScalaModule
 
-class ApplicationModule extends AbstractModule with ScalaModule:
+import java.time.Duration
+import scala.jdk.CollectionConverters.*
+
+class ApplicationModule(fullConfig: Config = ApplicationModule.loadConfig()) extends AbstractModule with ScalaModule with LazyLogging:
   override def configure(): Unit =
     val fileHelper = new FileHelper()
     bind[FileHelper].toInstance(fileHelper)
@@ -44,3 +50,58 @@ class ApplicationModule extends AbstractModule with ScalaModule:
       asSingleton = true
     )
     bind[WebApplication]
+
+    val entries = fullConfig.entrySet().asScala.toSeq
+    for (entry <- entries) {
+      val key = entry.getKey
+      val value = fullConfig.getAnyRef(key)
+      logger.trace(s"Config entry: $key = $value type: ${value.getClass}")
+      scala.util.Try(
+        fullConfig.getDuration(
+          key
+        )
+      ).toOption.foreach(duration =>
+        bind[Duration]
+          .annotatedWith(Names.named(key))
+          .toInstance(duration)
+      )
+      // Determine type and bind accordingly
+      value match {
+        case s: String =>
+          bind[String]
+            .annotatedWith(Names.named(key))
+            .toInstance(s)
+
+        case i: Integer =>
+          bind[Int]
+            .annotatedWith(Names.named(key))
+            .toInstance(i.intValue)
+
+        case l: java.lang.Long =>
+          bind[Long]
+            .annotatedWith(Names.named(key))
+            .toInstance(l)
+
+        case d: java.lang.Double =>
+          bind[Double]
+            .annotatedWith(Names.named(key))
+            .toInstance(d)
+
+        case b: java.lang.Boolean =>
+          bind[Boolean]
+            .annotatedWith(Names.named(key))
+            .toInstance(b)
+
+        case _ =>
+        // Optionally log or ignore unsupported types
+      }
+    }
+
+    bind[Config].toInstance(fullConfig)
+
+object ApplicationModule:
+  def loadConfig(): Config =
+    ConfigFactory.parseFile((os.pwd / "config" / "ics205.conf").toIO)
+      .withFallback(ConfigFactory.load()).resolve()
+
+  given Conversion[String, os.Path] = (in: String) => os.Path(in)

@@ -19,6 +19,8 @@
 package ics205.web
 
 import com.google.inject.Guice
+import com.google.inject.name.Names
+import com.typesafe.config.{Config, ConfigFactory}
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import ics205.store.Ics205Store
@@ -44,6 +46,39 @@ class ApplicationModuleTests extends munit.FunSuite:
 
     assert(!(first.getInstance(classOf[Ics205Store]) eq
       second.getInstance(classOf[Ics205Store])))
+
+  test("ApplicationModule binds Config and individual config entries"):
+    val config = ConfigFactory.parseString(
+      """
+        |test.str = "hello"
+        |test.int = 42
+        |test.long = 1234567890123
+        |test.double = 3.14
+        |test.bool = true
+        |test.duration = "10s"
+        |""".stripMargin
+    )
+    val injector = Guice.createInjector(new ApplicationModule(config))
+    val injectedConfig = injector.getInstance(classOf[Config])
+    assertEquals(injectedConfig, config)
+
+    val strVal = injector.getInstance(com.google.inject.Key.get(classOf[String], Names.named("test.str")))
+    assertEquals(strVal, "hello")
+
+    val intVal = injector.getInstance(com.google.inject.Key.get(classOf[Int], Names.named("test.int")))
+    assertEquals(intVal, 42)
+
+    val longVal = injector.getInstance(com.google.inject.Key.get(classOf[Long], Names.named("test.long")))
+    assertEquals(longVal, 1234567890123L)
+
+    val doubleVal = injector.getInstance(com.google.inject.Key.get(classOf[Double], Names.named("test.double")))
+    assertEquals(doubleVal, 3.14)
+
+    val boolVal = injector.getInstance(com.google.inject.Key.get(classOf[Boolean], Names.named("test.bool")))
+    assertEquals(boolVal, true)
+
+    val durationVal = injector.getInstance(com.google.inject.Key.get(classOf[java.time.Duration], Names.named("test.duration")))
+    assertEquals(durationVal, java.time.Duration.ofSeconds(10))
 
   test("discovered endpoint groups are served by the web application"):
     val injector = Guice.createInjector(new ApplicationModule)
