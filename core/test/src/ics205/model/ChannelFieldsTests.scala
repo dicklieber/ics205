@@ -29,7 +29,7 @@ class ChannelFieldsTests extends munit.FunSuite:
       assignment = "Operations",
       frequency = RxWithOffset(mhz"146.520", mhz"0.600"),
       mode = RadioMode.Fm,
-      bandwidth = Some(Bandwidth.Wide),
+      bandwidth = Bandwidth.Wide,
       ctcss = Ctcss(Some(CtcssFrequency.Hz100_0), CtcssMode.Tone),
       remarks = "Primary tactical"
     )

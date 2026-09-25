@@ -47,6 +47,7 @@ private[web] object Ics205Editor:
           div(cls := "toolbar")(
             button(tpe := "submit", if !canEdit then disabled else cls := "")("Save plan"),
             button(tpe := "submit", attr("formaction") := "/preview", attr("formtarget") := "_blank")("Print preview"),
+            a(href := "/export/radio", style := "margin-left: 10px; color: #0052cc; text-decoration: none; font-weight: bold;")("Export Radio CSV"),
             a(href := "/admin/users", style := "margin-left: 10px; color: #0052cc; text-decoration: none; font-weight: bold;")("User Management"),
             currentUser match
               case Some(user) =>
@@ -97,7 +98,7 @@ private[web] object Ics205Editor:
             )
           )
         ),
-        if canEdit then tag("template")(id := "channel-template")(row(Map("row.NEW.offset" -> "0", "row.NEW.mode" -> "Fm", "row.NEW.ctcssMode" -> "None"), "NEW", canEdit = true)) else span(),
+        if canEdit then tag("template")(id := "channel-template")(row(Map("row.NEW.offset" -> "0", "row.NEW.bandwidth" -> "Wide", "row.NEW.mode" -> "Fm", "row.NEW.ctcssMode" -> "None"), "NEW", canEdit = true)) else span(),
         if canEdit then script(raw(editorScript)) else span()
       )
     )).render
@@ -129,7 +130,7 @@ private[web] object Ics205Editor:
       td(edit("assignment", "Assignment")),
       td(edit("rx", "RX frequency in MHz", true)),
       td(edit("offset", "Offset in MHz", true)),
-      td(choose("bandwidth", "Bandwidth", Seq("" -> "—", "Narrow" -> "Narrow", "Wide" -> "Wide"))),
+      td(choose("bandwidth", "Bandwidth", Seq("Wide" -> "Wide", "Narrow" -> "Narrow"))),
       td(div(cls := "ctcss-controls")(
         choose("ctcssMode", "CTCSS mode", Seq("None" -> "None", "Tone" -> "Tone", "TSQL" -> "TSQL")),
         choose("ctcssFrequency", "CTCSS frequency in Hz",

@@ -41,12 +41,12 @@ case class Ics205Channel(id: String,
                          assignment: String,
                          frequency: RxWithOffset,
                          mode: RadioMode = RadioMode.Fm,
-                         bandwidth: Option[Bandwidth] = None,
+                         bandwidth: Bandwidth = Bandwidth.Wide,
                          ctcss: Ctcss = Ctcss(),
                          remarks: String = "")
 
 object Ics205Channel:
-  // Older saved channels may omit remarks; use the model default when decoding.
+  // Older saved channels may omit remarks or bandwidth; use the model default when decoding.
   private given Configuration = Configuration.default.withDefaults
   given Codec.AsObject[Ics205Channel] = ConfiguredCodec.derived[Ics205Channel]
 

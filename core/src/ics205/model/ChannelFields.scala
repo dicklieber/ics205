@@ -33,7 +33,7 @@ enum ChannelField(extract: Ics205Channel => String):
   case Tx extends ChannelField(_.frequency.tx.toString)
   case Offset extends ChannelField(_.frequency.offset.toString)
   case Mode extends ChannelField(_.mode.toString)
-  case Bandwidth extends ChannelField(_.bandwidth.map(_.toString).getOrElse(""))
+  case Bandwidth extends ChannelField(_.bandwidth.toString)
   case CtcssFrequency extends ChannelField(_.ctcss.frequency.map(_.hz.toString).getOrElse(""))
   case CtcssMode extends ChannelField(_.ctcss.mode.toString)
   case Remarks extends ChannelField(_.remarks)

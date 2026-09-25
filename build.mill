@@ -57,6 +57,10 @@ object core extends ScalaModule with BuildInfo:
 object exporters extends ScalaModule:
   def scalaVersion = "3.7.4"
   def moduleDeps = Seq(core)
+  def mvnDeps = Seq(
+    mvn"org.apache.commons:commons-csv:1.14.0",
+    mvn"io.github.classgraph:classgraph:4.8.195"
+  )
   object test extends ScalaTests with TestModule.Munit:
     def mvnDeps = Seq(mvn"org.scalameta::munit:1.0.0")
 

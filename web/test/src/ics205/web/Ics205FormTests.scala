@@ -17,7 +17,7 @@ class Ics205FormTests extends munit.FunSuite:
     specialInstructions = "Line one\nLine two", formatVersion = "1.1",
     channels = Seq(
       Ics205Channel("a", Some("Zone"), Some("1"), "Command", "Repeater", "All",
-        RxWithOffset(mhz"146.940", mhz"-0.600"), bandwidth = Some(Bandwidth.Narrow),
+        RxWithOffset(mhz"146.940", mhz"-0.600"), bandwidth = Bandwidth.Narrow,
         ctcss = Ctcss(Some(CtcssFrequency.Hz100_0), CtcssMode.Tone),
         remarks = "Monitor"),
       Ics205Channel("b", function = "Tactical", name = "Simplex", assignment = "Teams",

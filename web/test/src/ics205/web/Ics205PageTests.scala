@@ -9,7 +9,7 @@ class Ics205PageTests extends munit.FunSuite:
     id = "repeater", zoneGroup = Some("Local"), channelNumber = Some("1"),
     function = "Command", name = "Repeater", assignment = "Operations",
     frequency = RxWithOffset(mhz"146.94", mhz"-0.6"),
-    bandwidth = Some(Bandwidth.Narrow),
+    bandwidth = Bandwidth.Narrow,
     ctcss = Ctcss(Some(CtcssFrequency.Hz100_0), CtcssMode.Tone),
     remarks = "Monitor"
   )
@@ -49,7 +49,7 @@ class Ics205PageTests extends munit.FunSuite:
       incidentName = "<script>alert(1)</script>",
       preparedBy = None, operationalPeriod = OperationalPeriod(),
       channels = Seq(channel.copy(
-        remarks = "<b>unsafe</b>", bandwidth = None,
+        remarks = "<b>unsafe</b>",
         ctcss = Ctcss()
       ))
     ))

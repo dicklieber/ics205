@@ -7,6 +7,9 @@ Configuration:
       PatternLayout:
         pattern: "%style{%d{HH:mm:ss.SSS}}{dim} %style{[%t]}{magenta} %highlight{%-5level} %style{%logger{36}}{cyan} - %msg%n"
   Loggers:
+    Logger:
+      - name: ics205.exporter.RadioExportDefinitions
+        level: debug
     Root:
       level: info
       AppenderRef:

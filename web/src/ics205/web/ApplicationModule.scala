@@ -23,6 +23,7 @@ import com.google.inject.name.Names
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.{AuthConfig, AuthenticationService, PasswordService, ScalaPassPasswordService}
+import ics205.exporter.{RadioExportDefinitions, RadioExporter}
 import ics205.store.{Ics205Store, InMemJsonSessionStore, SessionStore, UserStore}
 import ics205.util.FileHelper
 import ics205.web.auth.AuthSecurity
@@ -43,6 +44,8 @@ class ApplicationModule(fullConfig: Config = ApplicationModule.loadConfig()) ext
     bind[SessionStore].to[InMemJsonSessionStore].asEagerSingleton()
     bind[AuthenticationService].asEagerSingleton()
     bind[AuthSecurity].asEagerSingleton()
+    bind[RadioExportDefinitions].asEagerSingleton()
+    bind[RadioExporter].asEagerSingleton()
 
     AutoBind.bindAllImplementationsOf[ApiEndpoints](
       binder = binder(),

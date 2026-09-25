@@ -41,7 +41,7 @@ private[web] object Ics205Form:
         "name" -> channel.name, "assignment" -> channel.assignment,
         "rx" -> channel.frequency.rx.mhz.bigDecimal.toPlainString,
         "offset" -> channel.frequency.offset.mhz.bigDecimal.toPlainString,
-        "bandwidth" -> channel.bandwidth.fold("")(_.toString),
+        "bandwidth" -> channel.bandwidth.toString,
         "mode" -> channel.mode.toString,
         "remarks" -> channel.remarks,
         "ctcssMode" -> channel.ctcss.mode.toString,
@@ -86,7 +86,7 @@ private[web] object Ics205Form:
           function = get("function"), name = get("name"), assignment = get("assignment"),
           frequency = RxWithOffset(Frequency(rx), Frequency(offset)),
           mode = parse(s"$label mode")(RadioMode.valueOf(get("mode"))),
-          bandwidth = opt("bandwidth").map(value => parse(s"$label bandwidth")(Bandwidth.valueOf(value))),
+          bandwidth = opt("bandwidth").map(value => parse(s"$label bandwidth")(Bandwidth.valueOf(value))).getOrElse(Bandwidth.Wide),
           ctcss = Ctcss(ctcssFrequency, ctcssMode),
           remarks = get("remarks")
         )

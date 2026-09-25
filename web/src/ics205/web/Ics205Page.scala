@@ -124,7 +124,7 @@ object Ics205Page:
         channel.zoneGroup.getOrElse(""), channel.channelNumber.getOrElse(""),
         channel.function, channel.name, channel.assignment,
         decimal(channel.frequency.rx.mhz), offsetText,
-        channel.bandwidth.map(_.toString).getOrElse(""),
+        channel.bandwidth.toString,
         ctcssText(channel.ctcss),
         modeText, channel.remarks
       ).map(value => td(cls := "value")(value))

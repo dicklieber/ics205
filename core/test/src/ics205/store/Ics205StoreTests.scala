@@ -45,7 +45,7 @@ class Ics205StoreTests extends munit.FunSuite:
       assignment = "All teams",
       frequency = RxWithOffset(mhz"146.520"),
       mode = RadioMode.Digital,
-      bandwidth = Some(Bandwidth.Narrow),
+      bandwidth = Bandwidth.Narrow,
       ctcss = Ctcss(Some(CtcssFrequency.Hz100_0), CtcssMode.Tone),
       remarks = "Test channel")),
     specialInstructions = "Monitor dispatch",
