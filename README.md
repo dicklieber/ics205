@@ -69,7 +69,7 @@ exported under `ics205_http_transactions` with durations in seconds.
 
 User and session databases are stored in the application data directory (resolved by `FileHelper`, e.g., `~/Library/Application Support/ICS-205` on macOS, `%LOCALAPPDATA%\ICS-205` on Windows, `~/.ics205` on Linux):
 
-- **Users file**: `users.json` (configurable via `AUTH_USERS_FILE` or `AuthConfig.userFileName`)
+- **Users file**: `users.json` (configurable via `auth.userFileName` or `AuthConfig.userFileName`)
   ```json
   {
     "users": [
@@ -85,7 +85,7 @@ User and session databases are stored in the application data directory (resolve
   ```
   Passwords are never stored in plaintext and are hashed using ScalaPass (Argon2id). Lookups by username are case-insensitive. Each user belongs to a single `Role` (defined by the `RolePermissions` enum).
 
-- **Sessions file**: `sessions.json` (configurable via `AUTH_SESSIONS_FILE` or `AuthConfig.sessionFileName`)
+- **Sessions file**: `sessions.json` (configurable via `auth.sessionFileName` or `AuthConfig.sessionFileName`)
   ```json
   {
     "sessions": [
@@ -102,16 +102,16 @@ User and session databases are stored in the application data directory (resolve
 
 ### Session Expiration
 
-Session lifetime is configurable via `AUTH_SESSION_LIFETIME_SECONDS` (defaults to 24 hours). Expired sessions are cleaned opportunistically on access and filtered on application startup.
+Session lifetime is configurable via `auth.sessionLifetime` (defaults to 24 hours). Expired sessions are cleaned opportunistically on access and filtered on application startup.
 
 ### Cookie Behavior
 
-Session tokens are transmitted using an HTTP-only cookie named `session` (configurable via `AUTH_COOKIE_NAME`):
+Session tokens are transmitted using an HTTP-only cookie named `session` (configurable via `auth.cookieName`):
 - `HttpOnly`: true (protects against XSS)
 - `SameSite`: Lax (CSRF defense)
 - `Path`: `/`
 - `Max-Age`: session duration (or 0 when logging out)
-- `Secure`: defaults to `false` in development and should be set to `true` in production (controlled via `AUTH_COOKIE_SECURE=true` or `AuthConfig.secureCookie`).
+- `Secure`: defaults to `false` in development and can be configured for production via `auth.secureCookie` or `AuthConfig.secureCookie`.
 
 ### Role Resolution for Existing Sessions
 

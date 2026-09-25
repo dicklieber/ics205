@@ -18,17 +18,29 @@
 
 package ics205.auth
 
+import com.github.andyglow.config.*
+import com.typesafe.config.{Config, ConfigFactory}
 import java.time.Duration
 
 case class AuthConfig(
-  userFileName: String = sys.env.getOrElse("AUTH_USERS_FILE", "users.json"),
-  sessionFileName: String = sys.env.getOrElse("AUTH_SESSIONS_FILE", "sessions.json"),
-  sessionLifetime: Duration = sys.env.get("AUTH_SESSION_LIFETIME_SECONDS")
-    .flatMap(_.toLongOption)
-    .map(Duration.ofSeconds)
-    .getOrElse(Duration.ofHours(24)),
-  cookieName: String = sys.env.getOrElse("AUTH_COOKIE_NAME", "session"),
-  secureCookie: Boolean = sys.env.get("AUTH_COOKIE_SECURE")
-    .flatMap(_.toBooleanOption)
-    .getOrElse(false)
+  userFileName: String = AuthConfig.default.userFileName,
+  sessionFileName: String = AuthConfig.default.sessionFileName,
+  sessionLifetime: Duration = AuthConfig.default.sessionLifetime,
+  cookieName: String = AuthConfig.default.cookieName,
+  secureCookie: Boolean = AuthConfig.default.secureCookie
 )
+
+object AuthConfig:
+  def fromConfig(config: Config): AuthConfig =
+    val authConf = if config.hasPath("auth") then config.getConfig("auth") else config
+    AuthConfig(
+      userFileName = if authConf.hasPath("userFileName") then authConf.getString("userFileName") else "users.json",
+      sessionFileName = if authConf.hasPath("sessionFileName") then authConf.getString("sessionFileName") else "sessions.json",
+      sessionLifetime = if authConf.hasPath("sessionLifetime") then authConf.getDuration("sessionLifetime") else Duration.ofHours(24),
+      cookieName = if authConf.hasPath("cookieName") then authConf.getString("cookieName") else "session",
+      secureCookie = if authConf.hasPath("secureCookie") then authConf.getBoolean("secureCookie") else false
+    )
+
+  def apply(config: Config): AuthConfig = fromConfig(config)
+
+  lazy val default: AuthConfig = fromConfig(ConfigFactory.load())

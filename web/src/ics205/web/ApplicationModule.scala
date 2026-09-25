@@ -36,7 +36,7 @@ class ApplicationModule(fullConfig: Config = ApplicationModule.loadConfig()) ext
     val fileHelper = new FileHelper()
     bind[FileHelper].toInstance(fileHelper)
 
-    val authConfig = AuthConfig()
+    val authConfig = AuthConfig.fromConfig(fullConfig)
     bind[AuthConfig].toInstance(authConfig)
     bind[PasswordService].to[ScalaPassPasswordService].asEagerSingleton()
     bind[UserStore].asEagerSingleton()
