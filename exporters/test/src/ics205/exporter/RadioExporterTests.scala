@@ -84,7 +84,7 @@ class RadioExporterTests extends munit.FunSuite:
     assertEquals(row2.length, 24)
     assertEquals(row2(0), "CH-02")
     assertEquals(row2(1), "446.000")
-    assertEquals(row2(6), "CMD Incident Command")
+    assertEquals(row2(6), "CMD Incident Cmd")
 
   test("RadioExporter exports CSV without header when includeHeader is false"):
     val csv = exporter.generateCsv("TH-D75.json", sampleIcs205, includeHeader = false)

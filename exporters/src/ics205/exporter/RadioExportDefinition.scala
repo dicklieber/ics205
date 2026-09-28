@@ -82,5 +82,39 @@ trait RadioChannelNameBuilder:
   def apply(ics205Channel: Ics205Channel): String
 
 class RadioChannelNameBuilderDefault() extends RadioChannelNameBuilder:
+  private val maxLength = 16
+  private val abbreviations = Map(
+    "operations" -> "Ops", "operation" -> "Ops", "command" -> "Cmd",
+    "medical" -> "Med", "emergency" -> "Emerg", "logistics" -> "Log",
+    "communications" -> "Comms", "tactical" -> "Tac", "support" -> "Sup",
+    "division" -> "Div", "branch" -> "Br", "group" -> "Grp",
+    "administration" -> "Admin", "administrative" -> "Admin",
+    "primary" -> "Pri", "secondary" -> "Sec", "alternate" -> "Alt",
+    "north" -> "N", "south" -> "S", "east" -> "E", "west" -> "W",
+    "central" -> "Ctr", "station" -> "Sta", "channel" -> "Ch"
+  )
+  private val word = "[A-Za-z]+".r
+
+  private def normalize(value: String): String = value.trim.replaceAll("\\s+", " ")
+
+  // Avoid leaving half a UTF-16 surrogate pair at the end of a truncated label.
+  private def truncate(value: String, limit: Int): String =
+    val result = value.take(limit).trim
+    if result.nonEmpty && Character.isHighSurrogate(result.last) then result.dropRight(1) else result
+
   override def apply(ics205Channel: Ics205Channel): String =
-    s"${ics205Channel.name} ${ics205Channel.assignment}"
+    val name = normalize(ics205Channel.name)
+    val assignment = normalize(ics205Channel.assignment)
+    val separator = if name.nonEmpty then " " else ""
+    val budget = maxLength - name.length - separator.length
+    if assignment.isEmpty || budget <= 0 then truncate(name, maxLength)
+    else
+      val abbreviated = word.replaceAllIn(assignment, m =>
+        abbreviations.getOrElse(m.matched.toLowerCase(java.util.Locale.ROOT), m.matched))
+      val consonants = word.replaceAllIn(abbreviated, m =>
+        m.matched.head.toString + m.matched.tail.replaceAll("(?i)[aeiou]", ""))
+      // Only alphabetic runs become initials, retaining identifiers such as 16-20 or CMT1.
+      val initials = word.replaceAllIn(abbreviated, m => m.matched.head.toString)
+      val candidates = Seq(assignment, abbreviated, consonants, initials, initials.replace(" ", ""))
+      val compact = candidates.find(_.length <= budget).getOrElse(truncate(candidates.last, budget))
+      s"$name$separator$compact".trim
