@@ -80,16 +80,25 @@ textarea {
     min-width: 1250px;
 }
 
-.channels th:nth-child(4) {
+.channels thead th:nth-child(5) {
     width: 12%;
 }
 
-.channels th:nth-child(11) {
+.channels thead th:nth-child(12) {
     width: 16%;
 }
 
-.channels th:nth-child(1), .channels th:nth-child(2) {
+.channels thead th:nth-child(2), .channels thead th:nth-child(3) {
     width: 4%;
+}
+
+.channels thead th:first-child, .channels .row-number {
+    width: var(--row-number-width, 1ch);
+    padding-left: 2px;
+    padding-right: 2px;
+    white-space: nowrap;
+    text-align: center;
+    vertical-align: middle;
 }
 
 .channels input[type=number] {
@@ -109,7 +118,7 @@ textarea {
     flex: 1;
 }
 
-.channels th:nth-child(9) {
+.channels thead th:nth-child(10) {
     width: 15%;
 }
 

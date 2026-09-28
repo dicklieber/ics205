@@ -70,8 +70,9 @@ private[web] object Ics205Editor:
               ),
               div(cls := "section-label")(strong("4. Basic Radio Channel Use:")),
               div(cls := "table-scroll")(
-                table(cls := "channels", attr("aria-label") := "Editable radio channels")(
-                  thead(tr(Seq("Zone / Grp.", "Ch #", "Function", "Channel Name / Talkgroup", "Assignment",
+                table(cls := "channels", attr("aria-label") := "Editable radio channels",
+                  style := s"--row-number-width: ${count.toString.length}ch;")(
+                  thead(tr(Seq("#", "Zone / Grp.", "Ch #", "Function", "Channel Name / Talkgroup", "Assignment",
                     "RX Freq (MHz)", "Offset (MHz)", "Bandwidth", "CTCSS", "Mode",
                     "Remarks", "Row controls").map(text => th(attr("scope") := "col")(text)))),
                   tbody(id := "channel-rows")((0 until count).map(index => row(values, index.toString, canEdit)))
@@ -106,11 +107,12 @@ private[web] object Ics205Editor:
   private def row(values: Map[String, String], index: String, canEdit: Boolean): Frag =
     val prefix = s"row.$index."
     def current(key: String): String = values.getOrElse(prefix + key, "")
+    val isOther = current("mode") == "Other"
     def edit(key: String, caption: String, numeric: Boolean = false): Frag =
       input(name := prefix + key, attr("data-field") := key, attr("aria-label") := caption,
-        tpe := (if numeric then "number" else "text"), value := current(key),
+        tpe := (if numeric && !isOther then "number" else "text"), value := current(key),
         if numeric then step := "any" else cls := "",
-        if !canEdit then readonly else if key == "rx" || key == "offset" then required else cls := "")
+        if !canEdit then readonly else if !isOther && (key == "rx" || key == "offset") then required else cls := "")
     def choose(key: String, caption: String, choices: Seq[(String, String)], isHidden: Boolean = false): Frag =
       select(name := prefix + key, attr("data-field") := key, attr("aria-label") := caption,
         if isHidden then hidden else cls := "",
@@ -122,6 +124,7 @@ private[web] object Ics205Editor:
       )
     val isCtcssNone = current("ctcssMode") == "None" || current("ctcssMode").isEmpty
     tr(cls := "channel-row")(
+      th(cls := "row-number", attr("scope") := "row")(index.toIntOption.map(_ + 1).fold("")(_.toString)),
       td(input(tpe := "hidden", name := prefix + "id", attr("data-field") := "id", value := current("id")),
         edit("zoneGroup", "Zone / Group")),
       td(edit("channelNumber", "Channel number")),
@@ -140,7 +143,7 @@ private[web] object Ics205Editor:
           isHidden = isCtcssNone
         )
       )),
-      td(choose("mode", "Mode", Seq("Fm" -> "FM", "Am" -> "AM", "Digital" -> "Digital"))),
+      td(choose("mode", "Mode", Seq("Fm" -> "FM", "Am" -> "AM", "Digital" -> "Digital", "Other" -> "Other"))),
       td(
         textarea(name := prefix + "remarks", attr("data-field") := "remarks", attr("aria-label") := "Remarks", rows := 1,
           if !canEdit then readonly else cls := ""
@@ -172,15 +175,23 @@ private[web] object Ics205Editor:
       function changed() { dirty = true; status.textContent = 'Unsaved changes'; }
       function refresh() {
         const list = [...rows.children];
+        rows.closest('table').style.setProperty('--row-number-width', String(list.length).length + 'ch');
         list.forEach((row, index) => {
+          row.querySelector('.row-number').textContent = index + 1;
           row.querySelectorAll('[data-field]').forEach(control => {
             control.name = 'row.' + index + '.' + control.dataset.field;
+          });
+          const isOther = row.querySelector('[data-field=mode]').value === 'Other';
+          ['rx', 'offset'].forEach(field => {
+            const control = row.querySelector('[data-field=' + field + ']');
+            control.type = isOther ? 'text' : 'number';
+            control.required = !isOther;
           });
           const frequency = row.querySelector('[data-field=ctcssFrequency]');
           const enabled = row.querySelector('[data-field=ctcssMode]').value !== 'None';
           frequency.hidden = !enabled;
           frequency.disabled = !enabled;
-          frequency.required = enabled;
+          frequency.required = enabled && !isOther;
           row.querySelector('[data-action=up]').disabled = index === 0;
           row.querySelector('[data-action=down]').disabled = index === list.length - 1;
           row.querySelectorAll('[data-action]').forEach(button => {

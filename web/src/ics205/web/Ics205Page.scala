@@ -119,6 +119,7 @@ object Ics205Page:
       case RadioMode.Fm => "FM"
       case RadioMode.Am => "AM"
       case RadioMode.Digital => "Digital"
+      case RadioMode.Other => "Other"
     tr(cls := "channel-row", attr("data-channel-id") := channel.id)(
       Seq(
         channel.zoneGroup.getOrElse(""), channel.channelNumber.getOrElse(""),

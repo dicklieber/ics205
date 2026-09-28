@@ -70,23 +70,28 @@ private[web] object Ics205Form:
         val label = s"Row ${index + 1}"
         def get(key: String): String = text(prefix + key)
         def opt(key: String): Option[String] = optional(prefix + key)
-        def number(key: String): BigDecimal = parse(s"$label $key")(BigDecimal(get(key)))
-        val ctcssMode = parse(s"$label CTCSS mode")(CtcssMode.valueOf(get("ctcssMode")))
+        val mode = parse(s"$label mode")(RadioMode.valueOf(get("mode")))
+        val isOther = mode == RadioMode.Other
+        def rowValue[A](label: String, fallback: => A)(value: => A): A =
+          if isOther then Try(value).getOrElse(fallback) else parse(label)(value)
+        def number(key: String): BigDecimal = rowValue(s"$label $key", BigDecimal(0))(BigDecimal(get(key)))
+        val ctcssMode = rowValue(s"$label CTCSS mode", CtcssMode.None)(CtcssMode.valueOf(get("ctcssMode")))
         val ctcssFrequency = if ctcssMode == CtcssMode.None then None
+          else if isOther then Try(BigDecimal(get("ctcssFrequency"))).toOption.flatMap(CtcssFrequency.fromHz)
           else Some(CtcssFrequency.fromHz(number("ctcssFrequency")).getOrElse(
             fail(s"$label: select a standard CTCSS frequency for Tone or TSQL.")
           ))
         val rx = number("rx")
         val offset = number("offset")
-        if rx <= 0 || rx + offset <= 0 then fail(s"$label: RX and derived TX frequencies must be positive.")
+        if !isOther && (rx <= 0 || rx + offset <= 0) then fail(s"$label: RX and derived TX frequencies must be positive.")
         val id = get("id")
         if id.isEmpty then fail(s"$label: missing channel ID.")
         Ics205Channel(
           id = id, zoneGroup = opt("zoneGroup"), channelNumber = opt("channelNumber"),
           function = get("function"), name = get("name"), assignment = get("assignment"),
           frequency = RxWithOffset(Frequency(rx), Frequency(offset)),
-          mode = parse(s"$label mode")(RadioMode.valueOf(get("mode"))),
-          bandwidth = opt("bandwidth").map(value => parse(s"$label bandwidth")(Bandwidth.valueOf(value))).getOrElse(Bandwidth.Wide),
+          mode = mode,
+          bandwidth = opt("bandwidth").map(value => rowValue(s"$label bandwidth", Bandwidth.Wide)(Bandwidth.valueOf(value))).getOrElse(Bandwidth.Wide),
           ctcss = Ctcss(ctcssFrequency, ctcssMode),
           remarks = get("remarks")
         )

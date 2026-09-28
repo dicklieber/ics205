@@ -24,6 +24,7 @@ enum RadioMode derives Codec.AsObject:
   case Fm
   case Am
   case Digital
+  case Other
 
 enum Bandwidth derives Codec.AsObject:
   case Narrow

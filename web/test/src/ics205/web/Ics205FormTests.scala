@@ -181,3 +181,40 @@ class Ics205FormTests extends munit.FunSuite:
       assertEquals(editorRes.status, Status.SeeOther)
       assertEquals(store.ics205().incidentName, "New Incident Name")
     finally os.remove.all(tempDirectory)
+
+  test("Other accepts incomplete radio fields and survives JSON and form round trips"):
+    val fields = Ics205Form.fields(base) ++ Map(
+      "row.0.mode" -> "Other", "row.0.rx" -> "", "row.0.offset" -> "not applicable",
+      "row.0.ctcssMode" -> "Tone", "row.0.ctcssFrequency" -> "", "row.0.bandwidth" -> ""
+    )
+    val result = Ics205Form.decode(fields, base).toOption.get
+    val channel = result.channels.head
+    assertEquals(channel.mode, RadioMode.Other)
+    assertEquals(channel.frequency, RxWithOffset(mhz"0", mhz"0"))
+    assertEquals(channel.ctcss, Ctcss(None, CtcssMode.Tone))
+    assertEquals(channel.name, base.channels.head.name)
+    assertEquals(channel.remarks, base.channels.head.remarks)
+    assertEquals(Ics205Form.decode(Ics205Form.fields(result), result), Right(result))
+    import io.circe.syntax.*
+    assertEquals(io.circe.parser.decode[Ics205](result.asJson.noSpaces), Right(result))
+    assert(Ics205Form.decode(fields.updated("row.0.mode", "Fm"), base).isLeft)
+    assert(Ics205Form.decode(fields.updated("row.1.rx", ""), base).isLeft)
+
+  test("Other retains numeric values without positive frequency validation"):
+    val fields = Ics205Form.fields(base) ++ Map(
+      "row.0.mode" -> "Other", "row.0.rx" -> "-10", "row.0.offset" -> "-20",
+      "row.0.ctcssMode" -> "invalid", "row.0.bandwidth" -> "invalid"
+    )
+    val channel = Ics205Form.decode(fields, base).toOption.get.channels.head
+    assertEquals(channel.frequency, RxWithOffset(mhz"-10", mhz"-20"))
+    assertEquals(channel.ctcss, Ctcss())
+    assertEquals(channel.bandwidth, Bandwidth.Wide)
+
+  test("Other renders numeric fields without browser number or required constraints"):
+    val plan = base.copy(channels = Seq(base.channels.head.copy(mode = RadioMode.Other)))
+    val user = ics205.auth.AuthenticatedUser("editor", "editor", ics205.auth.RolePermissions.Editor)
+    val html = Ics205Editor.render(plan, currentUser = Some(user))
+    val row = html.substring(html.indexOf("<tbody"), html.indexOf("</tbody>"))
+    assert(row.contains("value=\"Other\" selected"))
+    assert(!row.contains("required"))
+    assert(!row.contains("type=\"number\""))
