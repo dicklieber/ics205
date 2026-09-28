@@ -68,7 +68,8 @@ class RadioExportEndpointsTests extends munit.FunSuite:
       val exporter = new RadioExporter(definitions)
       val exportEndpoints = new RadioExportEndpoints(exporter, definitions, ics205Store, authService, config)
 
-      val allServerEndpoints: List[ServerEndpoint[Any, IO]] = exportEndpoints.endpoints
+      val allServerEndpoints: List[ServerEndpoint[Any, IO]] = exportEndpoints.endpoints ++
+        new PdfExportEndpoints(new ics205.exporter.Ics205PdfExporter(), ics205Store, authService, config).endpoints
       val httpApp = Http4sServerInterpreter[IO]().toRoutes(allServerEndpoints).orNotFound
 
       test(tempDir, userStore, sessionStore, ics205Store, authService, exportEndpoints, httpApp)
@@ -165,4 +166,32 @@ class RadioExportEndpointsTests extends munit.FunSuite:
       assert(body.contains("Generated CSV Output"))
       assert(!body.contains("Receive Frequency"))
       assert(body.contains("146.520"))
+    }
+
+  test("PDF export requires a valid session"):
+    withContext { (_, _, _, _, _, _, app) =>
+      Seq(None, Some("invalid-session")).foreach { session =>
+        val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/pdf"))
+        val res = app.run(session.fold(req)(id => req.putHeaders(Header.Raw(CIString("Cookie"), s"session=$id")))).unsafeRunSync()
+        assertEquals(res.status, Status.SeeOther)
+        assertEquals(res.headers.get(CIString("Location")).map(_.head.value), Some("/login"))
+      }
+    }
+
+  test("PDF download reads the latest saved plan and returns PDF headers"):
+    withContext { (_, userStore, _, store, authService, _, app) =>
+      userStore.add(User("pdf-user", "pdfuser", new ScalaPassPasswordService().hash("password"), RolePermissions.User, enabled = true))
+      val session = authService.authenticate("pdfuser", "password").get
+      store.save(store.ics205().copy(incidentName = "Updated incident"))
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/pdf"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val res = app.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.Ok)
+      assertEquals(res.headers.get(CIString("Content-Type")).map(_.head.value), Some("application/pdf"))
+      assertEquals(res.headers.get(CIString("Content-Disposition")).map(_.head.value), Some("attachment; filename=\"ics205.pdf\""))
+      assertEquals(res.headers.get(CIString("Cache-Control")).map(_.head.value), Some("no-store"))
+      val bytes = res.body.compile.toVector.unsafeRunSync().toArray
+      scala.util.Using.resource(org.apache.pdfbox.Loader.loadPDF(bytes)) { pdf =>
+        assert(new org.apache.pdfbox.text.PDFTextStripper().getText(pdf).contains("Updated incident"))
+      }
     }

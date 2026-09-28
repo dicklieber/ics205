@@ -48,6 +48,7 @@ private[web] object Ics205Editor:
             button(tpe := "submit", if !canEdit then disabled else cls := "")("Save plan"),
             button(tpe := "submit", attr("formaction") := "/preview", attr("formtarget") := "_blank")("Print preview"),
             a(href := "/export/radio", style := "margin-left: 10px; color: #0052cc; text-decoration: none; font-weight: bold;")("Export Radio CSV"),
+            a(href := "/export/pdf", title := "Download the saved plan as a PDF; save edits first", style := "margin-left: 10px; color: #0052cc; text-decoration: none; font-weight: bold;")("Export PDF"),
             a(href := "/admin/users", style := "margin-left: 10px; color: #0052cc; text-decoration: none; font-weight: bold;")("User Management"),
             currentUser match
               case Some(user) =>

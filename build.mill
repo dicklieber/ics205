@@ -59,6 +59,7 @@ object exporters extends ScalaModule:
   def moduleDeps = Seq(core)
   def mvnDeps = Seq(
     mvn"org.apache.commons:commons-csv:1.14.0",
+    mvn"org.apache.pdfbox:pdfbox:3.0.8",
     mvn"io.github.classgraph:classgraph:4.8.195"
   )
   object test extends ScalaTests with TestModule.Munit:

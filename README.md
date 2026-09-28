@@ -6,7 +6,7 @@ plans and exporting radio-programming data.
 ## Modules
 
 - `core` — domain model and amateur band-plan logic
-- `exporters` — radio-programmer exporters
+- `exporters` — radio-programmer and ICS 205 PDF exporters
 - `web` — Tapir/http4s server with a Scalatags thin-client UI
 
 ## Build
@@ -40,6 +40,17 @@ RX frequency and signed offset are in MHz, with bandwidth in a separate column.
 Each channel selects one of the standard 50 CTCSS frequencies in Hz and a mode: None (off), Tone
 (transmit tone), or TSQL (transmit tone and receive tone squelch). Remarks are plain text. The preparer's
 callsign appears beside their name. Signature remains blank for signing.
+
+**Export PDF** downloads the current saved plan as `ics205.pdf` (save edits first).
+The authenticated `/export/pdf` endpoint uses `Ics205PdfExporter.generatePdf(plan)`
+and the bundled FEMA ICS 205 v3.1 form. The PDF always has one page. Up to eight channels use landscape US Letter;
+additional channels extend the page height with full-height rows, keeping the
+instructions and signature below the table. RX and
+calculated TX frequencies include N/W bandwidth; CTCSS Tone applies to TX only,
+while TSQL applies to both RX and TX. FM/AM are marked A, digital D, and Other
+remains Other because the model does not specify mixed mode. Text wraps and
+shrinks to fit the form; very long entries can become small. Characters outside
+the form's Helvetica/WinAnsi character set are replaced with `?`.
 
 `Main` creates a Guice injector using `ApplicationModule` and starts the injected
 `WebApplication`. Add application bindings in `ApplicationModule` and use
