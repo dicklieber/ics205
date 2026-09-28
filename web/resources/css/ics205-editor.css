@@ -145,6 +145,9 @@ textarea {
 
 .channels textarea {
     display: block;
+    box-sizing: border-box;
+    overflow-y: hidden;
+    resize: none;
 }
 
 .row-toolbar {

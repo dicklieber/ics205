@@ -100,7 +100,8 @@ private[web] object Ics205Editor:
           )
         ),
         if canEdit then tag("template")(id := "channel-template")(row(Map("row.NEW.offset" -> "0", "row.NEW.bandwidth" -> "Wide", "row.NEW.mode" -> "Fm", "row.NEW.ctcssMode" -> "None"), "NEW", canEdit = true)) else span(),
-        if canEdit then script(raw(editorScript)) else span()
+        if canEdit then script(raw(editorScript)) else span(),
+        script(raw(remarksSizingScript))
       )
     )).render
 
@@ -145,7 +146,7 @@ private[web] object Ics205Editor:
       )),
       td(choose("mode", "Mode", Seq("Fm" -> "FM", "Am" -> "AM", "Digital" -> "Digital", "Other" -> "Other"))),
       td(
-        textarea(name := prefix + "remarks", attr("data-field") := "remarks", attr("aria-label") := "Remarks", rows := 1,
+        textarea(name := prefix + "remarks", attr("data-field") := "remarks", attr("aria-label") := "Remarks", rows := current("remarks").split("\n", -1).length,
           if !canEdit then readonly else cls := ""
         )(current("remarks"))
       ),
@@ -162,6 +163,26 @@ private[web] object Ics205Editor:
         )
       )
     )
+
+  private val remarksSizingScript = """
+    (() => {
+      const rows = document.getElementById('channel-rows');
+      function fitRemarks() {
+        rows.querySelectorAll('textarea[data-field=remarks]').forEach(textarea => {
+          textarea.rows = 1;
+          textarea.style.height = 'auto';
+          const borderHeight = textarea.offsetHeight - textarea.clientHeight;
+          textarea.style.height = (textarea.scrollHeight + borderHeight) + 'px';
+        });
+      }
+      rows.addEventListener('input', event => {
+        if (event.target.matches('textarea[data-field=remarks]')) fitRemarks();
+      });
+      new MutationObserver(fitRemarks).observe(rows, { childList: true });
+      new ResizeObserver(fitRemarks).observe(rows.closest('table').parentElement);
+      fitRemarks();
+    })();
+  """
 
   private val editorScript = """
     (() => {
