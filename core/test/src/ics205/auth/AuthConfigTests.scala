@@ -70,3 +70,18 @@ class AuthConfigTests extends munit.FunSuite:
     val config = AuthConfig(sessionLifetime = Duration.ofSeconds(60))
     assertEquals(config.sessionLifetime, Duration.ofSeconds(60))
     assertEquals(config.userFileName, "users.json")
+
+  test("AuthErrorResponse roundtrips to and from JSON"):
+    import io.circe.syntax.*
+    import io.circe.parser.*
+    val err = AuthErrorResponse("unauthorized", "Access denied")
+    val json = err.asJson.noSpaces
+    val parsed = decode[AuthErrorResponse](json)
+    assertEquals(parsed, Right(err))
+
+  test("Permission fromString and KeyCodec"):
+    assertEquals(Permission.fromString("ViewUsers"), Some(Permission.ViewUsers))
+    assertEquals(Permission.fromString("UnknownPerm"), None)
+    assertEquals(RolePermissions.fromString("UnknownRole"), None)
+    assert(RolePermissions.hasPermission("admin", Permission.EditUsers))
+    assert(!RolePermissions.hasPermission("viewer", Permission.EditUsers))

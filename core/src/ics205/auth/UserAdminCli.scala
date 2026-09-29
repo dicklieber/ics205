@@ -27,8 +27,18 @@ object UserAdminCli:
     val config = AuthConfig()
     val userStore = new UserStore(fileHelper, config)
     val passwordService = new ScalaPassPasswordService()
+    val exitCode = run(args, userStore, passwordService)
+    if exitCode != 0 then sys.exit(exitCode)
 
-    println("=== ICS-205 User Creation Tool ===")
+  def run(
+    args: Array[String],
+    userStore: UserStore,
+    passwordService: PasswordService,
+    inReader: Option[java.io.BufferedReader] = None,
+    out: java.io.PrintStream = System.out,
+    err: java.io.PrintStream = System.err
+  ): Int =
+    out.println("=== ICS-205 User Creation Tool ===")
 
     var parsedUsername: Option[String] = None
     var parsedRole: Option[RolePermissions] = None
@@ -55,60 +65,58 @@ object UserAdminCli:
         case _ =>
           i += 1
 
-    val console = System.console()
+    def readLine(prompt: String): Option[String] =
+      inReader match
+        case Some(reader) =>
+          out.print(prompt)
+          Option(reader.readLine()).map(_.trim)
+        case None =>
+          val console = System.console()
+          if console != null then
+            Option(console.readLine(prompt)).map(_.trim)
+          else
+            Option(scala.io.StdIn.readLine(prompt)).map(_.trim)
 
-    val username = parsedUsername.getOrElse {
-      if console != null then
-        val input = console.readLine("Username: ")
-        if input == null then
-          System.err.println("Error: Standard input is unavailable. If invoking via Mill, use the -i flag: mill -i core.runMain ics205.auth.UserAdminCli")
-          sys.exit(1)
-        input.trim
-      else
-        val line = scala.io.StdIn.readLine("Username: ")
-        if line == null then
-          System.err.println("Error: Standard input is unavailable. If invoking via Mill, use the -i flag: mill -i core.runMain ics205.auth.UserAdminCli")
-          sys.exit(1)
-        line.trim
-    }
+    def readPassword(prompt: String): Option[String] =
+      inReader match
+        case Some(reader) =>
+          out.print(prompt)
+          Option(reader.readLine())
+        case None =>
+          val console = System.console()
+          if console != null then
+            Option(console.readPassword(prompt)).map(new String(_))
+          else
+            Option(scala.io.StdIn.readLine(prompt))
+
+    val username = parsedUsername.orElse(readLine("Username: ")) match
+      case None =>
+        err.println("Error: Standard input is unavailable. If invoking via Mill, use the -i flag: mill -i core.runMain ics205.auth.UserAdminCli")
+        return 1
+      case Some(u) => u
 
     if username.isEmpty then
-      System.err.println("Error: Username cannot be empty.")
-      sys.exit(1)
+      err.println("Error: Username cannot be empty.")
+      return 1
 
     val role = parsedRole.getOrElse {
-      val roleInput = if console != null then
-        val input = console.readLine(s"Role [${RolePermissions.values.mkString(", ")}] (default 'Admin'): ")
-        if input == null then "" else input.trim
-      else
-        val line = scala.io.StdIn.readLine(s"Role [${RolePermissions.values.mkString(", ")}] (default 'Admin'): ")
-        if line == null then "" else line.trim
-
+      val roleInput = readLine(s"Role [${RolePermissions.values.mkString(", ")}] (default 'Admin'): ").getOrElse("")
       if roleInput.isEmpty then RolePermissions.Admin
       else RolePermissions.fromString(roleInput).getOrElse {
-        println(s"Unknown role '$roleInput', defaulting to 'Admin'")
+        out.println(s"Unknown role '$roleInput', defaulting to 'Admin'")
         RolePermissions.Admin
       }
     }
 
-    val password = parsedPassword.getOrElse {
-      if console != null then
-        val chars = console.readPassword("Password: ")
-        if chars == null then
-          System.err.println("Error: Standard input is unavailable. If invoking via Mill, use the -i flag: mill -i core.runMain ics205.auth.UserAdminCli")
-          sys.exit(1)
-        new String(chars)
-      else
-        val line = scala.io.StdIn.readLine("Password: ")
-        if line == null then
-          System.err.println("Error: Standard input is unavailable. If invoking via Mill, use the -i flag: mill -i core.runMain ics205.auth.UserAdminCli")
-          sys.exit(1)
-        line
-    }
+    val password = parsedPassword.orElse(readPassword("Password: ")) match
+      case None =>
+        err.println("Error: Standard input is unavailable. If invoking via Mill, use the -i flag: mill -i core.runMain ics205.auth.UserAdminCli")
+        return 1
+      case Some(p) => p
 
     if password.isEmpty then
-      System.err.println("Error: Password cannot be empty.")
-      sys.exit(1)
+      err.println("Error: Password cannot be empty.")
+      return 1
 
     val hash = passwordService.hash(password)
     val user = User(
@@ -120,7 +128,8 @@ object UserAdminCli:
 
     userStore.add(user) match
       case Right(u) =>
-        println(s"User '${u.username}' (id: ${u.id}) created successfully with role: ${u.role}")
-      case Left(err) =>
-        System.err.println(s"Error creating user: $err")
-        sys.exit(1)
+        out.println(s"User '${u.username}' (id: ${u.id}) created successfully with role: ${u.role}")
+        0
+      case Left(error) =>
+        err.println(s"Error creating user: $error")
+        1

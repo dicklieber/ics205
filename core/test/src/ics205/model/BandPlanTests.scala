@@ -43,3 +43,38 @@ class RxWithOffsetTests extends munit.FunSuite:
     assertEquals(f.rx, mhz"441.050")
     assertEquals(f.tx, mhz"441.050")
     assert(f.isSimplex)
+
+  test("Frequency operations and toString"):
+    val f1 = mhz"146.520"
+    val f2 = mhz"0.600"
+    assertEquals((f1 + f2).mhz, BigDecimal("147.120"))
+    assertEquals((f1 - f2).mhz, BigDecimal("145.920"))
+    assertEquals(f1.toString, "146.520")
+
+  test("FrequencyRange and AmateurBandPlan isBand"):
+    val bandRange = FrequencyRange(mhz"144.000", mhz"148.000")
+    val plusRange = FrequencyRange(mhz"147.000", mhz"148.000")
+    val minusRange = FrequencyRange(mhz"146.000", mhz"147.000")
+    val plan = AmateurBandPlan(
+      name = "2m",
+      band = bandRange,
+      plus = plusRange,
+      minus = minusRange,
+      offset = mhz"0.600"
+    )
+
+    assert(plan.isBand(mhz"146.520"))
+    assert(plan.isBand(mhz"144.000"))
+    assert(plan.isBand(mhz"148.000"))
+    assert(!plan.isBand(mhz"143.999"))
+    assert(!plan.isBand(mhz"148.001"))
+
+    assertEquals(Direction.values.toSet, Set(Direction.Simplex, Direction.Plus, Direction.Minus))
+
+  test("PreparedBy roundtrips to and from JSON"):
+    import io.circe.syntax.*
+    import io.circe.parser.*
+    val p = PreparedBy("John Doe", Some("W1AW"))
+    val json = p.asJson.noSpaces
+    val parsed = decode[PreparedBy](json)
+    assertEquals(parsed, Right(p))

@@ -157,3 +157,55 @@ class Ics205StoreTests extends munit.FunSuite:
     assertEquals(legacy.as[Ics205Channel], Right(expected))
     assertEquals(legacy.mapObject(_.add("remarks", Json.Null)).as[Ics205Channel], Right(expected))
     assert(!expected.asJson.hcursor.keys.get.toSet.contains("digital"))
+
+  test("event and ics205Event return full event and metadata"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      assertEquals(store.event().ics205.incidentName, "")
+      assertEquals(store.ics205Event().ics205.incidentName, "")
+    }
+
+  test("save overloads correctly handle refreshPrepared and userId variations"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      val initialTime = LocalDateTime.of(2020, 1, 1, 0, 0)
+      val fixedPlan = plan.copy(prepared = initialTime)
+
+      store.save(fixedPlan, refreshPrepared = false)
+      assertEquals(store.ics205().prepared, initialTime)
+
+      store.save(fixedPlan, userId = "user-a", refreshPrepared = false)
+      assertEquals(store.ics205().prepared, initialTime)
+      assertEquals(store.metadata().lastEditedBy, Some("user-a"))
+
+      store.save(fixedPlan, userId = Some("user-b"), refreshPrepared = false)
+      assertEquals(store.ics205().prepared, initialTime)
+      assertEquals(store.metadata().lastEditedBy, Some("user-b"))
+
+      store.save(fixedPlan, userId = Some("user-c"))
+      assertNotEquals(store.ics205().prepared, initialTime)
+      assertEquals(store.metadata().lastEditedBy, Some("user-c"))
+    }
+
+  test("saveEvent persists event and handles refreshPrepared flag"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      val initialTime = LocalDateTime.of(2020, 1, 1, 0, 0)
+      val event = Ics205Event(plan.copy(prepared = initialTime), Ics205Metadata())
+
+      store.saveEvent(event, refreshPrepared = false)
+      assertEquals(store.ics205().prepared, initialTime)
+
+      store.saveEvent(event, refreshPrepared = true)
+      assertNotEquals(store.ics205().prepared, initialTime)
+    }
+
+  test("setUserPermission with Option[Permission] sets and clears permissions"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      store.setUserPermission("user-opt", Some(ics205.auth.Permission.EditUsers))
+      assertEquals(store.metadata().permissions.get("user-opt"), Some(ics205.auth.Permission.EditUsers))
+
+      store.setUserPermission("user-opt", None)
+      assertEquals(store.metadata().permissions.get("user-opt"), None)
+    }

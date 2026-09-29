@@ -195,3 +195,88 @@ class RadioExportEndpointsTests extends munit.FunSuite:
         assert(new org.apache.pdfbox.text.PDFTextStripper().getText(pdf).contains("Updated incident"))
       }
     }
+
+  test("GET /export/radio with definition query parameter generates CSV preview"):
+    withContext { (_, userStore, _, _, authService, _, app) =>
+      val passwordService = new ScalaPassPasswordService()
+      userStore.add(User("testuser", passwordService.hash("password"), RolePermissions.User, enabled = true, id = "u1"))
+      val session = authService.authenticate("testuser", "password").get
+
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/radio?definition=Kenwood+TH-D75&includeHeader=true"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val (res, body) = (for
+        r <- app.run(req)
+        b <- r.as[String]
+      yield (r, b)).unsafeRunSync()
+
+      assertEquals(res.status, Status.Ok)
+      assert(body.contains("Receive Frequency"))
+      assert(body.contains("146.520"))
+    }
+
+  test("GET /export/radio with invalid definition or msg and err queries renders notifications"):
+    withContext { (_, userStore, _, _, authService, _, app) =>
+      val passwordService = new ScalaPassPasswordService()
+      userStore.add(User("testuser", passwordService.hash("password"), RolePermissions.User, enabled = true, id = "u1"))
+      val session = authService.authenticate("testuser", "password").get
+
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/radio?definition=UnknownModel&msg=NoticeMessage&err=ErrorMessage"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val (res, body) = (for
+        r <- app.run(req)
+        b <- r.as[String]
+      yield (r, b)).unsafeRunSync()
+
+      assertEquals(res.status, Status.Ok)
+      assert(body.contains("NoticeMessage"))
+      assert(body.contains("ErrorMessage") || body.contains("UnknownModel"))
+    }
+
+  test("POST /export/radio without session redirects to /login"):
+    withContext { (_, _, _, _, _, _, app) =>
+      val form = UrlForm("definition" -> "Kenwood TH-D75")
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/export/radio")).withEntity(form)
+      val res = app.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+      assertEquals(res.headers.get(CIString("Location")).map(_.head.value), Some("/login"))
+    }
+
+  test("POST /export/radio with empty definition renders error alert"):
+    withContext { (_, userStore, _, _, authService, _, app) =>
+      val passwordService = new ScalaPassPasswordService()
+      userStore.add(User("testuser", passwordService.hash("password"), RolePermissions.User, enabled = true, id = "u1"))
+      val session = authService.authenticate("testuser", "password").get
+
+      val form = UrlForm("definition" -> "")
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/export/radio"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        .withEntity(form)
+
+      val (res, body) = (for
+        r <- app.run(req)
+        b <- r.as[String]
+      yield (r, b)).unsafeRunSync()
+
+      assertEquals(res.status, Status.Ok)
+      assert(body.contains("Please select a radio export definition."))
+    }
+
+  test("POST /export/radio with unknown definition renders failure alert"):
+    withContext { (_, userStore, _, _, authService, _, app) =>
+      val passwordService = new ScalaPassPasswordService()
+      userStore.add(User("testuser", passwordService.hash("password"), RolePermissions.User, enabled = true, id = "u1"))
+      val session = authService.authenticate("testuser", "password").get
+
+      val form = UrlForm("definition" -> "NoSuchRadio")
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/export/radio"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        .withEntity(form)
+
+      val (res, body) = (for
+        r <- app.run(req)
+        b <- r.as[String]
+      yield (r, b)).unsafeRunSync()
+
+      assertEquals(res.status, Status.Ok)
+      assert(body.contains("Failed to generate CSV"))
+    }
