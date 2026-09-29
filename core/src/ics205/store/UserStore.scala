@@ -21,6 +21,7 @@ package ics205.store
 import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.{AuthConfig, User, UserDatabase}
 import ics205.util.FileHelper
+import ics205.util.Ids.{Id, generateId}
 import io.circe.parser.*
 import io.circe.syntax.*
 import io.circe.Printer
@@ -58,7 +59,7 @@ class UserStore @Inject()(fileHelper: FileHelper, config: AuthConfig) extends La
 
   private def persist(users: Seq[User]): Unit = synchronized {
     val path = fileHelper.directory / fileName
-    val tempPath = fileHelper.directory / s".$fileName.tmp.${java.util.UUID.randomUUID()}"
+    val tempPath = fileHelper.directory / s".$fileName.tmp.${generateId()}"
     val db = UserDatabase(users)
     val json = db.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true))
     os.write.over(tempPath, json, createFolders = true)
@@ -75,7 +76,7 @@ class UserStore @Inject()(fileHelper: FileHelper, config: AuthConfig) extends La
 
   def all(): Seq[User] = synchronized { usersState }
 
-  def findById(id: String): Option[User] = synchronized {
+  def findById(id: Id): Option[User] = synchronized {
     usersState.find(_.id == id)
   }
 
@@ -111,7 +112,7 @@ class UserStore @Inject()(fileHelper: FileHelper, config: AuthConfig) extends La
           Right(user)
   }
 
-  def delete(id: String): Boolean = synchronized {
+  def delete(id: Id): Boolean = synchronized {
     val filtered = usersState.filterNot(_.id == id)
     if filtered.length != usersState.length then
       persist(filtered)

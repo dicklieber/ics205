@@ -18,11 +18,12 @@
 
 package ics205.auth
 
+import ics205.util.Ids.Id
 import io.circe.Codec
 import io.circe.derivation.{Configuration, ConfiguredCodec}
 
 case class AuthenticatedUser(
-  id: String,
+  id: Id,
   username: String,
   role: RolePermissions
 ):

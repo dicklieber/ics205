@@ -124,27 +124,32 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       userStore.add(User("u-admin", "admin", hash, RolePermissions.Admin, enabled = true))
       val session = authService.authenticate("admin", "adminpass").get
 
-      val form = UrlForm(
-        "username" -> "newuser",
-        "password" -> "secret123",
-        "role" -> "editor",
-        "enabled" -> "true"
-      )
-      val req = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
-        .withEntity(form)
-        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      ics205.util.Ids.useSeqentialStartingAt(100)
+      try
+        val form = UrlForm(
+          "username" -> "newuser",
+          "password" -> "secret123",
+          "role" -> "editor",
+          "enabled" -> "true"
+        )
+        val req = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+          .withEntity(form)
+          .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
 
-      val res = app.run(req).unsafeRunSync()
-      assertEquals(res.status, Status.SeeOther)
-      val location = res.headers.get(CIString("Location")).map(_.head.value).getOrElse("")
-      assert(location.startsWith("/admin/users?msg="))
+        val res = app.run(req).unsafeRunSync()
+        assertEquals(res.status, Status.SeeOther)
+        val location = res.headers.get(CIString("Location")).map(_.head.value).getOrElse("")
+        assert(location.startsWith("/admin/users?msg="))
 
-      val created = userStore.findByUsername("newuser")
-      assert(created.isDefined)
-      assertEquals(created.get.username, "newuser")
-      assertEquals(created.get.role, RolePermissions.Editor)
-      assertEquals(created.get.enabled, true)
-      assert(passwordService.verify("secret123", created.get.passwordHash))
+        val created = userStore.findByUsername("newuser")
+        assert(created.isDefined)
+        assertEquals(created.get.id, "100")
+        assertEquals(created.get.username, "newuser")
+        assertEquals(created.get.role, RolePermissions.Editor)
+        assertEquals(created.get.enabled, true)
+        assert(passwordService.verify("secret123", created.get.passwordHash))
+      finally
+        ics205.util.Ids.revertToRandom()
     }
 
   test("POST /admin/users/create rejects empty username or password"):

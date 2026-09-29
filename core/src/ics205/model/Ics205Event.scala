@@ -19,6 +19,7 @@
 package ics205.model
 
 import ics205.auth.{AuthenticatedUser, Permission, RolePermissions, User}
+import ics205.util.Ids.Id
 import io.circe.{Codec, Decoder, Encoder, HCursor, Json, JsonObject}
 import io.circe.syntax.*
 
@@ -34,7 +35,7 @@ case class Ics205Event(
   def permissionFor(user: AuthenticatedUser): Option[Permission] =
     metadata.permissionFor(user)
 
-  def permissionFor(userId: String): Option[Permission] =
+  def permissionFor(userId: Id): Option[Permission] =
     metadata.permissionFor(userId)
 
   def accessFor(user: User): Option[PlanAccess] =
@@ -43,7 +44,7 @@ case class Ics205Event(
   def accessFor(user: AuthenticatedUser): Option[PlanAccess] =
     metadata.accessFor(user)
 
-  def accessFor(userId: String, role: RolePermissions): Option[PlanAccess] =
+  def accessFor(userId: Id, role: RolePermissions): Option[PlanAccess] =
     metadata.accessFor(userId, role)
 
   def canEdit(user: User): Boolean =

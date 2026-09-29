@@ -21,6 +21,7 @@ package ics205.store
 import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.{AuthConfig, Session, SessionDatabase}
 import ics205.util.FileHelper
+import ics205.util.Ids.{Id, generateId}
 import io.circe.parser.*
 import io.circe.syntax.*
 import io.circe.Printer
@@ -32,10 +33,10 @@ import java.time.Instant
 import scala.collection.mutable
 
 trait SessionStore:
-  def create(userId: String): Session
-  def find(sessionId: String): Option[Session]
-  def delete(sessionId: String): Unit
-  def deleteAllForUser(userId: String): Unit
+  def create(userId: Id): Session
+  def find(sessionId: Id): Option[Session]
+  def delete(sessionId: Id): Unit
+  def deleteAllForUser(userId: Id): Unit
   def all(): Seq[Session]
   def cleanExpired(): Unit
 
@@ -46,7 +47,7 @@ class InMemJsonSessionStore @Inject()(fileHelper: FileHelper, config: AuthConfig
   private val fileName: String = config.sessionFileName
   private val secureRandom = new SecureRandom()
 
-  private val sessions: mutable.Map[String, Session] = mutable.Map.empty
+  private val sessions: mutable.Map[Id, Session] = mutable.Map.empty
 
   // Initialize on startup: load persisted sessions, discard expired sessions, populate in-memory store
   synchronized {
@@ -58,7 +59,7 @@ class InMemJsonSessionStore @Inject()(fileHelper: FileHelper, config: AuthConfig
       persist()
   }
 
-  private def generateSessionId(): String =
+  private def generateSessionId(): Id =
     val bytes = new Array[Byte](32)
     secureRandom.nextBytes(bytes)
     java.util.HexFormat.of().formatHex(bytes)
@@ -84,7 +85,7 @@ class InMemJsonSessionStore @Inject()(fileHelper: FileHelper, config: AuthConfig
 
   private def persist(): Unit =
     val path = fileHelper.directory / fileName
-    val tempPath = fileHelper.directory / s".$fileName.tmp.${java.util.UUID.randomUUID()}"
+    val tempPath = fileHelper.directory / s".$fileName.tmp.${generateId()}"
     val db = SessionDatabase(sessions.values.toSeq)
     val json = db.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true))
     os.write.over(tempPath, json, createFolders = true)
@@ -98,7 +99,7 @@ class InMemJsonSessionStore @Inject()(fileHelper: FileHelper, config: AuthConfig
       if os.exists(tempPath) then
         try os.remove(tempPath) catch case _: Exception => ()
 
-  override def create(userId: String): Session = synchronized {
+  override def create(userId: Id): Session = synchronized {
     val now = Instant.now()
     val expiresAt = now.plus(config.sessionLifetime)
     val session = Session(
@@ -112,7 +113,7 @@ class InMemJsonSessionStore @Inject()(fileHelper: FileHelper, config: AuthConfig
     session
   }
 
-  override def find(sessionId: String): Option[Session] = synchronized {
+  override def find(sessionId: Id): Option[Session] = synchronized {
     sessions.get(sessionId) match
       case Some(session) =>
         if session.expiresAt.isBefore(Instant.now()) then
@@ -125,12 +126,12 @@ class InMemJsonSessionStore @Inject()(fileHelper: FileHelper, config: AuthConfig
         None
   }
 
-  override def delete(sessionId: String): Unit = synchronized {
+  override def delete(sessionId: Id): Unit = synchronized {
     if sessions.remove(sessionId).isDefined then
       persist()
   }
 
-  override def deleteAllForUser(userId: String): Unit = synchronized {
+  override def deleteAllForUser(userId: Id): Unit = synchronized {
     val toRemove = sessions.filter(_._2.userId == userId).keys.toList
     if toRemove.nonEmpty then
       toRemove.foreach(sessions.remove)

@@ -19,6 +19,7 @@
 package ics205.model
 
 import ics205.auth.{AuthenticatedUser, Permission, RolePermissions, User}
+import ics205.util.Ids.Id
 import io.circe.{Codec, Decoder, Encoder, HCursor, Json, JsonObject}
 import io.circe.syntax.*
 
@@ -32,15 +33,15 @@ type EventAccess = PlanAccess
 val EventAccess: PlanAccess.type = PlanAccess
 
 case class Ics205Metadata(
-  permissions: Map[String, Permission] = Map.empty,
-  lastEditedBy: Option[String] = None,
+  permissions: Map[Id, Permission] = Map.empty,
+  lastEditedBy: Option[Id] = None,
   savedAt: Instant = Instant.now()
 ):
-  def userPermissions: Map[String, Permission] = permissions
-  def lastEditedByUserId: Option[String] = lastEditedBy
+  def userPermissions: Map[Id, Permission] = permissions
+  def lastEditedByUserId: Option[Id] = lastEditedBy
   def savedInstant: Instant = savedAt
 
-  def permissionFor(userId: String): Option[Permission] =
+  def permissionFor(userId: Id): Option[Permission] =
     permissions.get(userId)
 
   def permissionFor(user: User): Option[Permission] =
@@ -49,7 +50,7 @@ case class Ics205Metadata(
   def permissionFor(user: AuthenticatedUser): Option[Permission] =
     permissionFor(user.id, user.role)
 
-  def permissionFor(userId: String, role: RolePermissions): Option[Permission] =
+  def permissionFor(userId: Id, role: RolePermissions): Option[Permission] =
     if role == RolePermissions.Admin then
       Some(Permission.EditPlans)
     else
@@ -76,7 +77,7 @@ case class Ics205Metadata(
       case _ => None
     }
 
-  def accessFor(userId: String, role: RolePermissions): Option[PlanAccess] =
+  def accessFor(userId: Id, role: RolePermissions): Option[PlanAccess] =
     permissionFor(userId, role).flatMap {
       case Permission.EditPlans => Some(PlanAccess.Edit)
       case Permission.ViewPlans => Some(PlanAccess.ReadOnly)
@@ -104,18 +105,18 @@ case class Ics205Metadata(
   def isEdit(user: User): Boolean = canEdit(user)
   def isEdit(user: AuthenticatedUser): Boolean = canEdit(user)
 
-  def withUserPermission(userId: String, permission: Option[Permission]): Ics205Metadata =
+  def withUserPermission(userId: Id, permission: Option[Permission]): Ics205Metadata =
     permission match
       case Some(p) => copy(permissions = permissions + (userId -> p))
       case None    => copy(permissions = permissions - userId)
 
-  def withUserPermission(userId: String, permission: Permission): Ics205Metadata =
+  def withUserPermission(userId: Id, permission: Permission): Ics205Metadata =
     copy(permissions = permissions + (userId -> permission))
 
-  def withoutUserPermission(userId: String): Ics205Metadata =
+  def withoutUserPermission(userId: Id): Ics205Metadata =
     copy(permissions = permissions - userId)
 
-  def withLastEditedBy(userId: String): Ics205Metadata =
+  def withLastEditedBy(userId: Id): Ics205Metadata =
     copy(lastEditedBy = Some(userId))
 
   def withSavedAt(instant: Instant): Ics205Metadata =
@@ -125,13 +126,13 @@ object Ics205Metadata:
   given Codec.AsObject[Ics205Metadata] = Codec.AsObject.from(
     (c: HCursor) => {
       for
-        perms <- c.downField("permissions").as[Option[Map[String, Permission]]].flatMap {
+        perms <- c.downField("permissions").as[Option[Map[Id, Permission]]].flatMap {
           case Some(p) => Right(p)
-          case None => c.downField("userPermissions").as[Option[Map[String, Permission]]].map(_.getOrElse(Map.empty))
+          case None => c.downField("userPermissions").as[Option[Map[Id, Permission]]].map(_.getOrElse(Map.empty))
         }
-        lastEdited <- c.downField("lastEditedBy").as[Option[String]].flatMap {
+        lastEdited <- c.downField("lastEditedBy").as[Option[Id]].flatMap {
           case Some(u) => Right(Some(u))
-          case None => c.downField("lastEditedByUserId").as[Option[String]]
+          case None => c.downField("lastEditedByUserId").as[Option[Id]]
         }
         saved <- c.downField("savedAt").as[Option[Instant]].flatMap {
           case Some(s) => Right(s)

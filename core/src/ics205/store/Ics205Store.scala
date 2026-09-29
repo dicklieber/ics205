@@ -22,6 +22,7 @@ import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.Permission
 import ics205.model.{Ics205, Ics205Event, Ics205Metadata, OperationalPeriod}
 import ics205.util.FileHelper
+import ics205.util.Ids.Id
 import jakarta.inject.{Inject, Singleton}
 
 import java.time.{Instant, LocalDateTime}
@@ -49,19 +50,19 @@ class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
     save(value, None, refreshPrepared)
   }
 
-  def save(value: Ics205, userId: String): Unit = synchronized {
+  def save(value: Ics205, userId: Id): Unit = synchronized {
     save(value, Some(userId), refreshPrepared = true)
   }
 
-  def save(value: Ics205, userId: String, refreshPrepared: Boolean): Unit = synchronized {
+  def save(value: Ics205, userId: Id, refreshPrepared: Boolean): Unit = synchronized {
     save(value, Some(userId), refreshPrepared)
   }
 
-  def save(value: Ics205, userId: Option[String]): Unit = synchronized {
+  def save(value: Ics205, userId: Option[Id]): Unit = synchronized {
     save(value, userId, refreshPrepared = true)
   }
 
-  def save(value: Ics205, userId: Option[String], refreshPrepared: Boolean): Unit = synchronized {
+  def save(value: Ics205, userId: Option[Id], refreshPrepared: Boolean): Unit = synchronized {
     val preparedNow = if refreshPrepared then value.copy(prepared = LocalDateTime.now()) else value
     val updatedMetadata = current.metadata.copy(
       lastEditedBy = userId.orElse(current.metadata.lastEditedBy),
@@ -88,14 +89,14 @@ class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
     updatedMetadata
   }
 
-  def setUserPermission(userId: String, permission: Option[Permission]): Unit = synchronized {
+  def setUserPermission(userId: Id, permission: Option[Permission]): Unit = synchronized {
     updateMetadata(_.withUserPermission(userId, permission))
   }
 
-  def setUserPermission(userId: String, permission: Permission): Unit = synchronized {
+  def setUserPermission(userId: Id, permission: Permission): Unit = synchronized {
     updateMetadata(_.withUserPermission(userId, permission))
   }
 
-  def removeUserPermission(userId: String): Unit = synchronized {
+  def removeUserPermission(userId: Id): Unit = synchronized {
     updateMetadata(_.withoutUserPermission(userId))
   }

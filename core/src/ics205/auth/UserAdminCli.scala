@@ -19,9 +19,7 @@
 package ics205.auth
 
 import ics205.store.UserStore
-import ics205.util.FileHelper
-
-import java.util.UUID
+import ics205.util.{FileHelper, Ids}
 
 object UserAdminCli:
   def main(args: Array[String]): Unit =
@@ -114,7 +112,7 @@ object UserAdminCli:
 
     val hash = passwordService.hash(password)
     val user = User(
-      id = UUID.randomUUID().toString,
+      id = Ids.generateId(),
       username = username,
       passwordHash = hash,
       role = role,
