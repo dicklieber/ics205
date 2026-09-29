@@ -126,6 +126,8 @@ class Ics205FormTests extends munit.FunSuite:
     assert(!html.contains("readonly"))
     assert(html.contains(">Save plan</button>"))
     assert(!html.contains("disabled=\"disabled\">Save plan</button>"))
+    assert(!html.contains("Print preview"))
+    assert(!html.contains("Changes are saved with Save plan"))
     assert(html.contains(">Add channel</button>"))
     assert(html.contains("<template id=\"channel-template\">"))
     assert(html.contains("const form = document.getElementById('plan-form');"))

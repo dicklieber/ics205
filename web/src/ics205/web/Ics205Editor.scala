@@ -49,9 +49,7 @@ private[web] object Ics205Editor:
         form(id := "plan-form", method := "post", action := "/", attr("data-unsaved") := (canEdit && submitted.isDefined).toString)(
           div(cls := "toolbar")(
             button(tpe := "submit", if !canEdit then disabled else cls := "")("Save plan"),
-            button(tpe := "submit", attr("formaction") := "/preview", attr("formtarget") := "_blank")("Print preview"),
-            span(id := "status", attr("role") := "status")(if saved then "Plan saved." else ""),
-            p("Changes are saved with Save plan. Print preview includes your current edits.")
+            span(id := "status", attr("role") := "status")(if saved then "Plan saved." else "")
           ),
           error.map(message => div(cls := "error", attr("role") := "alert")(message, " Your edits have been kept below.")),
           div(cls := "sheet")(
@@ -263,9 +261,8 @@ private[web] object Ics205Editor:
       });
       form.addEventListener('input', changed);
       form.addEventListener('change', () => { refresh(); changed(); });
-      form.addEventListener('submit', event => {
+      form.addEventListener('submit', () => {
         refresh();
-        if (event.submitter && event.submitter.getAttribute('formaction') === '/preview') return;
         dirty = false;
       });
       window.addEventListener('beforeunload', event => {
