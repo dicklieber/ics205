@@ -18,10 +18,11 @@
 
 package ics205.web
 
+import ics205.auth.AuthenticatedUser
 import ics205.model.*
 import ics205.exporter.{RadioChannelNameBuilder, RadioChannelNameBuilderDefault}
 import scalatags.Text.all.*
-import scalatags.Text.tags2.{nav, section}
+import scalatags.Text.tags2.section
 
 /** Read-only radio view with generated channel names and expanded nested values. */
 object RadioPage:
@@ -51,25 +52,21 @@ object RadioPage:
     simple("remarks")(_.remarks)
   )
 
-  def render(plan: Ics205): String =
+  def render(plan: Ics205, currentUser: Option[AuthenticatedUser] = None): String =
     def field(label: String, value: String): Frag = div(cls := "radio-field")(dt(label), dd(value))
     doctype("html")(html(lang := "en")(
       head(
         meta(charset := "utf-8"),
         meta(name := "viewport", content := "width=device-width, initial-scale=1"),
         scalatags.Text.tags2.title("ICS 205 — Radio"),
+        link(rel := "stylesheet", href := "/css/navbar.css"),
         link(rel := "stylesheet", href := "/css/radio.css")
       ),
       body(
+        NavigationBar.render(NavigationBar.ActivePage.Radio, currentUser),
         div(cls := "radio-page")(
           header(
-            h1("Radio"),
-            nav(attr("aria-label") := "Radio navigation")(
-              a(href := "/")("Edit plan"),
-              a(href := "/export/radio")("Export Radio CSV"),
-              a(href := "/export/pdf")("Export PDF"),
-              a(href := "/logout")("Log out")
-            )
+            h1("Radio")
           ),
           p("Current saved ICS205 plan. Save edits on the plan page before viewing them here."),
           section(attr("aria-label") := "Plan details")(

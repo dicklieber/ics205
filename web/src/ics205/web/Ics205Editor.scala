@@ -40,24 +40,16 @@ private[web] object Ics205Editor:
       head(
         meta(charset := "utf-8"), meta(name := "viewport", content := "width=device-width, initial-scale=1"),
         scalatags.Text.tags2.title("ICS 205 — Edit plan"),
+        link(rel := "stylesheet", href := "/css/navbar.css"),
         link(rel := "stylesheet", href := "/css/ics205.css"),
         link(rel := "stylesheet", href := "/css/ics205-editor.css")
       ),
       body(
+        NavigationBar.render(NavigationBar.ActivePage.Plan, currentUser),
         form(id := "plan-form", method := "post", action := "/", attr("data-unsaved") := (canEdit && submitted.isDefined).toString)(
           div(cls := "toolbar")(
             button(tpe := "submit", if !canEdit then disabled else cls := "")("Save plan"),
             button(tpe := "submit", attr("formaction") := "/preview", attr("formtarget") := "_blank")("Print preview"),
-            a(href := "/radio", style := "margin-left: 10px; color: #0052cc; text-decoration: none; font-weight: bold;")("Radio"),
-            a(href := "/export/radio", style := "margin-left: 10px; color: #0052cc; text-decoration: none; font-weight: bold;")("Export Radio CSV"),
-            a(href := "/export/pdf", title := "Download the saved plan as a PDF; save edits first", style := "margin-left: 10px; color: #0052cc; text-decoration: none; font-weight: bold;")("Export PDF"),
-            a(href := "/admin/users", style := "margin-left: 10px; color: #0052cc; text-decoration: none; font-weight: bold;")("User Management"),
-            currentUser match
-              case Some(user) =>
-                span(style := "margin-left: 10px; color: #5e6c84; font-size: 9.5pt;")(s"Logged in as: ", strong(user.username))
-              case None =>
-                a(href := "/login", style := "margin-left: 10px; color: #0052cc; text-decoration: none;")("Log in"),
-            a(href := "/logout", style := "margin-left: 10px; color: #5e6c84; text-decoration: none;")("Log out"),
             span(id := "status", attr("role") := "status")(if saved then "Plan saved." else ""),
             p("Changes are saved with Save plan. Print preview includes your current edits.")
           ),

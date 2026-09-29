@@ -91,7 +91,7 @@ class AuthEndpointsTests extends munit.FunSuite:
       assert(body.contains("alice"))
     }
 
-  test("GET /login renders HTML login page with form and messages"):
+  test("GET /login renders HTML login page with form and messages, without navbar"):
     withContext { (_, _, _, _, _, _, _, app) =>
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/login?msg=Logged+out&err=Invalid+credentials"))
       val (response, body) = (for
@@ -105,6 +105,8 @@ class AuthEndpointsTests extends munit.FunSuite:
       assert(body.contains("name=\"password\""))
       assert(body.contains("Logged out"))
       assert(body.contains("Invalid credentials"))
+      assert(!body.contains("class=\"navbar"))
+      assert(!body.contains("Main navigation"))
     }
 
   test("POST /login with form data authenticates user, sets session cookie, and redirects to target"):

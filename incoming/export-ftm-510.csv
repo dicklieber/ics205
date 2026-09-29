@@ -5,7 +5,7 @@
 4,146.52000,146.52000,,Simplex,FM,N,,None,100.0,023,0,0,12,Low,Skip,5 kHz,N,N,,
 5,446.00000,446.00000,,Simplex,FM,N,70cm SPX,None,67.0,023,0,0,0,High,Skip,25 kHz,N,N,,
 6,146.52000,146.52000,,Simplex,FM,N,,None,100.0,023,0,0,12,High,Skip,5 kHz,N,N,,
-7,145.79000,145.79000,,Simplex,FM,N,VHFD1,None,100.0,023,0,0,12,High,Skip,5 kHz,N,Y,,
+7,145.79000,145.79000,,Simplex,FM,N,VHFD1,None,100.0,023,0,0,12,High,Skip,5Desc kHz,N,Y,,
 8,145.51000,145.51000,,Simplex,FM,N,VHFD2,None,100.0,023,0,0,12,High,Skip,5 kHz,N,Y,,
 9,441.00000,441.00000,,Simplex,FM,N,UHFD1,None,100.0,023,0,0,12,High,Skip,5 kHz,N,N,,
 10,446.50000,446.50000,,Simplex,FM,N,UHFD2,None,100.0,023,0,0,12,High,Skip,5 kHz,N,N,,

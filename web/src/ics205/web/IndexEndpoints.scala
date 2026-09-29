@@ -119,7 +119,7 @@ class IndexEndpoints @Inject() (
     .serverLogicSuccess[IO] { session =>
       IO.blocking {
         session.flatMap(id => authService.authenticateSession(id).toOption) match
-          case Some(_) => (StatusCode.Ok, None, RadioPage.render(store.ics205()))
+          case Some(user) => (StatusCode.Ok, None, RadioPage.render(store.ics205(), Some(user)))
           case None => (StatusCode.SeeOther, Some("/login"), "")
       }
     }

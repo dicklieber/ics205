@@ -19,6 +19,7 @@
 package ics205.web.admin
 
 import ics205.auth.{AuthenticatedUser, RolePermissions, User}
+import ics205.web.NavigationBar
 import scalatags.Text.all.*
 
 object UserAdminPage:
@@ -39,18 +40,15 @@ object UserAdminPage:
           meta(charset := "utf-8"),
           meta(name := "viewport", content := "width=device-width, initial-scale=1"),
           scalatags.Text.tags2.title("ICS 205 — User Administration"),
+          link(rel := "stylesheet", href := "/css/navbar.css"),
           link(rel := "stylesheet", href := "/css/admin.css")
         ),
         body(
+          NavigationBar.render(NavigationBar.ActivePage.UserAdmin, Some(currentUser)),
           div(cls := "admin-container")(
             div(cls := "admin-header")(
               div(
-                h1("User Administration"),
-                p(s"Logged in as: ", strong(currentUser.username), s" (${currentUser.role})")
-              ),
-              div(cls := "nav-links")(
-                a(href := "/")("← Back to Radio Plan"),
-                a(href := "/logout")("Log out")
+                h1("User Administration")
               )
             ),
 

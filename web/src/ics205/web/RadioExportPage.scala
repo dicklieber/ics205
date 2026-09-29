@@ -40,29 +40,19 @@ object RadioExportPage:
           meta(charset := "utf-8"),
           meta(name := "viewport", content := "width=device-width, initial-scale=1"),
           scalatags.Text.tags2.title("ICS 205 — Export Radio CSV"),
+          link(rel := "stylesheet", href := "/css/navbar.css"),
           link(rel := "stylesheet", href := "/css/admin.css")
         ),
         body(
+          NavigationBar.render(NavigationBar.ActivePage.ExportRadio, Some(currentUser)),
           div(cls := "admin-container")(
             div(cls := "admin-header")(
               div(
                 h1("Export Radio CSV"),
                 p(
                   s"Incident: ",
-                  strong(if plan.incidentName.trim.nonEmpty then plan.incidentName else "Untitled Plan"),
-                  span(style := "margin-left: 15px; color: #5e6c84;")(
-                    s"Logged in as: ",
-                    strong(currentUser.username)
-                  )
+                  strong(if plan.incidentName.trim.nonEmpty then plan.incidentName else "Untitled Plan")
                 )
-              ),
-              div(cls := "nav-links")(
-                a(href := "/")("← Back to Radio Plan"),
-                if currentUser.hasPermission(Permission.EditUsers) then
-                  a(href := "/admin/users")("User Management")
-                else
-                  span(),
-                a(href := "/logout")("Log out")
               )
             ),
 
