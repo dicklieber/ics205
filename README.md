@@ -9,21 +9,88 @@ plans and exporting radio-programming data.
 - `exporters` — radio-programmer and ICS 205 PDF exporters
 - `web` — Tapir/http4s server with a Scalatags thin-client UI
 
+## Prerequisites
+
+Before setting up and running the project, ensure you have the following installed:
+
+- **Java Development Kit (JDK)**: JDK 17 or higher (JDK 17, 21, or newer LTS recommended). Ensure `JAVA_HOME` is set and `java` is available in your `PATH`.
+- **Git**: For cloning the repository and managing source control.
+- **Mill Build Tool**: The project includes the `./mill` wrapper script at the repository root, which automatically downloads and uses the required Mill version (configured in `.mill-version`). You do not need to install Mill globally.
+- **Scala 3**: All Scala 3 dependencies and the Scala 3.7.4 compiler are managed automatically by Mill — no separate Scala installation is necessary.
+
 ## Build
 
-    mill core.test
-    mill exporters.test
-    mill web.compile
-    mill web.test
+```bash
+./mill core.compile
+./mill exporters.compile
+./mill web.compile
+```
 
 The core module generates `ics205.BuildInfo` with `name`, `appName`, `productName`, `version`,
 `scalaVersion`, and `millVersion` fields. The application version is read from
 `version.txt`; changes to that file automatically refresh the build info.
 These build details are logged when the server starts.
 
+## Testing and Code Coverage
+
+### Run Tests
+
+Run all unit tests across all modules:
+
+```bash
+./mill __.test
+```
+
+Or run tests for an individual module:
+
+```bash
+./mill core.test
+./mill exporters.test
+./mill web.test
+```
+
+### Clean, Test, and View Coverage Report
+
+To perform a clean build, execute all tests with Scoverage instrumentation, generate HTML coverage reports, and view them in your default browser:
+
+```bash
+./mill clean && ./mill __.test && ./mill __.scoverage.htmlReport && open out/*/scoverage/htmlReport.dest/index.html
+```
+
+### Coverage Reports (Scoverage)
+
+Code coverage is instrumented using Scoverage (`mill-contrib-scoverage`).
+
+- **HTML Coverage Report** (interactive line-by-line source view):
+  ```bash
+  ./mill __.scoverage.htmlReport
+  ```
+  Reports are generated at:
+  - `out/core/scoverage/htmlReport.dest/index.html`
+  - `out/exporters/scoverage/htmlReport.dest/index.html`
+  - `out/web/scoverage/htmlReport.dest/index.html`
+
+  To open all generated HTML coverage reports in your browser:
+  ```bash
+  open out/*/scoverage/htmlReport.dest/index.html
+  ```
+
+- **Console Coverage Summary** (statement and branch coverage in terminal):
+  ```bash
+  ./mill __.scoverage.consoleReport
+  ```
+
+- **XML Coverage Report** (Cobertura-compatible XML for CI/tools):
+  ```bash
+  ./mill __.scoverage.xmlReport
+  ```
+  Reports are generated at `out/*/scoverage/xmlReport.dest/scoverage.xml`.
+
 ## Run
 
-    mill web.run
+```bash
+./mill web.run
+```
 
 Open http://localhost:8080.
 
@@ -140,18 +207,18 @@ Sessions store **only** the `userId` and timestamp metadata; roles and permissio
 Run the built-in user administration tool interactively using Mill's `-i` (`--interactive`) flag:
 
 ```bash
-mill -i web.run -- --create-user
+./mill -i web.run -- --create-user
 ```
 
 Or run the CLI directly:
 ```bash
 # Prompts interactively for Username, Role, and Password (without echoing password)
-mill -i core.runMain ics205.auth.UserAdminCli
+./mill -i core.runMain ics205.auth.UserAdminCli
 ```
 
 Non-interactive user creation is also supported by passing arguments:
 ```bash
-mill core.runMain ics205.auth.UserAdminCli --username admin --role admin --password secret
+./mill core.runMain ics205.auth.UserAdminCli --username admin --role admin --password secret
 ```
 
 ### User Login and Logout UI
