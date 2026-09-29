@@ -81,7 +81,11 @@ textarea {
 }
 
 .channels thead th:nth-child(5) {
-    width: 12%;
+    width: 8%;
+}
+
+.channels thead th:nth-child(6) {
+    width: 14%;
 }
 
 .channels thead th:nth-child(12) {

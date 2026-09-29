@@ -25,6 +25,7 @@ class RadioExportDefinitionsTests extends munit.FunSuite:
     val list = definitions.listDefinitions
     assert(list.nonEmpty, "Definitions list should not be empty")
     assert(list.contains("Kenwood TH-D75"), s"Expected 'Kenwood TH-D75' in $list")
+    assert(list.contains("Yaesu FTM-510"), s"Expected 'Yaesu FTM-510' in $list")
     assertEquals(list, list.sorted)
 
   test("RadioExportDefinitions.get retrieves definition by name or baseName"):
@@ -37,6 +38,15 @@ class RadioExportDefinitionsTests extends munit.FunSuite:
 
     val byFile = definitions.get("TH-D75.json")
     assertEquals(byFile.name, "Kenwood TH-D75")
+
+    val ftmByName = definitions.get("Yaesu FTM-510")
+    assertEquals(ftmByName.name, "Yaesu FTM-510")
+
+    val ftmByBase = definitions.get("FTM-510")
+    assertEquals(ftmByBase.name, "Yaesu FTM-510")
+
+    val ftmByFile = definitions.get("FTM-510.json")
+    assertEquals(ftmByFile.name, "Yaesu FTM-510")
 
   test("RadioExportDefinitions.get throws IllegalArgumentException for unknown definition"):
     val definitions = new RadioExportDefinitions()

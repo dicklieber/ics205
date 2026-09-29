@@ -86,6 +86,32 @@ class RadioExporterTests extends munit.FunSuite:
     assertEquals(row2(1), "446.000")
     assertEquals(row2(6), "CMD Incident Cmd")
 
+  test("RadioExporter exports FTM-510 CSV with header"):
+    val csv = exporter.generateCsv("FTM-510", sampleIcs205, includeHeader = true)
+    val parser = CSVParser.parse(new StringReader(csv), CSVFormat.DEFAULT)
+    val records = parser.getRecords.asScala.toList
+    assertEquals(records.length, 3)
+
+    val header = records(0).toList.asScala.toList
+    assertEquals(header.length, 21)
+    assertEquals(header(0), "")
+    assertEquals(header(1), "Receive Frequency")
+    assertEquals(header(2), "Transmit Frequency")
+    assertEquals(header(6), "AMS")
+    assertEquals(header(7), "Name")
+    assertEquals(header(19), "Comment")
+    assertEquals(header(20), "")
+
+    val row1 = records(1).toList.asScala.toList
+    assertEquals(row1.length, 21)
+    assertEquals(row1(0), "CH-01")
+    assertEquals(row1(1), "146.520")
+    assertEquals(row1(2), "147.120")
+    assertEquals(row1(6), "N")
+    assertEquals(row1(7), "TAC1 Operations")
+    assertEquals(row1(19), "Primary tactical channel")
+    assertEquals(row1(20), "")
+
   test("RadioExporter exports CSV without header when includeHeader is false"):
     val csv = exporter.generateCsv("TH-D75.json", sampleIcs205, includeHeader = false)
     val parser = CSVParser.parse(new StringReader(csv), CSVFormat.DEFAULT)

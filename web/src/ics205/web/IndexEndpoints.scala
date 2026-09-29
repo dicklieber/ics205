@@ -111,4 +111,16 @@ class IndexEndpoints @Inject() (
       }
     }
 
-  override val endpoints: List[ServerEndpoint[Any, IO]] = List(indexEndpoint, saveEndpoint, previewEndpoint)
+  private val radioEndpoint: ServerEndpoint[Any, IO] = endpoint.get
+    .in("radio")
+    .in(cookie[Option[String]](config.cookieName))
+    .out(statusCode.and(header[Option[String]]("Location")).and(htmlBodyUtf8))
+    .serverLogicSuccess[IO] { session =>
+      IO.blocking {
+        session.flatMap(id => authService.authenticateSession(id).toOption) match
+          case Some(_) => (StatusCode.Ok, None, RadioPage.render(store.ics205()))
+          case None => (StatusCode.SeeOther, Some("/login"), "")
+      }
+    }
+
+  override val endpoints: List[ServerEndpoint[Any, IO]] = List(indexEndpoint, saveEndpoint, previewEndpoint, radioEndpoint)
