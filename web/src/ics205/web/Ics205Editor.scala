@@ -49,6 +49,7 @@ private[web] object Ics205Editor:
         form(id := "plan-form", method := "post", action := "/", attr("data-unsaved") := (canEdit && submitted.isDefined).toString)(
           div(cls := "toolbar")(
             button(tpe := "submit", if !canEdit then disabled else cls := "")("Save plan"),
+            button(tpe := "button", cls := "renumber-channels-btn", id := "renumber-channels-top", if !canEdit then disabled else cls := "")("Channel numbers"),
             span(id := "status", attr("role") := "status")(if saved then "Plan saved." else "")
           ),
           error.map(message => div(cls := "error", attr("role") := "alert")(message, " Your edits have been kept below.")),
@@ -74,6 +75,7 @@ private[web] object Ics205Editor:
               div(cls := "row-toolbar")(
                 button(tpe := "button", id := "add-row", if !canEdit then disabled else cls := "")("Add channel"),
                 button(tpe := "button", id := "paste-row", disabled)("Paste channel"),
+                button(tpe := "button", id := "renumber-channels", cls := "renumber-channels-btn", if !canEdit then disabled else cls := "")("Channel numbers"),
                 span(id := "clipboard-status", attr("role") := "status")(),
                 span(id := "row-status", attr("role") := "status")(),
                 p("Offset is in MHz; use 0 for simplex. CTCSS is in Hz: None disables it, Tone transmits a tone, and TSQL uses the tone for transmit and receive squelch.")
@@ -93,6 +95,19 @@ private[web] object Ics205Editor:
           )
         ),
         if canEdit then tag("template")(id := "channel-template")(row(Map("row.NEW.offset" -> "0", "row.NEW.bandwidth" -> "Wide", "row.NEW.mode" -> "Fm", "row.NEW.ctcssMode" -> "None"), "NEW", canEdit = true)) else span(),
+        if canEdit then tag("dialog")(id := "channel-numbers-dialog", cls := "channel-numbers-dialog")(
+          form(method := "dialog", id := "channel-numbers-form")(
+            h3("Channel numbers"),
+            div(cls := "dialog-body")(
+              label(attr("for") := "starting-channel-number")("Starting channel number:"),
+              input(tpe := "number", id := "starting-channel-number", name := "startingChannelNumber", value := "1", step := "1", required)
+            ),
+            div(cls := "dialog-actions")(
+              button(tpe := "button", id := "channel-numbers-cancel", value := "cancel")("Cancel"),
+              button(tpe := "submit", id := "channel-numbers-ok", value := "ok")("OK")
+            )
+          )
+        ) else span(),
         if canEdit then script(raw(editorScript)) else span(),
         script(raw(remarksSizingScript))
       )
@@ -184,6 +199,11 @@ private[web] object Ics205Editor:
       const status = document.getElementById('status');
       const paste = document.getElementById('paste-row');
       const clipboardStatus = document.getElementById('clipboard-status');
+      const renumberBtns = document.querySelectorAll('.renumber-channels-btn, #renumber-channels');
+      const renumberDialog = document.getElementById('channel-numbers-dialog');
+      const renumberForm = document.getElementById('channel-numbers-form');
+      const startingNumberInput = document.getElementById('starting-channel-number');
+      const cancelBtn = document.getElementById('channel-numbers-cancel');
       let copiedChannel = null;
       let dirty = form.dataset.unsaved === 'true';
       function changed() { dirty = true; status.textContent = 'Unsaved changes'; }
@@ -234,6 +254,58 @@ private[web] object Ics205Editor:
         insertChannel(copiedChannel);
         clipboardStatus.textContent = 'Channel pasted at the end. Save plan to keep it.';
       });
+      function applyChannelNumbers(startNum) {
+        const list = [...rows.children];
+        list.forEach((row, index) => {
+          const control = row.querySelector('[data-field=channelNumber]');
+          if (control) {
+            control.value = String(startNum + index);
+          }
+        });
+        changed();
+      }
+      if (renumberDialog) {
+        renumberBtns.forEach(btn => {
+          btn.addEventListener('click', () => {
+            if (typeof renumberDialog.showModal === 'function') {
+              renumberDialog.showModal();
+              if (startingNumberInput) {
+                startingNumberInput.focus();
+                startingNumberInput.select();
+              }
+            } else {
+              const val = prompt('Starting channel number:', startingNumberInput ? startingNumberInput.value : '1');
+              if (val !== null) {
+                const startNum = parseInt(val, 10);
+                if (!isNaN(startNum)) {
+                  applyChannelNumbers(startNum);
+                }
+              }
+            }
+          });
+        });
+      }
+      if (renumberForm) {
+        renumberForm.addEventListener('submit', event => {
+          event.preventDefault();
+          if (startingNumberInput) {
+            const startNum = parseInt(startingNumberInput.value, 10);
+            if (!isNaN(startNum)) {
+              applyChannelNumbers(startNum);
+            }
+          }
+          if (typeof renumberDialog.close === 'function') {
+            renumberDialog.close();
+          }
+        });
+      }
+      if (cancelBtn && renumberDialog) {
+        cancelBtn.addEventListener('click', () => {
+          if (typeof renumberDialog.close === 'function') {
+            renumberDialog.close();
+          }
+        });
+      }
       rows.addEventListener('click', event => {
         const button = event.target.closest('[data-action]');
         if (!button) return;

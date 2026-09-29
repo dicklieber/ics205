@@ -129,8 +129,13 @@ class Ics205FormTests extends munit.FunSuite:
     assert(!html.contains("Print preview"))
     assert(!html.contains("Changes are saved with Save plan"))
     assert(html.contains(">Add channel</button>"))
+    assert(html.contains(">Channel numbers</button>"))
+    assert(!html.contains("disabled=\"disabled\">Channel numbers</button>"))
+    assert(html.contains("id=\"channel-numbers-dialog\""))
+    assert(html.contains("id=\"starting-channel-number\""))
     assert(html.contains("<template id=\"channel-template\">"))
     assert(html.contains("const form = document.getElementById('plan-form');"))
+    assert(html.contains("applyChannelNumbers"))
 
   test("Ics205Editor renders read-only controls for user without EditPlans permission"):
     val viewerUser = ics205.auth.AuthenticatedUser("viewer1", ics205.auth.RolePermissions.Viewer, id = "u-viewer")
@@ -138,6 +143,8 @@ class Ics205FormTests extends munit.FunSuite:
     assert(html.contains("readonly=\"readonly\""))
     assert(html.contains("disabled=\"disabled\">Save plan</button>"))
     assert(html.contains("disabled=\"disabled\">Add channel</button>"))
+    assert(html.contains("disabled=\"disabled\">Channel numbers</button>"))
+    assert(!html.contains("id=\"channel-numbers-dialog\""))
     assert(html.contains("data-action=\"up\""))
     assert(html.contains("data-action=\"down\""))
     assert(html.contains("data-action=\"copy\""))
