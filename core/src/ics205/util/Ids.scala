@@ -45,11 +45,6 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 object Ids:
   type Id = String
-  type UserId = Id
-  type SessionId = Id
-  type ChannelId = Id
-  type EventId = Id
-  type PlanId = Id
 
   val IdSize = 22
 
@@ -70,16 +65,14 @@ object Ids:
   /**
    * Create a compact, url-safe, representation of a UUID.
    *
-   * @tparam T The specific ID type to generate (defaults to Id / String)
    * @return
    */
-  def generateId[T <: Id](): T =
-    val id = sequentialIds match
+  def generateId(): Id =
+    sequentialIds match
       case Some(seq) =>
         seq.getAndIncrement().toString
       case None =>
         nextRandom
-    id.asInstanceOf[T]
 
   def nextRandom: Id =
     val uuid: UUID = UUID.randomUUID

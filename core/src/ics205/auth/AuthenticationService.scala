@@ -20,7 +20,6 @@ package ics205.auth
 
 import com.typesafe.scalalogging.LazyLogging
 import ics205.store.{SessionStore, UserStore}
-import ics205.util.Ids.SessionId
 import jakarta.inject.{Inject, Singleton}
 
 @Singleton
@@ -42,7 +41,7 @@ class AuthenticationService @Inject()(
       case Some(session) =>
         userStore.findById(session.userId) match
           case Some(user) if user.enabled =>
-            Right(AuthenticatedUser(id = user.id, username = user.username, role = user.role))
+            Right(AuthenticatedUser(username = user.username, role = user.role, id = user.id))
           case _ =>
             Left(Unauthorized("User disabled or does not exist"))
       case None =>

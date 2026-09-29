@@ -19,9 +19,9 @@
 package ics205.store
 
 import com.typesafe.scalalogging.LazyLogging
-import ics205.auth.{AuthConfig, User, UserDatabase}
+import ics205.auth.{AuthConfig, User, UserDatabase, UserId}
 import ics205.util.FileHelper
-import ics205.util.Ids.{Id, UserId, generateId}
+import ics205.util.Ids.generateId
 import io.circe.parser.*
 import io.circe.syntax.*
 import io.circe.Printer
@@ -59,7 +59,7 @@ class UserStore @Inject()(fileHelper: FileHelper, config: AuthConfig) extends La
 
   private def persist(users: Seq[User]): Unit = synchronized {
     val path = fileHelper.directory / fileName
-    val tempPath = fileHelper.directory / s".$fileName.tmp.${generateId[Id]()}"
+    val tempPath = fileHelper.directory / s".$fileName.tmp.${generateId()}"
     val db = UserDatabase(users)
     val json = db.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true))
     os.write.over(tempPath, json, createFolders = true)

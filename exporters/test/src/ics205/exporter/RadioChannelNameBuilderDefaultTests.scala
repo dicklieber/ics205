@@ -5,8 +5,8 @@ import ics205.model.*
 class RadioChannelNameBuilderDefaultTests extends munit.FunSuite:
   private val builder = new RadioChannelNameBuilderDefault()
   private def label(name: String, assignment: String): String =
-    builder(Ics205Channel("1", function = "", name = name, assignment = assignment,
-      frequency = RxWithOffset(Frequency(BigDecimal("146.52")))))
+    builder(Ics205Channel(function = "", name = name, assignment = assignment,
+      frequency = RxWithOffset(Frequency(BigDecimal("146.52"))), id = "1"))
 
   test("keeps labels that fit, including the exact limit"):
     assertEquals(label("TAC1", "Operations"), "TAC1 Operations")

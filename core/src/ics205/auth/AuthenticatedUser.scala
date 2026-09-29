@@ -18,14 +18,14 @@
 
 package ics205.auth
 
-import ics205.util.Ids.UserId
+import ics205.util.Ids
 import io.circe.Codec
 import io.circe.derivation.{Configuration, ConfiguredCodec}
 
 case class AuthenticatedUser(
-  id: UserId,
   username: String,
-  role: RolePermissions
+  role: RolePermissions,
+  id: UserId = Ids.generateId()
 ):
   def roles: Set[String] = Set(role.toString.toLowerCase)
   def hasPermission(permission: Permission): Boolean = role.hasPermission(permission)

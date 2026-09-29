@@ -16,14 +16,14 @@ class Ics205FormTests extends munit.FunSuite:
     prepared = prepared, preparedBy = Some(PreparedBy("Alex", Some("W9ABC"))),
     specialInstructions = "Line one\nLine two", formatVersion = "1.1",
     channels = Seq(
-      Ics205Channel("a", Some("Zone"), Some("1"), "Command", "Repeater", "All",
+      Ics205Channel(Some("Zone"), Some("1"), "Command", "Repeater", "All",
         RxWithOffset(mhz"146.940", mhz"-0.600"), bandwidth = Bandwidth.Narrow,
         ctcss = Ctcss(Some(CtcssFrequency.Hz100_0), CtcssMode.Tone),
-        remarks = "Monitor"),
-      Ics205Channel("b", function = "Tactical", name = "Simplex", assignment = "Teams",
+        remarks = "Monitor", id = "a"),
+      Ics205Channel(function = "Tactical", name = "Simplex", assignment = "Teams",
         frequency = RxWithOffset(mhz"446.00625"), mode = RadioMode.Digital,
-        ctcss = Ctcss(Some(CtcssFrequency.Hz88_5), CtcssMode.TSQL)),
-      Ics205Channel("c", function = "", name = "", assignment = "", frequency = RxWithOffset(mhz"155.5"))
+        ctcss = Ctcss(Some(CtcssFrequency.Hz88_5), CtcssMode.TSQL), id = "b"),
+      Ics205Channel(function = "", name = "", assignment = "", frequency = RxWithOffset(mhz"155.5"), id = "c")
     )
   )
 
@@ -70,7 +70,7 @@ class Ics205FormTests extends munit.FunSuite:
       val passwordService = new ics205.auth.ScalaPassPasswordService
       val authService = new ics205.auth.AuthenticationService(userStore, passwordService, sessionStore)
       val config = ics205.auth.AuthConfig()
-      userStore.add(ics205.auth.User("u1", "testuser", passwordService.hash("testpass"), ics205.auth.RolePermissions.Admin, enabled = true))
+      userStore.add(ics205.auth.User("testuser", passwordService.hash("testpass"), ics205.auth.RolePermissions.Admin, enabled = true, id = "u1"))
       val session = sessionStore.create("u1")
       val app = Http4sServerInterpreter[IO]().toRoutes(new IndexEndpoints(store, authService, config).endpoints).orNotFound
 
@@ -121,7 +121,7 @@ class Ics205FormTests extends munit.FunSuite:
     }
 
   test("Ics205Editor renders editable controls for user with EditPlans permission"):
-    val editorUser = ics205.auth.AuthenticatedUser("u-editor", "editor1", ics205.auth.RolePermissions.Editor)
+    val editorUser = ics205.auth.AuthenticatedUser("editor1", ics205.auth.RolePermissions.Editor, id = "u-editor")
     val html = Ics205Editor.render(base, currentUser = Some(editorUser))
     assert(!html.contains("readonly"))
     assert(html.contains(">Save plan</button>"))
@@ -131,7 +131,7 @@ class Ics205FormTests extends munit.FunSuite:
     assert(html.contains("const form = document.getElementById('plan-form');"))
 
   test("Ics205Editor renders read-only controls for user without EditPlans permission"):
-    val viewerUser = ics205.auth.AuthenticatedUser("u-viewer", "viewer1", ics205.auth.RolePermissions.Viewer)
+    val viewerUser = ics205.auth.AuthenticatedUser("viewer1", ics205.auth.RolePermissions.Viewer, id = "u-viewer")
     val html = Ics205Editor.render(base, currentUser = Some(viewerUser))
     assert(html.contains("readonly=\"readonly\""))
     assert(html.contains("disabled=\"disabled\">Save plan</button>"))
@@ -156,11 +156,11 @@ class Ics205FormTests extends munit.FunSuite:
       val config = ics205.auth.AuthConfig()
 
       // Add a viewer user (no EditPlans permission)
-      userStore.add(ics205.auth.User("u-viewer", "viewer1", passwordService.hash("pass"), ics205.auth.RolePermissions.Viewer, enabled = true))
+      userStore.add(ics205.auth.User("viewer1", passwordService.hash("pass"), ics205.auth.RolePermissions.Viewer, enabled = true, id = "u-viewer"))
       val viewerSession = sessionStore.create("u-viewer")
 
       // Add an editor user (has EditPlans permission)
-      userStore.add(ics205.auth.User("u-editor", "editor1", passwordService.hash("pass"), ics205.auth.RolePermissions.Editor, enabled = true))
+      userStore.add(ics205.auth.User("editor1", passwordService.hash("pass"), ics205.auth.RolePermissions.Editor, enabled = true, id = "u-editor"))
       val editorSession = sessionStore.create("u-editor")
 
       val app = Http4sServerInterpreter[IO]().toRoutes(new IndexEndpoints(store, authService, config).endpoints).orNotFound
@@ -196,12 +196,12 @@ class Ics205FormTests extends munit.FunSuite:
       val config = ics205.auth.AuthConfig()
 
       // Regular user granted EditPlans on this event
-      userStore.add(ics205.auth.User("u-user", "user1", passwordService.hash("pass"), ics205.auth.RolePermissions.User, enabled = true))
+      userStore.add(ics205.auth.User("user1", passwordService.hash("pass"), ics205.auth.RolePermissions.User, enabled = true, id = "u-user"))
       val userSession = sessionStore.create("u-user")
       store.setUserPermission("u-user", ics205.auth.Permission.EditPlans)
 
       // Editor restricted to ViewPlans on this event
-      userStore.add(ics205.auth.User("u-editor", "editor1", passwordService.hash("pass"), ics205.auth.RolePermissions.Editor, enabled = true))
+      userStore.add(ics205.auth.User("editor1", passwordService.hash("pass"), ics205.auth.RolePermissions.Editor, enabled = true, id = "u-editor"))
       val editorSession = sessionStore.create("u-editor")
       store.setUserPermission("u-editor", ics205.auth.Permission.ViewPlans)
 
@@ -254,7 +254,7 @@ class Ics205FormTests extends munit.FunSuite:
 
   test("Other renders numeric fields without browser number or required constraints"):
     val plan = base.copy(channels = Seq(base.channels.head.copy(mode = RadioMode.Other)))
-    val user = ics205.auth.AuthenticatedUser("editor", "editor", ics205.auth.RolePermissions.Editor)
+    val user = ics205.auth.AuthenticatedUser("editor", ics205.auth.RolePermissions.Editor, id = "editor")
     val html = Ics205Editor.render(plan, currentUser = Some(user))
     val row = html.substring(html.indexOf("<tbody"), html.indexOf("</tbody>"))
     assert(row.contains("value=\"Other\" selected"))

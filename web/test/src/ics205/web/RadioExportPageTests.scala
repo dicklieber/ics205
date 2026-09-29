@@ -25,9 +25,9 @@ import java.time.Instant
 class RadioExportPageTests extends munit.FunSuite:
 
   val sampleUser = AuthenticatedUser(
-    id = "u1",
     username = "johndoe",
-    role = RolePermissions.Admin
+    role = RolePermissions.Admin,
+    id = "u1"
   )
 
   val samplePlan = Ics205(

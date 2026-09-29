@@ -95,7 +95,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
   test("GET /export/radio with authenticated user renders export page"):
     withContext { (_, userStore, _, _, authService, _, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("u1", "testuser", passwordService.hash("password"), RolePermissions.User, enabled = true))
+      userStore.add(User("testuser", passwordService.hash("password"), RolePermissions.User, enabled = true, id = "u1"))
       val session = authService.authenticate("testuser", "password").get
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/radio"))
@@ -116,7 +116,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
   test("POST /export/radio generates CSV and displays in textarea"):
     withContext { (_, userStore, _, _, authService, _, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("u1", "testuser", passwordService.hash("password"), RolePermissions.User, enabled = true))
+      userStore.add(User("testuser", passwordService.hash("password"), RolePermissions.User, enabled = true, id = "u1"))
       val session = authService.authenticate("testuser", "password").get
 
       val form = UrlForm(
@@ -146,7 +146,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
   test("POST /export/radio without includeHeader generates CSV without header"):
     withContext { (_, userStore, _, _, authService, _, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("u1", "testuser", passwordService.hash("password"), RolePermissions.User, enabled = true))
+      userStore.add(User("testuser", passwordService.hash("password"), RolePermissions.User, enabled = true, id = "u1"))
       val session = authService.authenticate("testuser", "password").get
 
       val form = UrlForm(
@@ -180,7 +180,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
 
   test("PDF download reads the latest saved plan and returns PDF headers"):
     withContext { (_, userStore, _, store, authService, _, app) =>
-      userStore.add(User("pdf-user", "pdfuser", new ScalaPassPasswordService().hash("password"), RolePermissions.User, enabled = true))
+      userStore.add(User("pdfuser", new ScalaPassPasswordService().hash("password"), RolePermissions.User, enabled = true, id = "pdf-user"))
       val session = authService.authenticate("pdfuser", "password").get
       store.save(store.ics205().copy(incidentName = "Updated incident"))
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/pdf"))

@@ -38,7 +38,7 @@ class RadioEndpointsTests extends munit.FunSuite:
       val users = new UserStore(helper, config)
       val sessions = new InMemJsonSessionStore(helper, config)
       val auth = new AuthenticationService(users, new ScalaPassPasswordService(), sessions)
-      users.add(User("viewer", "viewer", "unused", RolePermissions.User, enabled = true))
+      users.add(User("viewer", "unused", RolePermissions.User, enabled = true, id = "viewer"))
       val session = sessions.create("viewer")
       val app = Http4sServerInterpreter[IO]().toRoutes(
         new IndexEndpoints(store, auth, config).endpoints ++ new AssetEndpoints().endpoints).orNotFound

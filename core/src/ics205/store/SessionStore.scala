@@ -19,9 +19,9 @@
 package ics205.store
 
 import com.typesafe.scalalogging.LazyLogging
-import ics205.auth.{AuthConfig, Session, SessionDatabase}
+import ics205.auth.{AuthConfig, Session, SessionDatabase, SessionId, UserId}
 import ics205.util.FileHelper
-import ics205.util.Ids.{Id, SessionId, UserId, generateId}
+import ics205.util.Ids.generateId
 import io.circe.parser.*
 import io.circe.syntax.*
 import io.circe.Printer
@@ -85,7 +85,7 @@ class InMemJsonSessionStore @Inject()(fileHelper: FileHelper, config: AuthConfig
 
   private def persist(): Unit =
     val path = fileHelper.directory / fileName
-    val tempPath = fileHelper.directory / s".$fileName.tmp.${generateId[Id]()}"
+    val tempPath = fileHelper.directory / s".$fileName.tmp.${generateId()}"
     val db = SessionDatabase(sessions.values.toSeq)
     val json = db.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true))
     os.write.over(tempPath, json, createFolders = true)
@@ -103,10 +103,10 @@ class InMemJsonSessionStore @Inject()(fileHelper: FileHelper, config: AuthConfig
     val now = Instant.now()
     val expiresAt = now.plus(config.sessionLifetime)
     val session = Session(
-      id = generateSessionId(),
       userId = userId,
       createdAt = now,
-      expiresAt = expiresAt
+      expiresAt = expiresAt,
+      id = generateSessionId()
     )
     sessions.put(session.id, session)
     persist()

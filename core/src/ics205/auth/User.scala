@@ -18,16 +18,19 @@
 
 package ics205.auth
 
-import ics205.util.Ids.UserId
+import ics205.util.Ids
+import ics205.util.Ids.Id
 import io.circe.{Codec, Decoder, Encoder, HCursor, Json, JsonObject}
 import io.circe.derivation.{Configuration, ConfiguredCodec}
 
+type UserId = Id
+
 case class User(
-  id: UserId,
   username: String,
   passwordHash: String,
   role: RolePermissions,
-  enabled: Boolean = true
+  enabled: Boolean = true,
+  id: UserId = Ids.generateId()
 ):
   def roles: Set[String] = Set(role.toString.toLowerCase)
 
@@ -44,7 +47,7 @@ object User:
           ).orElse(Right(RolePermissions.User))
         )
         enabled <- c.downField("enabled").as[Option[Boolean]].map(_.getOrElse(true))
-      yield User(id, username, passwordHash, role, enabled)
+      yield User(username = username, passwordHash = passwordHash, role = role, enabled = enabled, id = id)
     },
     (u: User) => JsonObject(
       "id" -> Json.fromString(u.id),

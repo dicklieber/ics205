@@ -19,10 +19,10 @@
 package ics205.auth
 
 class AuthorizationServiceTests extends munit.FunSuite:
-  private val admin = AuthenticatedUser("1", "admin", RolePermissions.Admin)
-  private val editor = AuthenticatedUser("2", "editor", RolePermissions.Editor)
-  private val user = AuthenticatedUser("3", "user", RolePermissions.User)
-  private val viewer = AuthenticatedUser("4", "viewer", RolePermissions.Viewer)
+  private val admin = AuthenticatedUser("admin", RolePermissions.Admin, id = "1")
+  private val editor = AuthenticatedUser("editor", RolePermissions.Editor, id = "2")
+  private val user = AuthenticatedUser("user", RolePermissions.User, id = "3")
+  private val viewer = AuthenticatedUser("viewer", RolePermissions.Viewer, id = "4")
 
   test("admin has all system permissions"):
     assertEquals(AuthorizationService.authorize(admin, Permission.ViewUsers), Right(admin))

@@ -18,8 +18,7 @@
 
 package ics205.model
 
-import ics205.auth.{AuthenticatedUser, Permission, RolePermissions, User}
-import ics205.util.Ids.UserId
+import ics205.auth.{AuthenticatedUser, Permission, RolePermissions, User, UserId}
 import io.circe.{Codec, Decoder, Encoder, HCursor, Json, JsonObject}
 import io.circe.syntax.*
 

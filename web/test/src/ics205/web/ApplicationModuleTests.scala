@@ -85,7 +85,7 @@ class ApplicationModuleTests extends munit.FunSuite:
     val app = injector.getInstance(classOf[WebApplication]).httpApp
     val userStore = injector.getInstance(classOf[ics205.store.UserStore])
     val sessionStore = injector.getInstance(classOf[ics205.store.SessionStore])
-    userStore.add(ics205.auth.User("test-id", "admin", "hash", ics205.auth.RolePermissions.Admin, enabled = true))
+    userStore.add(ics205.auth.User("admin", "hash", ics205.auth.RolePermissions.Admin, enabled = true, id = "test-id"))
     val session = sessionStore.create("test-id")
 
     // Unauthenticated connection to / redirects to /login

@@ -26,9 +26,17 @@ import scala.util.Using
 
 class Ics205PdfExporterTests extends munit.FunSuite:
   private val exporter = new Ics205PdfExporter()
-  private val channel = Ics205Channel("1", Some("Z1"), Some("1"), "Command", "Repeater", "Operations",
-    RxWithOffset(Frequency(BigDecimal("146.94")), Frequency(BigDecimal("-0.6"))),
-    bandwidth = Bandwidth.Narrow, remarks = "Primary")
+  private val channel = Ics205Channel(
+    zoneGroup = Some("Z1"),
+    channelNumber = Some("1"),
+    function = "Command",
+    name = "Repeater",
+    assignment = "Operations",
+    frequency = RxWithOffset(Frequency(BigDecimal("146.94")), Frequency(BigDecimal("-0.6"))),
+    bandwidth = Bandwidth.Narrow,
+    remarks = "Primary",
+    id = "1"
+  )
   private val plan = Ics205(incidentName = "Flood Exercise", operationalPeriod = OperationalPeriod(
     Some(LocalDateTime.of(2026, 9, 28, 8, 0)), Some(LocalDateTime.of(2026, 9, 28, 20, 0))),
     channels = Seq(channel), specialInstructions = "Monitor command", preparedBy = Some(PreparedBy("Jane Doe", Some("W1ABC"))),

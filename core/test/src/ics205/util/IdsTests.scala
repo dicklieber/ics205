@@ -18,7 +18,9 @@
 
 package ics205.util
 
-import ics205.util.Ids.{ChannelId, EventId, Id, PlanId, SessionId, UserId}
+import ics205.auth.{SessionId, UserId}
+import ics205.model.{ChannelId, EventId, PlanId}
+import ics205.util.Ids.Id
 
 class IdsTests extends munit.FunSuite:
 
@@ -34,13 +36,13 @@ class IdsTests extends munit.FunSuite:
     assertNotEquals(id1, id2)
     assertEquals(id1.length, Ids.IdSize)
 
-  test("generateId can specify specific ID type"):
+  test("generateId output is assignable to specific ID types"):
     Ids.revertToRandom()
-    val userId: UserId = Ids.generateId[UserId]()
-    val sessionId: SessionId = Ids.generateId[SessionId]()
-    val channelId: ChannelId = Ids.generateId[ChannelId]()
-    val eventId: EventId = Ids.generateId[EventId]()
-    val planId: PlanId = Ids.generateId[PlanId]()
+    val userId: UserId = Ids.generateId()
+    val sessionId: SessionId = Ids.generateId()
+    val channelId: ChannelId = Ids.generateId()
+    val eventId: EventId = Ids.generateId()
+    val planId: PlanId = Ids.generateId()
     assertEquals(userId.length, Ids.IdSize)
     assertEquals(sessionId.length, Ids.IdSize)
     assertEquals(channelId.length, Ids.IdSize)

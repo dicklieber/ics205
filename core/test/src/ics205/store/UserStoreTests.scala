@@ -31,11 +31,11 @@ class UserStoreTests extends munit.FunSuite:
     override val directory: os.Path = path
 
   private val testUser = User(
-    id = "user-1",
     username = "admin",
     passwordHash = "hash123",
     role = RolePermissions.Admin,
-    enabled = true
+    enabled = true,
+    id = "user-1"
   )
 
   test("missing file loads empty user list without error"):
@@ -67,10 +67,10 @@ class UserStoreTests extends munit.FunSuite:
       val store = new UserStore(helper(dir))
       assertEquals(store.add(testUser), Right(testUser))
 
-      val dupName = User("user-2", "ADMIN", "hash2", RolePermissions.User)
+      val dupName = User("ADMIN", "hash2", RolePermissions.User, enabled = true, id = "user-2")
       assert(store.add(dupName).isLeft)
 
-      val dupId = User("user-1", "other", "hash3", RolePermissions.User)
+      val dupId = User("other", "hash3", RolePermissions.User, enabled = true, id = "user-1")
       assert(store.add(dupId).isLeft)
     }
 

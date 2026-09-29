@@ -30,9 +30,9 @@ class RadioPageTests extends munit.FunSuite:
     operationalPeriod = OperationalPeriod(Some(LocalDateTime.of(2026, 9, 28, 8, 0))),
     prepared = LocalDateTime.of(2026, 9, 27, 17, 30),
     preparedBy = Some(PreparedBy("Alex", Some("W9ABC"))), specialInstructions = "First line\nSecond line",
-    channels = Seq(Ics205Channel("channel-id", Some("Zone 1"), Some("7"), "Command", "Repeater", "All",
+    channels = Seq(Ics205Channel(Some("Zone 1"), Some("7"), "Command", "Repeater", "All",
       RxWithOffset(mhz"146.94000", mhz"-0.600"), RadioMode.Digital, Bandwidth.Narrow,
-      Ctcss(Some(CtcssFrequency.Hz100_0), CtcssMode.TSQL), "<script>alert(1)</script>")))
+      Ctcss(Some(CtcssFrequency.Hz100_0), CtcssMode.TSQL), "<script>alert(1)</script>", "channel-id")))
 
   private def table(html: String): Element =
     val markup = html.substring(html.indexOf("<table>"), html.indexOf("</table>") + 8)

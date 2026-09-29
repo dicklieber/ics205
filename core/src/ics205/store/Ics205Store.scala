@@ -19,10 +19,9 @@
 package ics205.store
 
 import com.typesafe.scalalogging.LazyLogging
-import ics205.auth.Permission
+import ics205.auth.{Permission, UserId}
 import ics205.model.{Ics205, Ics205Event, Ics205Metadata, OperationalPeriod}
 import ics205.util.FileHelper
-import ics205.util.Ids.UserId
 import jakarta.inject.{Inject, Singleton}
 
 import java.time.{Instant, LocalDateTime}

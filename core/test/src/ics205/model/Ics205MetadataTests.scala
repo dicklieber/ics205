@@ -25,15 +25,15 @@ import io.circe.syntax.*
 import java.time.Instant
 
 class Ics205MetadataTests extends munit.FunSuite:
-  private val adminUser = User("u-admin", "admin", "hash", RolePermissions.Admin)
-  private val editorUser = User("u-editor", "editor", "hash", RolePermissions.Editor)
-  private val regularUser = User("u-user", "user", "hash", RolePermissions.User)
-  private val viewerUser = User("u-viewer", "viewer", "hash", RolePermissions.Viewer)
+  private val adminUser = User("admin", "hash", RolePermissions.Admin, enabled = true, id = "u-admin")
+  private val editorUser = User("editor", "hash", RolePermissions.Editor, enabled = true, id = "u-editor")
+  private val regularUser = User("user", "hash", RolePermissions.User, enabled = true, id = "u-user")
+  private val viewerUser = User("viewer", "hash", RolePermissions.Viewer, enabled = true, id = "u-viewer")
 
-  private val authAdmin = AuthenticatedUser(adminUser.id, adminUser.username, adminUser.role)
-  private val authEditor = AuthenticatedUser(editorUser.id, editorUser.username, editorUser.role)
-  private val authUser = AuthenticatedUser(regularUser.id, regularUser.username, regularUser.role)
-  private val authViewer = AuthenticatedUser(viewerUser.id, viewerUser.username, viewerUser.role)
+  private val authAdmin = AuthenticatedUser(adminUser.username, adminUser.role, id = adminUser.id)
+  private val authEditor = AuthenticatedUser(editorUser.username, editorUser.role, id = editorUser.id)
+  private val authUser = AuthenticatedUser(regularUser.username, regularUser.role, id = regularUser.id)
+  private val authViewer = AuthenticatedUser(viewerUser.username, viewerUser.role, id = viewerUser.id)
 
   private val basePlan = Ics205(
     incidentName = "Test Drill",
@@ -129,7 +129,7 @@ class Ics205MetadataTests extends munit.FunSuite:
     assertEquals(event.plan, basePlan)
     assertEquals(event.ics205, basePlan)
     assertEquals(event.metadata, meta)
-    assert(event.canEdit(User("u-1", "user1", "hash", RolePermissions.User)))
+    assert(event.canEdit(User("user1", "hash", RolePermissions.User, enabled = true, id = "u-1")))
 
     val json = event.asJson.noSpaces
     val decoded = decode[Ics205Event](json)
