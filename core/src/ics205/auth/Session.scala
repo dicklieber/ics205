@@ -18,14 +18,14 @@
 
 package ics205.auth
 
-import ics205.util.Ids.Id
+import ics205.util.Ids.{SessionId, UserId}
 import io.circe.Codec
 import io.circe.derivation.{Configuration, ConfiguredCodec}
 import java.time.Instant
 
 case class Session(
-  id: Id,
-  userId: Id,
+  id: SessionId,
+  userId: UserId,
   createdAt: Instant,
   expiresAt: Instant
 )

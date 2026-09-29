@@ -20,7 +20,7 @@ package ics205.auth
 
 import com.typesafe.scalalogging.LazyLogging
 import ics205.store.{SessionStore, UserStore}
-import ics205.util.Ids.Id
+import ics205.util.Ids.SessionId
 import jakarta.inject.{Inject, Singleton}
 
 @Singleton
@@ -37,7 +37,7 @@ class AuthenticationService @Inject()(
       case _ =>
         None
 
-  def authenticateSession(sessionId: Id): Either[AuthError, AuthenticatedUser] =
+  def authenticateSession(sessionId: SessionId): Either[AuthError, AuthenticatedUser] =
     sessionStore.find(sessionId) match
       case Some(session) =>
         userStore.findById(session.userId) match

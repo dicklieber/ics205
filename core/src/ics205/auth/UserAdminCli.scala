@@ -19,6 +19,7 @@
 package ics205.auth
 
 import ics205.store.UserStore
+import ics205.util.Ids.UserId
 import ics205.util.{FileHelper, Ids}
 
 object UserAdminCli:
@@ -112,7 +113,7 @@ object UserAdminCli:
 
     val hash = passwordService.hash(password)
     val user = User(
-      id = Ids.generateId(),
+      id = Ids.generateId[UserId](),
       username = username,
       passwordHash = hash,
       role = role,

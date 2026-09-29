@@ -22,6 +22,7 @@ import cats.effect.IO
 import ics205.auth.{PasswordService, Permission, RolePermissions, User}
 import ics205.store.UserStore
 import ics205.util.Ids
+import ics205.util.Ids.UserId
 import ics205.web.ApiEndpoints
 import ics205.web.auth.AuthSecurity
 import jakarta.inject.{Inject, Singleton}
@@ -84,7 +85,7 @@ class UserAdminEndpoints @Inject()(
           else
             val passwordHash = passwordService.hash(password)
             val newUser = User(
-              id = Ids.generateId(),
+              id = Ids.generateId[UserId](),
               username = username,
               passwordHash = passwordHash,
               role = role,

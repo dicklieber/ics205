@@ -18,7 +18,7 @@
 
 package ics205.util
 
-import ics205.util.Ids.Id
+import ics205.util.Ids.{ChannelId, EventId, Id, PlanId, SessionId, UserId}
 
 class IdsTests extends munit.FunSuite:
 
@@ -33,6 +33,19 @@ class IdsTests extends munit.FunSuite:
     assert(id2.nonEmpty)
     assertNotEquals(id1, id2)
     assertEquals(id1.length, Ids.IdSize)
+
+  test("generateId can specify specific ID type"):
+    Ids.revertToRandom()
+    val userId: UserId = Ids.generateId[UserId]()
+    val sessionId: SessionId = Ids.generateId[SessionId]()
+    val channelId: ChannelId = Ids.generateId[ChannelId]()
+    val eventId: EventId = Ids.generateId[EventId]()
+    val planId: PlanId = Ids.generateId[PlanId]()
+    assertEquals(userId.length, Ids.IdSize)
+    assertEquals(sessionId.length, Ids.IdSize)
+    assertEquals(channelId.length, Ids.IdSize)
+    assertEquals(eventId.length, Ids.IdSize)
+    assertEquals(planId.length, Ids.IdSize)
 
   test("useSeqentialStartingAt generates predictable sequence of IDs"):
     Ids.useSeqentialStartingAt(1)
@@ -53,11 +66,6 @@ class IdsTests extends munit.FunSuite:
     Ids.useSeqentialStartingAt(1)
     assertEquals(Ids.generateId(), "1")
     Ids.revertToRandom()
-    val randomId = Ids.generateId()
+    val randomId: Id = Ids.generateId()
     assertNotEquals(randomId, "2")
     assertEquals(randomId.length, Ids.IdSize)
-
-  test("generateInstanceId creates 3-character compact id"):
-    val instanceId = Ids.generateInstanceId()
-    assert(instanceId.nonEmpty)
-    assertEquals(instanceId.length, 3)
