@@ -180,6 +180,48 @@ class Ics205FormTests extends munit.FunSuite:
         .withEntity(UrlForm(fields.toSeq*))).unsafeRunSync()
       assertEquals(editorRes.status, Status.SeeOther)
       assertEquals(store.ics205().incidentName, "New Incident Name")
+      assertEquals(store.metadata().lastEditedBy, Some("u-editor"))
+    finally os.remove.all(tempDirectory)
+
+  test("POST / respects per-event metadata authorization"):
+    val tempDirectory = os.temp.dir()
+    try
+      val helper = new FileHelper:
+        override val directory: os.Path = tempDirectory
+      val store = new Ics205Store(helper)
+      val userStore = new ics205.store.UserStore(helper)
+      val sessionStore = new ics205.store.InMemJsonSessionStore(helper)
+      val passwordService = new ics205.auth.ScalaPassPasswordService
+      val authService = new ics205.auth.AuthenticationService(userStore, passwordService, sessionStore)
+      val config = ics205.auth.AuthConfig()
+
+      // Regular user granted EditPlans on this event
+      userStore.add(ics205.auth.User("u-user", "user1", passwordService.hash("pass"), ics205.auth.RolePermissions.User, enabled = true))
+      val userSession = sessionStore.create("u-user")
+      store.setUserPermission("u-user", ics205.auth.Permission.EditPlans)
+
+      // Editor restricted to ViewPlans on this event
+      userStore.add(ics205.auth.User("u-editor", "editor1", passwordService.hash("pass"), ics205.auth.RolePermissions.Editor, enabled = true))
+      val editorSession = sessionStore.create("u-editor")
+      store.setUserPermission("u-editor", ics205.auth.Permission.ViewPlans)
+
+      val app = Http4sServerInterpreter[IO]().toRoutes(new IndexEndpoints(store, authService, config).endpoints).orNotFound
+
+      val fields = Ics205Form.fields(base.copy(incidentName = "Custom Event Drill"))
+
+      // Editor with event-level ViewPlans -> 403 Forbidden
+      val editorRes = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/"))
+        .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${editorSession.id}"))
+        .withEntity(UrlForm(fields.toSeq*))).unsafeRunSync()
+      assertEquals(editorRes.status, Status.Forbidden)
+
+      // User with event-level EditPlans -> 303 SeeOther and persists with lastEditedBy
+      val userRes = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/"))
+        .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${userSession.id}"))
+        .withEntity(UrlForm(fields.toSeq*))).unsafeRunSync()
+      assertEquals(userRes.status, Status.SeeOther)
+      assertEquals(store.ics205().incidentName, "Custom Event Drill")
+      assertEquals(store.metadata().lastEditedBy, Some("u-user"))
     finally os.remove.all(tempDirectory)
 
   test("Other accepts incomplete radio fields and survives JSON and form round trips"):

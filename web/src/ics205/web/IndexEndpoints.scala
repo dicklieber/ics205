@@ -54,7 +54,7 @@ class IndexEndpoints @Inject() (
       IO.blocking {
         sessionIdOpt.flatMap(id => authService.authenticateSession(id).toOption) match
           case Some(user) =>
-            (StatusCode.Ok, None, Ics205Editor.render(store.ics205(), saved = saved.contains("1"), currentUser = Some(user)))
+            (StatusCode.Ok, None, Ics205Editor.render(store.ics205(), saved = saved.contains("1"), currentUser = Some(user), metadata = Some(store.metadata())))
           case None =>
             (StatusCode.SeeOther, Some("/login"), "")
       }
@@ -72,22 +72,23 @@ class IndexEndpoints @Inject() (
           case None =>
             Left((StatusCode.SeeOther, Some("/login"), ""))
           case Some(user) =>
-            if !user.hasPermission(Permission.EditPlans) then
+            val currentMeta = store.metadata()
+            if !currentMeta.canEdit(user) then
               val current = store.ics205()
-              Left((StatusCode.Forbidden, None, Ics205Editor.render(current, error = Some("You do not have permission to edit plans."), currentUser = Some(user))))
+              Left((StatusCode.Forbidden, None, Ics205Editor.render(current, error = Some("You do not have permission to edit plans."), currentUser = Some(user), metadata = Some(currentMeta))))
             else
               val current = store.ics205()
               Ics205Form.decode(data, current) match
                 case Left(message) =>
-                  Left((StatusCode.UnprocessableEntity, None, Ics205Editor.render(current, Some(data), Some(message), currentUser = Some(user))))
+                  Left((StatusCode.UnprocessableEntity, None, Ics205Editor.render(current, Some(data), Some(message), currentUser = Some(user), metadata = Some(currentMeta))))
                 case Right(plan) =>
                   try
-                    store.save(plan, refreshPrepared = false)
+                    store.save(plan, Some(user.id), refreshPrepared = false)
                     Right((StatusCode.SeeOther, "/?saved=1"))
                   catch
                     case _: java.io.IOException =>
                       Left((StatusCode.InternalServerError, None, Ics205Editor.render(current, Some(data),
-                        Some("The plan could not be saved. Check that the data directory is writable and try again."), currentUser = Some(user))))
+                        Some("The plan could not be saved. Check that the data directory is writable and try again."), currentUser = Some(user), metadata = Some(currentMeta))))
       }
     }
 
@@ -105,7 +106,7 @@ class IndexEndpoints @Inject() (
             val current = store.ics205()
             Ics205Form.decode(data, current) match
               case Left(message) =>
-                (StatusCode.UnprocessableEntity, None, Ics205Editor.render(current, Some(data), Some(message), currentUser = Some(user)))
+                (StatusCode.UnprocessableEntity, None, Ics205Editor.render(current, Some(data), Some(message), currentUser = Some(user), metadata = Some(store.metadata())))
               case Right(plan) =>
                 (StatusCode.Ok, None, Ics205Page.renderPrintable(plan))
       }

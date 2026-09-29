@@ -19,14 +19,15 @@
 package ics205.web
 
 import ics205.auth.{AuthenticatedUser, Permission}
-import ics205.model.{CtcssFrequency, Ics205}
+import ics205.model.{CtcssFrequency, Ics205, Ics205Metadata}
 import scalatags.Text.all.*
 
 private[web] object Ics205Editor:
   def render(plan: Ics205, submitted: Option[Map[String, String]] = None,
              error: Option[String] = None, saved: Boolean = false,
-             currentUser: Option[AuthenticatedUser] = None): String =
-    val canEdit = currentUser.exists(_.hasPermission(Permission.EditPlans))
+             currentUser: Option[AuthenticatedUser] = None,
+             metadata: Option[Ics205Metadata] = None): String =
+    val canEdit = currentUser.exists(u => metadata.map(_.canEdit(u)).getOrElse(u.hasPermission(Permission.EditPlans)))
     val values = submitted.getOrElse(Ics205Form.fields(plan))
     val count = values.get("rowCount").flatMap(_.toIntOption).filter(n => n >= 0 && n <= 1000).getOrElse(0)
     def field(key: String, caption: String, kind: String = "text"): Frag =

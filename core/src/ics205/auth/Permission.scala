@@ -27,6 +27,18 @@ enum Permission:
   case ViewPlans
   case EditPlans
 
+object Permission:
+  def fromString(name: String): Option[Permission] =
+    values.find(_.toString.equalsIgnoreCase(name.trim))
+
+  given Codec[Permission] = Codec.from(
+    Decoder.decodeString.emap(str => fromString(str).toRight(s"Unknown permission: $str")),
+    Encoder.encodeString.contramap(_.toString)
+  )
+
+  given io.circe.KeyEncoder[Permission] = io.circe.KeyEncoder.encodeKeyString.contramap(_.toString)
+  given io.circe.KeyDecoder[Permission] = io.circe.KeyDecoder.instance(fromString)
+
 enum RolePermissions(val permissions: Set[Permission]):
   case Admin extends RolePermissions(Set(
     Permission.ViewUsers,

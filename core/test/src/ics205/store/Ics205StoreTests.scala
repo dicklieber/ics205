@@ -84,12 +84,51 @@ class Ics205StoreTests extends munit.FunSuite:
       )
       store.save(sparse)
       val json = io.circe.parser.parse(os.read(directory / "ics205.json")).toOption.get
-      assert(!json.hcursor.keys.get.toSet.contains("preparedBy"))
-      assertEquals(json.hcursor.downField("operationalPeriod").focus, Some(io.circe.Json.obj()))
-      val channel = json.hcursor.downField("channels").downArray
+      val ics205Cursor = json.hcursor.downField("ics205")
+      assert(!ics205Cursor.keys.get.toSet.contains("preparedBy"))
+      assertEquals(ics205Cursor.downField("operationalPeriod").focus, Some(io.circe.Json.obj()))
+      val channel = ics205Cursor.downField("channels").downArray
       assertEquals(channel.get[String]("remarks"), Right(""))
       assert(!channel.keys.get.toSet.contains("digital"))
       assertEquals(new Ics205Store(helper(directory)).ics205(), store.ics205())
+    }
+
+  test("save records lastEditedBy and savedAt in metadata"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      store.save(plan, userId = "user-123")
+      assertEquals(store.metadata().lastEditedBy, Some("user-123"))
+      assert(store.metadata().savedAt.toEpochMilli > 0)
+
+      val reloaded = new Ics205Store(helper(directory))
+      assertEquals(reloaded.metadata().lastEditedBy, Some("user-123"))
+      assertEquals(reloaded.metadata().savedAt, store.metadata().savedAt)
+    }
+
+  test("setUserPermission and metadata updates persist correctly"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      store.setUserPermission("user-1", ics205.auth.Permission.EditPlans)
+      store.setUserPermission("user-2", ics205.auth.Permission.ViewPlans)
+      assertEquals(store.metadata().permissions.get("user-1"), Some(ics205.auth.Permission.EditPlans))
+      assertEquals(store.metadata().permissions.get("user-2"), Some(ics205.auth.Permission.ViewPlans))
+
+      val reloaded = new Ics205Store(helper(directory))
+      assertEquals(reloaded.metadata().permissions.get("user-1"), Some(ics205.auth.Permission.EditPlans))
+      assertEquals(reloaded.metadata().permissions.get("user-2"), Some(ics205.auth.Permission.ViewPlans))
+
+      store.removeUserPermission("user-1")
+      assertEquals(store.metadata().permissions.get("user-1"), None)
+    }
+
+  test("legacy JSON with raw plan at root loads successfully"):
+    withDirectory { directory =>
+      val rawPlanJson = plan.asJson.noSpaces
+      os.write(directory / "ics205.json", rawPlanJson)
+      val store = new Ics205Store(helper(directory))
+      assertEquals(store.ics205().incidentName, plan.incidentName)
+      assertEquals(store.ics205().channels.size, plan.channels.size)
+      assertEquals(store.metadata().permissions, Map.empty)
     }
 
   test("undecodable JSON loads the default"):

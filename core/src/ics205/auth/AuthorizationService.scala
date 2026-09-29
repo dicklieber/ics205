@@ -18,6 +18,8 @@
 
 package ics205.auth
 
+import ics205.model.{Ics205Event, Ics205Metadata}
+
 object AuthorizationService:
   def authorize(
     user: AuthenticatedUser,
@@ -27,3 +29,24 @@ object AuthorizationService:
       Right(user)
     else
       Left(Forbidden(s"User '${user.username}' is not authorized for permission '${permission}'"))
+
+  def authorizeEvent(
+    user: AuthenticatedUser,
+    metadata: Ics205Metadata,
+    permission: Permission
+  ): Either[AuthError, AuthenticatedUser] =
+    val authorized = permission match
+      case Permission.EditPlans => metadata.canEdit(user)
+      case Permission.ViewPlans => metadata.canView(user)
+      case other => user.hasPermission(other)
+    if authorized then
+      Right(user)
+    else
+      Left(Forbidden(s"User '${user.username}' is not authorized for permission '${permission}' on this plan"))
+
+  def authorizeEvent(
+    user: AuthenticatedUser,
+    event: Ics205Event,
+    permission: Permission
+  ): Either[AuthError, AuthenticatedUser] =
+    authorizeEvent(user, event.metadata, permission)
