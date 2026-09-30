@@ -27,8 +27,7 @@ class UserStoreTests extends munit.FunSuite:
     try test(directory)
     finally os.remove.all(directory)
 
-  private def helper(path: os.Path): FileHelper = new FileHelper:
-    override val directory: os.Path = path
+  private def helper(path: os.Path): FileHelper = new FileHelper(path)
 
   private val testUser = User(
     username = "admin",

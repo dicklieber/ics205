@@ -62,8 +62,7 @@ class Ics205FormTests extends munit.FunSuite:
   test("save persists edits and prepared time; preview and validation do not write"):
     val tempDirectory = os.temp.dir()
     try
-      val helper = new FileHelper:
-        override val directory: os.Path = tempDirectory
+      val helper = new FileHelper(tempDirectory)
       val store = new Ics205Store(helper)
       store.saveEvent(ics205.model.Ics205Event("Exercise Event", base.copy(formatVersion = "1.0")))
       val userStore = new ics205.store.UserStore(helper)
@@ -156,8 +155,7 @@ class Ics205FormTests extends munit.FunSuite:
   test("POST / without EditPlans permission returns 403 Forbidden and does not save"):
     val tempDirectory = os.temp.dir()
     try
-      val helper = new FileHelper:
-        override val directory: os.Path = tempDirectory
+      val helper = new FileHelper(tempDirectory)
       val store = new Ics205Store(helper)
       store.saveEvent(ics205.model.Ics205Event("Exercise Event", base))
       val userStore = new ics205.store.UserStore(helper)
@@ -197,8 +195,7 @@ class Ics205FormTests extends munit.FunSuite:
   test("POST / respects per-event metadata authorization"):
     val tempDirectory = os.temp.dir()
     try
-      val helper = new FileHelper:
-        override val directory: os.Path = tempDirectory
+      val helper = new FileHelper(tempDirectory)
       val store = new Ics205Store(helper)
       store.saveEvent(ics205.model.Ics205Event("Exercise Event", base))
       val userStore = new ics205.store.UserStore(helper)

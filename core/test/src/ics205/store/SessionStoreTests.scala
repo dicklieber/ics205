@@ -31,8 +31,7 @@ class SessionStoreTests extends munit.FunSuite:
     try test(directory)
     finally os.remove.all(directory)
 
-  private def helper(path: os.Path): FileHelper = new FileHelper:
-    override val directory: os.Path = path
+  private def helper(path: os.Path): FileHelper = new FileHelper(path)
 
   test("create session creates in-memory session and persists to JSON"):
     withDirectory { dir =>

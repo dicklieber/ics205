@@ -31,8 +31,7 @@ class Ics205StoreTests extends munit.FunSuite:
     try test(directory)
     finally os.remove.all(directory)
 
-  private def helper(path: os.Path): FileHelper = new FileHelper:
-    override val directory: os.Path = path
+  private def helper(path: os.Path): FileHelper = new FileHelper(path)
 
   private val now = LocalDateTime.of(2026, 9, 20, 12, 30)
   private val plan = Ics205(incidentName = "Test incident",

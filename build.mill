@@ -59,6 +59,7 @@ object core extends ScalaModule with BuildInfo with ScoverageModule:
   )
   object test extends ScalaTests with TestModule.Munit with ScoverageTests:
     def mvnDeps = Seq(mvn"org.scalameta::munit:1.0.0")
+    def forkArgs = Task { Seq("-Dics205.test=true") }
 
 object exporters extends ScalaModule with ScoverageModule:
   def scalaVersion = "3.7.4"
@@ -71,6 +72,7 @@ object exporters extends ScalaModule with ScoverageModule:
   )
   object test extends ScalaTests with TestModule.Munit with ScoverageTests:
     def mvnDeps = Seq(mvn"org.scalameta::munit:1.0.0")
+    def forkArgs = Task { Seq("-Dics205.test=true") }
 
 object web extends ScalaModule with ScoverageModule:
   def scalaVersion = "3.7.4"
@@ -91,3 +93,4 @@ object web extends ScalaModule with ScoverageModule:
   def mainClass = Some("ics205.web.Main")
   object test extends ScalaTests with TestModule.Munit with ScoverageTests:
     def mvnDeps = Seq(mvn"org.scalameta::munit:1.0.0")
+    def forkArgs = Task { Seq("-Dics205.test=true") }

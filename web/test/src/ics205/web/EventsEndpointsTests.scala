@@ -14,8 +14,7 @@ class EventsEndpointsTests extends munit.FunSuite:
   private def withTestContext(test: (os.Path, Ics205Store, UserStore, InMemJsonSessionStore, AuthenticationService, org.http4s.HttpRoutes[IO]) => Unit): Unit =
     val tempDir = os.temp.dir()
     try
-      val helper = new FileHelper:
-        override val directory: os.Path = tempDir
+      val helper = new FileHelper(tempDir)
 
       val store = new Ics205Store(helper)
       val userStore = new UserStore(helper)
@@ -54,10 +53,10 @@ class EventsEndpointsTests extends munit.FunSuite:
       val body = res.as[String].unsafeRunSync()
       assert(body.contains("Field Day"))
       assert(body.contains("Marathon"))
-      assert(body.contains("Edit Plan"))
-      assert(body.contains("Edit Metadata"))
+      assert(body.contains("Plan"))
+      assert(body.contains("Metadata"))
       assert(body.contains("Create New Event"))
-      assert(body.contains("/events/select?name=Field+Day&amp;returnUrl=/events") || body.contains("/events/select?name=Field+Day&returnUrl=/events"))
+      assert(!body.contains("Working On") && !body.contains(">Select<"))
       assert(body.contains("/?event=Field+Day"))
     }
 

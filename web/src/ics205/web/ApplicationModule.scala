@@ -32,9 +32,15 @@ import net.codingwell.scalaguice.ScalaModule
 import java.time.Duration
 import scala.jdk.CollectionConverters.*
 
-class ApplicationModule(fullConfig: Config = ApplicationModule.loadConfig()) extends AbstractModule with ScalaModule with LazyLogging:
+class ApplicationModule(
+  fullConfig: Config = ApplicationModule.loadConfig(),
+  customFileHelper: Option[FileHelper] = None
+) extends AbstractModule with ScalaModule with LazyLogging:
+  def this(fullConfig: Config) = this(fullConfig, None)
+  def this(customFileHelper: FileHelper) = this(ApplicationModule.loadConfig(), Some(customFileHelper))
+
   override def configure(): Unit =
-    val fileHelper = new FileHelper()
+    val fileHelper = customFileHelper.getOrElse(new FileHelper())
     bind[FileHelper].toInstance(fileHelper)
 
     val authConfig = AuthConfig.fromConfig(fullConfig)

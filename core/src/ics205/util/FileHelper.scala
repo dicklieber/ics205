@@ -28,7 +28,7 @@ import java.nio.file.{NoSuchFileException, Paths}
 import jakarta.inject.Inject
 
 object FileHelper:
-  private def appHome(appName: String, productName: String): os.Path =
+  def appHome(appName: String = BuildInfo.appName, productName: String = BuildInfo.productName): os.Path =
     val osName = System.getProperty("os.name", "").toLowerCase
 
     if osName.contains("win") then
@@ -42,6 +42,34 @@ object FileHelper:
     else
       os.home / s".$productName"
 
+  def isTestExecution: Boolean =
+    sys.props.get("ics205.test").contains("true") ||
+    sys.env.get("ICS205_TEST").contains("true") ||
+    sys.props.contains("munit.suite") ||
+    Thread.currentThread().getStackTrace.exists { elem =>
+      val name = elem.getClassName
+      name.startsWith("munit.") ||
+      name.startsWith("org.junit.") ||
+      name.startsWith("org.scalameta.munit.") ||
+      name.contains(".munit.") ||
+      name.contains("TestRunner") ||
+      name.contains("mill.testrunner")
+    }
+
+  def defaultDirectory(appName: String = BuildInfo.appName, productName: String = BuildInfo.productName): os.Path =
+    sys.props.get("ics205.data.dir")
+      .orElse(sys.env.get("ICS205_DATA_DIR"))
+      .map(os.Path(_))
+      .getOrElse {
+        if isTestExecution then
+          os.temp.dir(prefix = "ics205-test-")
+        else
+          val base = appHome(appName, productName)
+          sys.env.get("PORT").filter(_.nonEmpty) match
+            case Some(port) => base / port
+            case None       => base
+      }
+
 /** A utility class for handling file-related operations, such as reading and writing JSON-encoded
   * data to files, and managing application-specific directory paths.
   */
@@ -51,21 +79,18 @@ class FileHelper(customDir: Option[os.Path] = None) extends LazyLogging:
 
   def this(customPath: os.Path) = this(Some(customPath))
 
-  /** One application-owned directory tree for all FdSwarm files.
+  /** One application-owned directory tree for all ICS-205 files.
     *
     * Platform conventions used here:
-    *   - Windows: %LOCALAPPDATA%\FdSwarm
-    *   - macOS:   ~/Library/Application Support/FdSwarm
-    *   - Linux:   ~/.fdswarm
+    *   - Windows: %LOCALAPPDATA%\ICS-205
+    *   - macOS:   ~/Library/Application Support/ICS-205
+    *   - Linux:   ~/.ics205
     *
+    * In test execution or if configured, an isolated directory is used so unit tests never touch
+    * the production directory.
     * If PORT is set, append it as a child directory so multiple local test nodes do not share files.
     */
-  val directory: os.Path = customDir.getOrElse {
-    val base = FileHelper.appHome(BuildInfo.appName, BuildInfo.productName)
-    sys.env.get("PORT").filter(_.nonEmpty) match
-      case Some(port) => base / port
-      case None       => base
-  }
+  val directory: os.Path = customDir.getOrElse(FileHelper.defaultDirectory())
   logger.info(s"Data directory: $directory")
 
   def loadOrDefault[T: Decoder](fileName: String)(default: => T): T =

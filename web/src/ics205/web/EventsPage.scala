@@ -123,18 +123,14 @@ object EventsPage:
                         ),
                         td(cls := "actions-cell")(
                           a(
-                            href := s"/events/select?name=${encode(ev.eventName)}&returnUrl=/events",
-                            cls := s"btn ${if isSelected then "btn-secondary" else "btn-primary"} btn-sm"
-                          )(if isSelected then "Working On" else "Select"),
-                          a(
                             href := s"/?event=${encode(ev.eventName)}",
-                            cls := "btn btn-secondary btn-sm"
-                          )("Edit Plan"),
+                            cls := "btn btn-primary btn-sm"
+                          )("Plan"),
                           if canEdit || isAdmin then
                             a(
                               href := s"/events/metadata?name=${encode(ev.eventName)}",
-                              cls := "btn btn-secondary btn-sm"
-                            )("Edit Metadata")
+                              cls := "btn btn-primary btn-sm"
+                            )("Metadata")
                           else
                             span(),
                           if isAdmin then
