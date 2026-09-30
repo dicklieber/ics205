@@ -68,12 +68,15 @@ class NavigationBarTests extends munit.FunSuite:
     assert(html.contains("Debug"))
     assert(html.contains("Reload Files"))
     assert(html.contains("href=\"/debug/reload-files\""))
+    assert(html.contains("href=\"/docs\""))
+    assert(html.contains("API Documentation"))
 
   test("NavigationBar hides Debug menu when user lacks Debug permission"):
     val html = NavigationBar.render(activePage = NavigationBar.ActivePage.Radio, currentUser = Some(viewerUser)).render
     assert(!html.contains("navbarDropdownDebug"))
     assert(!html.contains("Reload Files"))
     assert(!html.contains("href=\"/debug/reload-files\""))
+    assert(!html.contains("href=\"/docs\""))
 
   test("NavigationBar hides User Management when user lacks EditUsers permission"):
     val html = NavigationBar.render(activePage = NavigationBar.ActivePage.Radio, currentUser = Some(viewerUser)).render

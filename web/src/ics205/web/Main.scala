@@ -28,6 +28,7 @@ import ics205.metrics.ApplicationMetrics
 import jakarta.inject.Inject
 import org.http4s.ember.server.EmberServerBuilder
 import sttp.tapir.server.http4s.Http4sServerInterpreter
+import sttp.tapir.swagger.bundle.SwaggerInterpreter
 
 import scala.jdk.CollectionConverters.*
 
@@ -44,12 +45,18 @@ object Main extends IOApp:
 class WebApplication @Inject() (endpointsSet: java.util.Set[ApiEndpoints]) extends LazyLogging:
 
   val httpApp: org.http4s.HttpApp[IO] =
-    val allEndpoints = endpointsSet.asScala.toList
+    val configuredEndpoints = endpointsSet.asScala.toList
       .sortBy(_.getClass.getName)
       .flatMap { group =>
         logger.debug(s"Adding endpoints from ${group.getClass.getName}")
         group.endpoints
       }
+    val docsEndpoints = SwaggerInterpreter().fromServerEndpoints[IO](
+      configuredEndpoints,
+      title = BuildInfo.appName,
+      version = BuildInfo.version
+    )
+    val allEndpoints = configuredEndpoints ++ docsEndpoints
     HttpTransactionMetrics(
       Http4sServerInterpreter[IO]().toRoutes(allEndpoints).orNotFound,
       ApplicationMetrics.default

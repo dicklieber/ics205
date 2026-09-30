@@ -156,6 +156,12 @@ object NavigationBar:
                       cls := "dropdown-item",
                       href := "/debug/reload-files"
                     )("Reload Files")
+                  ),
+                  li(
+                    a(
+                      cls := "dropdown-item",
+                      href := "/docs"
+                    )("API Documentation")
                   )
                 )
               )

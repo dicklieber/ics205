@@ -87,6 +87,7 @@ object web extends ScalaModule with ScoverageModule:
     mvn"io.github.classgraph:classgraph:4.8.195",
     mvn"com.softwaremill.sttp.tapir::tapir-http4s-server:1.11.44",
     mvn"com.softwaremill.sttp.tapir::tapir-json-circe:1.11.44",
+    mvn"com.softwaremill.sttp.tapir::tapir-swagger-ui-bundle:1.11.44",
     mvn"org.http4s::http4s-ember-server:0.23.30",
     mvn"com.fasterxml.jackson.core:jackson-databind:2.20.1",
     mvn"com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.20.1",

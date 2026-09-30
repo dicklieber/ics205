@@ -23,6 +23,7 @@ import com.google.inject.name.Names
 import com.typesafe.config.{Config, ConfigFactory}
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import ics205.BuildInfo
 import ics205.store.Ics205Store
 import jakarta.inject.Inject
 import org.http4s.{Method, Request, Status, Uri}
@@ -100,12 +101,16 @@ class ApplicationModuleTests extends munit.FunSuite:
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}")))
       indexBody <- index.as[String]
       metrics <- app.run(Request[IO](Method.GET, Uri.unsafeFromString("/metrics")))
+      docs <- app.run(Request[IO](Method.GET, Uri.unsafeFromString("/docs")))
+      docsIndex <- app.run(Request[IO](Method.GET, Uri.unsafeFromString("/docs/index.html")))
+      docsIndexBody <- docsIndex.as[String]
+      docsYaml <- app.run(Request[IO](Method.GET, Uri.unsafeFromString("/docs/docs.yaml")))
       discovered <- app.run(Request[IO](Method.GET, Uri.unsafeFromString("/test-discovery")))
       discoveredBody <- discovered.as[String]
       missing <- app.run(Request[IO](Method.GET, Uri.unsafeFromString("/missing")))
-    yield (index, indexBody, metrics, discovered, discoveredBody, missing)).unsafeRunSync()
+    yield (index, indexBody, metrics, docs, docsIndex, docsIndexBody, docsYaml, discovered, discoveredBody, missing)).unsafeRunSync()
 
-    val (index, indexBody, metrics, discovered, discoveredBody, missing) = responses
+    val (index, indexBody, metrics, docs, docsIndex, docsIndexBody, docsYaml, discovered, discoveredBody, missing) = responses
     assertEquals(index.status, Status.Ok)
     assert(indexBody.contains("Incident Radio Communications Plan"))
     assert(!indexBody.contains("<style"))
@@ -123,6 +128,13 @@ class ApplicationModuleTests extends munit.FunSuite:
       h.name.toString.equalsIgnoreCase("Content-Type") &&
         h.value.contains("text/plain") && h.value.contains("version=0.0.4")
     ))
+    assertEquals(docs.status, Status.PermanentRedirect)
+    assertEquals(docsIndex.status, Status.Ok)
+    assert(docsIndexBody.contains("swagger-ui"))
+    assertEquals(docsYaml.status, Status.Ok)
+    val yamlContent = docsYaml.as[String].unsafeRunSync()
+    assert(yamlContent.contains("openapi:"))
+    assert(yamlContent.contains(BuildInfo.appName))
     assertEquals(discovered.status, Status.Ok)
     assertEquals(discoveredBody, "injected")
     assertEquals(missing.status, Status.NotFound)
