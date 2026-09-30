@@ -139,6 +139,20 @@ class ApplicationModuleTests extends munit.FunSuite:
     assertEquals(discoveredBody, "injected")
     assertEquals(missing.status, Status.NotFound)
 
+  test("WebApplication displayUri converts wildcard addresses to localhost"):
+    val app = Guice.createInjector(new ApplicationModule).getInstance(classOf[WebApplication])
+    val mockWildcardServer = new org.http4s.server.Server:
+      def address: java.net.InetSocketAddress = new java.net.InetSocketAddress("0.0.0.0", 8080)
+      def isSecure: Boolean = false
+      override def baseUri: Uri = Uri.unsafeFromString("http://[::]:8080/")
+    assertEquals(app.displayUri(mockWildcardServer), "http://localhost:8080/")
+
+    val mockExplicitServer = new org.http4s.server.Server:
+      def address: java.net.InetSocketAddress = new java.net.InetSocketAddress("192.168.1.50", 8080)
+      def isSecure: Boolean = false
+      override def baseUri: Uri = Uri.unsafeFromString("http://192.168.1.50:8080/")
+    assertEquals(app.displayUri(mockExplicitServer), "http://192.168.1.50:8080/")
+
 // This test-only group has no explicit Guice binding or server registration.
 class DiscoveryTestEndpoints @Inject() (store: Ics205Store) extends ApiEndpoints:
   override val endpoints: List[ServerEndpoint[Any, IO]] = List(

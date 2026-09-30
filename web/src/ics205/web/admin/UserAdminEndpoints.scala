@@ -19,7 +19,7 @@
 package ics205.web.admin
 
 import cats.effect.IO
-import ics205.auth.{PasswordService, Permission, RolePermissions, User}
+import ics205.auth.{AuthenticatedUser, PasswordService, Permission, RolePermissions, User}
 import ics205.store.{SessionStore, UserStore}
 import ics205.web.ApiEndpoints
 import ics205.web.auth.AuthSecurity
@@ -43,59 +43,109 @@ class UserAdminEndpoints @Inject()(
     URLEncoder.encode(s, StandardCharsets.UTF_8)
 
   private val viewUsersEndpoint: ServerEndpoint[Any, IO] =
-    security.authorizedEndpoint(Permission.EditUsers)
-      .get
+    endpoint.get
       .in("admin" / "users")
+      .in(cookie[Option[String]](security.config.cookieName))
       .in(query[Option[String]]("edit"))
       .in(query[Option[String]]("msg"))
       .in(query[Option[String]]("err"))
+      .errorOut(statusCode.and(stringBody))
       .out(htmlBodyUtf8)
-      .serverLogicSuccess { currentUser => (editId, msg, err) =>
-        IO {
+      .serverLogic[IO] { (sessionIdOpt, editId, msg, err) =>
+        IO.blocking {
           val users = userStore.all()
-          UserAdminPage.render(
-            currentUser = currentUser,
-            users = users,
-            editingUserId = editId,
-            message = msg,
-            error = err
-          )
+          if users.isEmpty then
+            Right(
+              UserAdminPage.render(
+                currentUser = None,
+                users = users,
+                editingUserId = editId,
+                message = msg,
+                error = err
+              )
+            )
+          else
+            sessionIdOpt match
+              case Some(sessionId) =>
+                val authResult = for
+                  user <- security.authService.authenticateSession(sessionId)
+                  _ <- ics205.auth.AuthorizationService.authorize(user, Permission.EditUsers)
+                yield user
+                authResult match
+                  case Right(user) =>
+                    Right(
+                      UserAdminPage.render(
+                        currentUser = Some(user),
+                        users = users,
+                        editingUserId = editId,
+                        message = msg,
+                        error = err
+                      )
+                    )
+                  case Left(e) =>
+                    Left((StatusCode(e.status), e.message))
+              case None =>
+                Left((StatusCode.Unauthorized, "Authentication required: missing session cookie"))
         }
       }
 
   private val createUserEndpoint: ServerEndpoint[Any, IO] =
-    security.authorizedEndpoint(Permission.EditUsers)
-      .post
+    endpoint.post
       .in("admin" / "users" / "create")
+      .in(cookie[Option[String]](security.config.cookieName))
       .in(formBody[Map[String, String]])
+      .errorOut(statusCode.and(stringBody))
       .out(statusCode.and(header[String]("Location")))
-      .serverLogicSuccess { _ => formData =>
+      .serverLogic[IO] { (sessionIdOpt, formData) =>
         IO.blocking {
-          val username = formData.getOrElse("username", "").trim
-          val password = formData.getOrElse("password", "")
-          val roleInput = formData.getOrElse("role", formData.getOrElse("roles", "user")).trim
-          val role = RolePermissions.fromString(roleInput).getOrElse(RolePermissions.User)
-          val enabled = formData.get("enabled").contains("true")
+          val users = userStore.all()
+          val isInitial = users.isEmpty
 
-          if username.isEmpty then
-            (StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Username cannot be empty.")}")
-          else if password.isEmpty then
-            (StatusCode.SeeOther, s"/admin/users?err=${ ("Password cannot be empty.")}")
-          else if password.length < 8 then
-            (StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Password must be at least 8 characters.")}")
-          else
-            val passwordHash = passwordService.hash(password)
-            val newUser = User(
-              username = username,
-              passwordHash = passwordHash,
-              role = role,
-              enabled = enabled
-            )
-            userStore.add(newUser) match
-              case Right(_) =>
-                (StatusCode.SeeOther, s"/admin/users?msg=${urlEncode(s"User '$username' created successfully.")}")
-              case Left(err) =>
-                (StatusCode.SeeOther, s"/admin/users?err=${urlEncode(err)}")
+          val authorized: Either[(StatusCode, String), Option[AuthenticatedUser]] =
+            if isInitial then Right(None)
+            else
+              sessionIdOpt match
+                case Some(sessionId) =>
+                  val authResult = for
+                    user <- security.authService.authenticateSession(sessionId)
+                    _ <- ics205.auth.AuthorizationService.authorize(user, Permission.EditUsers)
+                  yield user
+                  authResult.left.map(e => (StatusCode(e.status), e.message)).map(Some(_))
+                case None =>
+                  Left((StatusCode.Unauthorized, "Authentication required: missing session cookie"))
+
+          authorized match
+            case Left(err) => Left(err)
+            case Right(_) =>
+              val username = formData.getOrElse("username", "").trim
+              val password = formData.getOrElse("password", "")
+              val defaultRole = if isInitial then "admin" else "user"
+              val roleInput = formData.getOrElse("role", formData.getOrElse("roles", defaultRole)).trim
+              val role = RolePermissions.fromString(roleInput).getOrElse(if isInitial then RolePermissions.Admin else RolePermissions.User)
+              val enabled = formData.get("enabled").contains("true") || isInitial
+
+              if username.isEmpty then
+                Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Username cannot be empty.")}"))
+              else if password.isEmpty then
+                Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Password cannot be empty.")}"))
+              else if password.length < 8 then
+                Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Password must be at least 8 characters.")}"))
+              else
+                val passwordHash = passwordService.hash(password)
+                val newUser = User(
+                  username = username,
+                  passwordHash = passwordHash,
+                  role = role,
+                  enabled = enabled
+                )
+                userStore.add(newUser) match
+                  case Right(_) =>
+                    if isInitial then
+                      Right((StatusCode.SeeOther, s"/login?msg=${urlEncode(s"User '$username' created successfully. Please log in.")}"))
+                    else
+                      Right((StatusCode.SeeOther, s"/admin/users?msg=${urlEncode(s"User '$username' created successfully.")}"))
+                  case Left(err) =>
+                    Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode(err)}"))
         }
       }
 

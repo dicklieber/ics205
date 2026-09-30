@@ -19,8 +19,9 @@
 package ics205.web.auth
 
 import cats.effect.IO
+import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService}
-import ics205.store.SessionStore
+import ics205.store.{SessionStore, UserStore}
 import ics205.web.ApiEndpoints
 import io.circe.Codec
 import io.circe.derivation.{Configuration, ConfiguredCodec}
@@ -66,8 +67,9 @@ class AuthEndpoints @Inject()(
   authService: AuthenticationService,
   sessionStore: SessionStore,
   security: AuthSecurity,
-  config: AuthConfig
-) extends ApiEndpoints:
+  config: AuthConfig,
+  userStore: UserStore
+) extends ApiEndpoints with LazyLogging:
 
   private def urlEncode(s: String): String =
     URLEncoder.encode(s, StandardCharsets.UTF_8)
@@ -90,9 +92,16 @@ class AuthEndpoints @Inject()(
       .in(query[Option[String]]("redirect"))
       .in(query[Option[String]]("msg"))
       .in(query[Option[String]]("err"))
-      .out(htmlBodyUtf8)
+      .out(statusCode.and(header[Option[String]]("Location")).and(htmlBodyUtf8))
       .serverLogicSuccess[IO] { (redirect, msg, err) =>
-        IO(LoginPage.render(message = msg, error = err, redirect = redirect))
+        IO.blocking {
+          if userStore.all().isEmpty then
+            val message = "An initial admin user must be created."
+            logger.error(s"No users detected. Redirecting to user manager: $message")
+            (StatusCode.SeeOther, Some(s"/admin/users?msg=${urlEncode(message)}"), "")
+          else
+            (StatusCode.Ok, None, LoginPage.render(message = msg, error = err, redirect = redirect))
+        }
       }
 
   private val loginPostEndpoint: ServerEndpoint[Any, IO] =

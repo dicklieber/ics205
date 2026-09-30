@@ -23,7 +23,6 @@ import com.comcast.ip4s.*
 import com.google.inject.Guice
 import com.typesafe.scalalogging.LazyLogging
 import ics205.BuildInfo
-import ics205.auth.UserAdminCli
 import ics205.metrics.ApplicationMetrics
 import jakarta.inject.Inject
 import org.http4s.ember.server.EmberServerBuilder
@@ -34,13 +33,10 @@ import scala.jdk.CollectionConverters.*
 
 object Main extends IOApp:
   override def run(args: List[String]): IO[ExitCode] =
-    if args.contains("--create-user") || args.contains("-u") then
-      IO.blocking(UserAdminCli.main(args.toArray)).as(ExitCode.Success)
-    else
-      IO(Guice.createInjector(new ApplicationModule))
-        .flatMap(injector => IO(injector.getInstance(classOf[WebApplication])))
-        .flatMap(_.run)
-        .as(ExitCode.Success)
+    IO(Guice.createInjector(new ApplicationModule))
+      .flatMap(injector => IO(injector.getInstance(classOf[WebApplication])))
+      .flatMap(_.run)
+      .as(ExitCode.Success)
 
 class WebApplication @Inject() (endpointsSet: java.util.Set[ApiEndpoints]) extends LazyLogging:
 
@@ -62,15 +58,21 @@ class WebApplication @Inject() (endpointsSet: java.util.Set[ApiEndpoints]) exten
       ApplicationMetrics.default
     )
 
+  def displayUri(server: org.http4s.server.Server): String =
+    if server.address.getAddress != null && server.address.getAddress.isAnyLocalAddress then
+      s"http://localhost:${server.address.getPort}/"
+    else
+      server.baseUri.renderString
+
   def run: IO[Unit] =
     EmberServerBuilder.default[IO]
-bib      .withHost(ipv4"0.0.0.0")
+      .withHost(ipv4"0.0.0.0")
       .withPort(port"8080")
       .withHttpApp(httpApp)
       .build
       .use(server =>
         IO(logger.info(
-          s"${BuildInfo.name} ${BuildInfo.version} listening at ${server.baseUri} " +
+          s"${BuildInfo.name} ${BuildInfo.version} listening at ${displayUri(server)} " +
             s"(Scala ${BuildInfo.scalaVersion}, Mill ${BuildInfo.millVersion})"
         )) *> IO.never
       )

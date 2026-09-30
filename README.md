@@ -204,53 +204,7 @@ Sessions store **only** the `userId` and timestamp metadata; roles and permissio
 
 ### Creating the Initial User
 
-An initial user account must be provisioned before accessing protected features. The CLI user administration tool can be executed either locally through Mill or in production using the standalone executable JAR.
-
-#### Local Development (via Mill)
-
-- **Interactive Mode**: Prompts for username, role (defaults to `Admin`), and password securely without terminal echo.
-  ```bash
-  ./mill -i web.run -- --create-user
-  ```
-  Or run the CLI class directly:
-  ```bash
-  ./mill -i core.runMain ics205.auth.UserAdminCli
-  ```
-
-- **Non-Interactive Mode**: Pass credentials directly as arguments:
-  ```bash
-  ./mill web.run -- --create-user --username admin --role Admin --password "YourPassword123"
-  ```
-  Or via `core.runMain`:
-  ```bash
-  ./mill core.runMain ics205.auth.UserAdminCli --username admin --role Admin --password "YourPassword123"
-  ```
-
-#### Production & Remote Server (via Standalone JAR)
-
-When deployed on a remote host or running as a service, execute the user administration tool as the service user (e.g., `ics205`) so that `users.json` is created with appropriate ownership and file permissions:
-
-- **Interactive Mode**:
-  ```bash
-  sudo -u ics205 java -jar /opt/ics205/ics205.jar --create-user
-  ```
-
-- **Non-Interactive Mode**:
-  ```bash
-  sudo -u ics205 java -jar /opt/ics205/ics205.jar --create-user --username admin --role Admin --password "YourPassword123"
-  ```
-
-- **Custom Data Directory**: If a custom data directory is configured via `-Dics205.data.dir` or `ICS205_DATA_DIR`:
-  ```bash
-  sudo -u ics205 java -Dics205.data.dir=/var/lib/ics205 -jar /opt/ics205/ics205.jar --create-user
-  ```
-
-#### CLI Options & Requirements
-
-- `--username <name>`: User account login name (case-insensitive lookup, cannot be empty).
-- `--role <role>`: Assigned role. Options: `Admin`, `Editor`, `Viewer`, `None` (default: `Admin`).
-- `--password <password>`: User password (minimum length: 8 characters).
-- Changes take effect immediately; restarting the running web service is not required.
+An initial user account must be provisioned before accessing protected features. If no users are defined in the database, navigating to the login page (or opening the application) automatically redirects to the user management page (`/admin/users`) with a notice prompting you to create the initial admin user directly through the web UI. Once the initial admin user is created, subsequent user administration is managed by authorized administrators via the web UI at `/admin/users`.
 
 ### User Login and Logout UI
 
@@ -380,16 +334,13 @@ A production-ready systemd service unit file is provided at `deploy/ics205.servi
    sudo chmod 600 /etc/ics205/ics205.env
    ```
 
-3. Initialize the admin user in the working directory before starting the service:
-   ```bash
-   sudo -u ics205 -s /bin/bash -c "cd /var/lib/ics205 && java -jar /opt/ics205/ics205.jar --create-user"
-   ```
-
-4. Reload systemd, enable, and start the service:
+3. Reload systemd, enable, and start the service:
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable --now ics205.service
    ```
+
+4. Create the initial admin user by opening `http://<server-ip>:8080/` in your web browser.
 
 ### 5. Service Management and Monitoring
 

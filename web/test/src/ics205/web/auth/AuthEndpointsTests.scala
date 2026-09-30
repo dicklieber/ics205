@@ -46,7 +46,7 @@ class AuthEndpointsTests extends munit.FunSuite:
       val passwordService = new ScalaPassPasswordService()
       val authService = new AuthenticationService(userStore, passwordService, sessionStore)
       val security = new AuthSecurity(authService, config)
-      val authEndpoints = new AuthEndpoints(authService, sessionStore, security, config)
+      val authEndpoints = new AuthEndpoints(authService, sessionStore, security, config, userStore)
       val testProtectedEndpoints = new TestProtectedEndpoints(security)
 
       val allServerEndpoints: List[ServerEndpoint[Any, IO]] =
@@ -92,8 +92,22 @@ class AuthEndpointsTests extends munit.FunSuite:
       assert(body.contains("alice"))
     }
 
-  test("GET /login renders HTML login page with form and messages, without navbar"):
+  test("GET /login when no users defined redirects to /admin/users with message"):
     withContext { (_, _, _, _, _, _, _, app) =>
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/login"))
+      val res = app.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+      val location = res.headers.get(CIString("Location")).map(_.head.value)
+      assert(location.isDefined)
+      assert(location.get.startsWith("/admin/users?msg="))
+      assert(location.get.contains("initial+admin+user"))
+    }
+
+  test("GET /login renders HTML login page with form and messages, without navbar"):
+    withContext { (_, userStore, _, passwordService, _, _, _, app) =>
+      val hash = passwordService.hash("mypassword")
+      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
+
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/login?msg=Logged+out&err=Invalid+credentials"))
       val (response, body) = (for
         res <- app.run(req)
@@ -107,7 +121,6 @@ class AuthEndpointsTests extends munit.FunSuite:
       assert(body.contains("Logged out"))
       assert(body.contains("Invalid credentials"))
       assert(!body.contains("class=\"navbar"))
-      assert(!body.contains("Main navigation"))
     }
 
   test("POST /login with form data authenticates user, sets session cookie, and redirects to target"):

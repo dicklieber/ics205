@@ -51,11 +51,46 @@ class UserAdminEndpointsTests extends munit.FunSuite:
     finally
       os.remove.all(tempDir)
 
-  test("GET /admin/users without session cookie returns 401 Unauthorized"):
-    withContext { (_, _, _, _, _, _, _, app) =>
+  test("GET /admin/users without session cookie when users exist returns 401 Unauthorized"):
+    withContext { (_, userStore, _, passwordService, _, _, _, app) =>
+      val hash = passwordService.hash("password")
+      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/admin/users"))
       val res = app.run(req).unsafeRunSync()
       assertEquals(res.status, Status.Unauthorized)
+    }
+
+  test("GET /admin/users without session cookie when no users exist returns 200 OK"):
+    withContext { (_, _, _, _, _, _, _, app) =>
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/admin/users?msg=An+initial+admin+user+must+be+created."))
+      val (res, body) = (for
+        r <- app.run(req)
+        b <- r.as[String]
+      yield (r, b)).unsafeRunSync()
+      assertEquals(res.status, Status.Ok)
+      assert(body.contains("An initial admin user must be created."))
+      assert(body.contains("User Administration"))
+      assert(body.contains("No users found."))
+    }
+
+  test("POST /admin/users/create when no users exist creates initial admin user and redirects to /login"):
+    withContext { (_, userStore, _, passwordService, _, _, _, app) =>
+      val form = UrlForm(
+        "username" -> "initialadmin",
+        "password" -> "adminpass123",
+        "role" -> "admin"
+      )
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+        .withEntity(form)
+      val res = app.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+      val location = res.headers.get(CIString("Location")).map(_.head.value)
+      assertEquals(location, Some("/login?msg=User+%27initialadmin%27+created+successfully.+Please+log+in."))
+
+      val created = userStore.findByUsername("initialadmin").get
+      assertEquals(created.role, RolePermissions.Admin)
+      assertEquals(created.enabled, true)
+      assert(passwordService.verify("adminpass123", created.passwordHash))
     }
 
   test("GET /admin/users with user lacking EditUsers permission returns 403 Forbidden"):

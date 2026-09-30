@@ -26,6 +26,19 @@ object UserAdminPage:
 
   def render(
     currentUser: AuthenticatedUser,
+    users: Seq[User]
+  ): String = render(Some(currentUser), users, None, None, None)
+
+  def render(
+    currentUser: AuthenticatedUser,
+    users: Seq[User],
+    editingUserId: Option[String],
+    message: Option[String],
+    error: Option[String]
+  ): String = render(Some(currentUser), users, editingUserId, message, error)
+
+  def render(
+    currentUser: Option[AuthenticatedUser],
     users: Seq[User],
     editingUserId: Option[String] = None,
     message: Option[String] = None,
@@ -44,7 +57,7 @@ object UserAdminPage:
           link(rel := "stylesheet", href := "/css/admin.css")
         ),
         body(
-          NavigationBar.render(NavigationBar.ActivePage.UserAdmin, Some(currentUser)),
+          NavigationBar.render(NavigationBar.ActivePage.UserAdmin, currentUser),
           div(cls := "admin-container")(
             div(cls := "admin-header")(
               div(
@@ -146,7 +159,7 @@ object UserAdminPage:
                     RolePermissions.values.map { r =>
                       option(
                         value := r.toString.toLowerCase,
-                        if editingUser.exists(_.role == r) || (editingUser.isEmpty && r == RolePermissions.User) then selected else cls := ""
+                        if editingUser.exists(_.role == r) || (editingUser.isEmpty && r == (if users.isEmpty then RolePermissions.Admin else RolePermissions.User)) then selected else cls := ""
                       )(r.toString)
                     }
                   ),
