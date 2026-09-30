@@ -85,6 +85,13 @@ object NavigationBar:
                     href := "/export/pdf",
                     title := "Download the saved plan as a PDF; save edits first"
                   )("Export PDF")
+                ),
+                li(
+                  a(
+                    cls := "dropdown-item",
+                    href := "/export/json",
+                    title := "Download the saved plan as a JSON file; save edits first"
+                  )("Export JSON")
                 )
               )
             ),

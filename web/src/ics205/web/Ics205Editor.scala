@@ -59,8 +59,11 @@ private[web] object Ics205Editor:
           div(cls := "toolbar")(
             button(tpe := "submit", if !canEdit then disabled else cls := "")("Save plan"),
             button(tpe := "button", cls := "renumber-channels-btn", id := "renumber-channels-top", if !canEdit then disabled else cls := "")("Channel numbers"),
+            button(tpe := "button", id := "export-json", cls := "export-btn", title := "Export ICS 205 as pretty JSON")("Export"),
+            button(tpe := "button", id := "import-json", cls := "import-btn", title := "Import ICS 205 JSON file", if !canEdit then disabled else cls := "")("Import"),
             span(id := "status", attr("role") := "status")(if saved then "Plan saved." else "")
           ),
+          div(id := "client-error", cls := "error", attr("role") := "alert", style := "display: none;")(),
           error.map(message => div(cls := "error", attr("role") := "alert")(message, " Your edits have been kept below.")),
           div(cls := "sheet")(
             h1("Incident Radio Communications Plan (ICS 205)"),
@@ -117,6 +120,8 @@ private[web] object Ics205Editor:
             )
           )
         ) else span(),
+        if canEdit then input(tpe := "file", id := "import-json-file", accept := ".json,application/json", style := "display: none;") else span(),
+        script(raw(exportScript)),
         if canEdit then script(raw(editorScript)) else span(),
         script(raw(remarksSizingScript))
       )
@@ -180,6 +185,99 @@ private[web] object Ics205Editor:
         )
       )
     )
+
+  private val exportScript = """
+    (() => {
+      function getEditorIcs205() {
+        const planForm = document.getElementById('plan-form');
+        const incidentName = planForm ? (planForm.querySelector('[name=incidentName]')?.value || '') : '';
+        const prepared = planForm ? (planForm.querySelector('[name=prepared]')?.value || new Date().toISOString().slice(0, 19)) : new Date().toISOString().slice(0, 19);
+        const from = planForm ? (planForm.querySelector('[name=from]')?.value || null) : null;
+        const to = planForm ? (planForm.querySelector('[name=to]')?.value || null) : null;
+        const specialInstructions = planForm ? (planForm.querySelector('[name=specialInstructions]')?.value || '') : '';
+        const preparedByName = planForm ? (planForm.querySelector('[name=preparedBy]')?.value || '') : '';
+        const callsign = planForm ? (planForm.querySelector('[name=callsign]')?.value || null) : null;
+
+        const rows = document.getElementById('channel-rows');
+        const channelRows = rows ? [...rows.children] : [];
+        const channels = channelRows.map(row => {
+          const id = row.querySelector('[data-field=id]')?.value || crypto.randomUUID();
+          const zoneGroup = row.querySelector('[data-field=zoneGroup]')?.value || null;
+          const channelNumber = row.querySelector('[data-field=channelNumber]')?.value || null;
+          const func = row.querySelector('[data-field=function]')?.value || '';
+          const name = row.querySelector('[data-field=name]')?.value || '';
+          const assignment = row.querySelector('[data-field=assignment]')?.value || '';
+          const rxVal = row.querySelector('[data-field=rx]')?.value;
+          const offsetVal = row.querySelector('[data-field=offset]')?.value;
+          const mode = row.querySelector('[data-field=mode]')?.value || 'Fm';
+          const bandwidth = row.querySelector('[data-field=bandwidth]')?.value || 'Wide';
+          const ctcssMode = row.querySelector('[data-field=ctcssMode]')?.value || 'None';
+          const ctcssFreqVal = row.querySelector('[data-field=ctcssFrequency]')?.value;
+          const remarks = row.querySelector('[data-field=remarks]')?.value || '';
+
+          const rx = (rxVal !== undefined && rxVal !== '' && !isNaN(Number(rxVal))) ? Number(rxVal) : 0;
+          const offset = (offsetVal !== undefined && offsetVal !== '' && !isNaN(Number(offsetVal))) ? Number(offsetVal) : 0;
+          const ctcssFreq = (ctcssMode !== 'None' && ctcssFreqVal && !isNaN(Number(ctcssFreqVal))) ? Number(ctcssFreqVal) : null;
+
+          const channelObj = {
+            function: func,
+            name: name,
+            assignment: assignment,
+            frequency: {
+              rxFrequency: { mhz: rx },
+              offset: { mhz: offset }
+            },
+            mode: mode,
+            bandwidth: bandwidth,
+            ctcss: {
+              frequency: ctcssFreq,
+              mode: ctcssMode
+            },
+            remarks: remarks,
+            id: id
+          };
+          if (zoneGroup) channelObj.zoneGroup = zoneGroup;
+          if (channelNumber) channelObj.channelNumber = channelNumber;
+          return channelObj;
+        });
+
+        const obj = {
+          formatVersion: '1.0',
+          incidentName: incidentName,
+          operationalPeriod: {},
+          channels: channels,
+          specialInstructions: specialInstructions,
+          prepared: prepared
+        };
+        if (from) obj.operationalPeriod.from = from;
+        if (to) obj.operationalPeriod.to = to;
+        if (preparedByName || callsign) {
+          obj.preparedBy = { name: preparedByName };
+          if (callsign) obj.preparedBy.callsign = callsign;
+        }
+        return obj;
+      }
+
+      const exportBtn = document.getElementById('export-json');
+      if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+          const plan = getEditorIcs205();
+          const prettyJson = JSON.stringify(plan, null, 2);
+          const blob = new Blob([prettyJson], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          const rawName = plan.incidentName ? plan.incidentName.trim() : '';
+          const sanitized = rawName.replace(/[\\/:*?"<>|]/g, '_');
+          a.download = (sanitized.length > 0 ? sanitized : 'ics205') + '.json';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        });
+      }
+    })();
+  """
 
   private val remarksSizingScript = """
     (() => {
@@ -340,6 +438,160 @@ private[web] object Ics205Editor:
         refresh();
         changed();
       });
+      const importBtn = document.getElementById('import-json');
+      const fileInput = document.getElementById('import-json-file');
+      const clientError = document.getElementById('client-error');
+
+      function showError(msg) {
+        if (clientError) {
+          clientError.textContent = msg;
+          clientError.style.display = 'block';
+          clientError.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+          alert(msg);
+        }
+        if (status) {
+          status.textContent = 'Import failed: ' + msg;
+        }
+      }
+
+      function hideError() {
+        if (clientError) {
+          clientError.textContent = '';
+          clientError.style.display = 'none';
+        }
+      }
+
+      if (importBtn && fileInput) {
+        importBtn.addEventListener('click', () => {
+          fileInput.click();
+        });
+
+        fileInput.addEventListener('change', event => {
+          const file = event.target.files && event.target.files[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = e => {
+            try {
+              let json;
+              try {
+                json = JSON.parse(e.target.result);
+              } catch (parseErr) {
+                showError('Failed to parse JSON file: ' + parseErr.message);
+                return;
+              }
+
+              if (!json || typeof json !== 'object' || Array.isArray(json)) {
+                showError('Invalid JSON format: expected an object representing an ICS 205 plan or event.');
+                return;
+              }
+
+              const plan = (json.ics205 && typeof json.ics205 === 'object' && !Array.isArray(json.ics205)) ? json.ics205 : json;
+
+              if (plan.channels !== undefined && !Array.isArray(plan.channels)) {
+                showError('Invalid ICS 205 data: "channels" must be an array.');
+                return;
+              }
+
+              if (plan.incidentName === undefined && plan.channels === undefined && !plan.formatVersion) {
+                showError('Invalid ICS 205 data: file does not contain ICS 205 plan data.');
+                return;
+              }
+
+              hideError();
+
+              // Populate top-level fields
+              const incidentNameInput = form.querySelector('[name=incidentName]');
+              if (incidentNameInput && plan.incidentName !== undefined) {
+                incidentNameInput.value = plan.incidentName || '';
+              }
+
+              const preparedInput = form.querySelector('[name=prepared]');
+              if (preparedInput && plan.prepared !== undefined) {
+                preparedInput.value = plan.prepared || '';
+              }
+
+              const fromInput = form.querySelector('[name=from]');
+              if (fromInput) {
+                const fromVal = plan.operationalPeriod?.from || plan.from || '';
+                fromInput.value = fromVal;
+              }
+
+              const toInput = form.querySelector('[name=to]');
+              if (toInput) {
+                const toVal = plan.operationalPeriod?.to || plan.to || '';
+                toInput.value = toVal;
+              }
+
+              const specialInstructionsTextarea = form.querySelector('[name=specialInstructions]');
+              if (specialInstructionsTextarea && plan.specialInstructions !== undefined) {
+                specialInstructionsTextarea.value = plan.specialInstructions || '';
+              }
+
+              const preparedByInput = form.querySelector('[name=preparedBy]');
+              if (preparedByInput) {
+                const prepName = plan.preparedBy?.name ?? (typeof plan.preparedBy === 'string' ? plan.preparedBy : '') ?? '';
+                preparedByInput.value = prepName;
+              }
+
+              const callsignInput = form.querySelector('[name=callsign]');
+              if (callsignInput) {
+                const callsignVal = plan.preparedBy?.callsign ?? plan.callsign ?? '';
+                callsignInput.value = callsignVal;
+              }
+
+              // Replace channel rows
+              rows.replaceChildren();
+              const rawChannels = Array.isArray(plan.channels) ? plan.channels : [];
+              rawChannels.forEach(ch => {
+                const rxFreq = ch.frequency?.rxFrequency?.mhz ?? ch.frequency?.rx?.mhz ?? ch.frequency?.rxFrequency ?? ch.frequency?.rx ?? ch.rx ?? '';
+                const offsetFreq = ch.frequency?.offset?.mhz ?? ch.frequency?.offset ?? ch.offset ?? '0';
+                const ctcssFreq = ch.ctcss?.frequency?.hz ?? ch.ctcss?.frequency ?? ch.ctcssFrequency ?? '';
+                const ctcssMode = ch.ctcss?.mode ?? ch.ctcssMode ?? 'None';
+
+                const rowValues = {
+                  id: ch.id || crypto.randomUUID(),
+                  zoneGroup: ch.zoneGroup || '',
+                  channelNumber: ch.channelNumber || '',
+                  function: ch.function || '',
+                  name: ch.name || '',
+                  assignment: ch.assignment || '',
+                  rx: String(rxFreq),
+                  offset: String(offsetFreq),
+                  bandwidth: ch.bandwidth || 'Wide',
+                  ctcssMode: ctcssMode,
+                  ctcssFrequency: String(ctcssFreq),
+                  mode: ch.mode || 'Fm',
+                  remarks: ch.remarks || ''
+                };
+
+                const row = document.getElementById('channel-template').content.firstElementChild.cloneNode(true);
+                row.querySelectorAll('[data-field]').forEach(control => {
+                  const field = control.dataset.field;
+                  if (Object.hasOwn(rowValues, field)) {
+                    control.value = rowValues[field];
+                  }
+                });
+                rows.append(row);
+              });
+
+              refresh();
+              changed();
+              status.textContent = 'Unsaved changes (imported ' + file.name + ')';
+            } catch (err) {
+              showError('Error processing ICS 205 import: ' + err.message);
+            } finally {
+              fileInput.value = '';
+            }
+          };
+          reader.onerror = () => {
+            showError('Failed to read file: ' + file.name);
+            fileInput.value = '';
+          };
+          reader.readAsText(file);
+        });
+      }
       form.addEventListener('input', changed);
       form.addEventListener('change', () => { refresh(); changed(); });
       form.addEventListener('submit', () => {

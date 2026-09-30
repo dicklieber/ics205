@@ -45,6 +45,7 @@ class NavigationBarTests extends munit.FunSuite:
     assert(html.contains("href=\"/radio\""))
     assert(html.contains("href=\"/export/radio\""))
     assert(html.contains("href=\"/export/pdf\""))
+    assert(html.contains("href=\"/export/json\""))
     assert(html.contains("href=\"/login\""))
     assert(html.contains("Log in"))
     assert(html.contains("Log out"))
