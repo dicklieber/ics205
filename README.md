@@ -283,7 +283,33 @@ The resulting fat JAR is output to:
 out/web/assembly.dest/out.jar
 ```
 
-### 2. Linux Server Setup
+### 2. Automated Remote Deployment via SSH
+
+Automated deployment scripts are provided in `deploy/` for deploying from a macOS development host to a remote Linux server via SSH.
+
+#### Initial Installation on Remote Server (`deploy/install.sh`)
+Installs the fat JAR, creates the `ics205` system user/group, sets up directory permissions (`/opt/ics205`, `/var/lib/ics205`, `/etc/ics205`), configures the systemd service, and starts it:
+
+```bash
+# Build (if not already built) and install to remote Linux host
+./deploy/install.sh --build user@remote-server
+
+# Or with custom SSH port / key
+./deploy/install.sh -p 2222 -i ~/.ssh/id_ed25519 user@remote-server
+```
+
+#### Updating JAR and Restarting Service (`deploy/update.sh`)
+Transfers the newly compiled fat JAR from `out/web/assembly.dest/out.jar` to `/opt/ics205/ics205.jar`, updates file permissions, and restarts the `ics205.service` systemd unit:
+
+```bash
+# Rebuild fat JAR and deploy update to remote Linux host
+./deploy/update.sh --build user@remote-server
+
+# Deploy an existing build and also sync systemd service unit changes
+./deploy/update.sh --sync-service user@remote-server
+```
+
+### 3. Manual Linux Server Setup
 
 #### System Prerequisites
 - Java Runtime Environment (JRE/JDK 17 or 21+ LTS):
@@ -303,13 +329,13 @@ sudo chown -R ics205:ics205 /opt/ics205 /var/lib/ics205
 sudo chmod 750 /var/lib/ics205
 ```
 
-### 3. Systemd Service Configuration
+### 4. Systemd Service Configuration
 
-A production-ready systemd service unit file is provided at `ics205.service`.
+A production-ready systemd service unit file is provided at `deploy/ics205.service`.
 
 1. Copy the service unit to `/etc/systemd/system/`:
    ```bash
-   sudo cp ics205.service /etc/systemd/system/ics205.service
+   sudo cp deploy/ics205.service /etc/systemd/system/ics205.service
    sudo chmod 644 /etc/systemd/system/ics205.service
    ```
 
@@ -334,7 +360,7 @@ A production-ready systemd service unit file is provided at `ics205.service`.
    sudo systemctl enable --now ics205.service
    ```
 
-### 4. Service Management and Monitoring
+### 5. Service Management and Monitoring
 
 - **Check status**:
   ```bash
@@ -349,7 +375,7 @@ A production-ready systemd service unit file is provided at `ics205.service`.
   sudo systemctl restart ics205.service
   ```
 
-### 5. Reverse Proxy and HTTPS Setup
+### 6. Reverse Proxy and HTTPS Setup
 
 In production, place the application behind a reverse proxy (such as Nginx, Caddy, or Apache) with TLS/HTTPS enabled:
 - Configure proxy forwarding to `http://127.0.0.1:8080`.
