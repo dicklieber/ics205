@@ -26,10 +26,13 @@ private[web] object Ics205Editor:
   def render(plan: Ics205, submitted: Option[Map[String, String]] = None,
              error: Option[String] = None, saved: Boolean = false,
              currentUser: Option[AuthenticatedUser] = None,
-             metadata: Option[Ics205Metadata] = None): String =
+             metadata: Option[Ics205Metadata] = None,
+             currentEventName: Option[String] = None,
+             availableEvents: Seq[String] = Seq.empty): String =
     val canEdit = currentUser.exists(u => metadata.map(_.canEdit(u)).getOrElse(u.hasPermission(Permission.EditPlans)))
     val values = submitted.getOrElse(Ics205Form.fields(plan))
     val count = values.get("rowCount").flatMap(_.toIntOption).filter(n => n >= 0 && n <= 1000).getOrElse(0)
+    val formAction = currentEventName.filter(_.nonEmpty).map(n => s"/?event=${java.net.URLEncoder.encode(n, "UTF-8")}").getOrElse("/")
     def field(key: String, caption: String, kind: String = "text"): Frag =
       label(caption, input(name := key, attr("aria-label") := caption, tpe := kind,
         value := values.getOrElse(key, ""),
@@ -39,14 +42,20 @@ private[web] object Ics205Editor:
     doctype("html")(html(lang := "en")(
       head(
         meta(charset := "utf-8"), meta(name := "viewport", content := "width=device-width, initial-scale=1"),
-        scalatags.Text.tags2.title("ICS 205 — Edit plan"),
+        scalatags.Text.tags2.title(s"ICS 205 — Edit plan${currentEventName.filter(_.nonEmpty).map(n => s" ($n)").getOrElse("")}"),
         link(rel := "stylesheet", href := "/css/navbar.css"),
         link(rel := "stylesheet", href := "/css/ics205.css"),
         link(rel := "stylesheet", href := "/css/ics205-editor.css")
       ),
       body(
-        NavigationBar.render(NavigationBar.ActivePage.Plan, currentUser),
-        form(id := "plan-form", method := "post", action := "/", attr("data-unsaved") := (canEdit && submitted.isDefined).toString)(
+        NavigationBar.render(
+          activePage = NavigationBar.ActivePage.Plan,
+          currentUser = currentUser,
+          currentEventName = currentEventName,
+          availableEvents = availableEvents
+        ),
+        form(id := "plan-form", method := "post", action := formAction, attr("data-unsaved") := (canEdit && submitted.isDefined).toString)(
+          input(tpe := "hidden", name := "eventName", value := currentEventName.getOrElse("")),
           div(cls := "toolbar")(
             button(tpe := "submit", if !canEdit then disabled else cls := "")("Save plan"),
             button(tpe := "button", cls := "renumber-channels-btn", id := "renumber-channels-top", if !canEdit then disabled else cls := "")("Channel numbers"),

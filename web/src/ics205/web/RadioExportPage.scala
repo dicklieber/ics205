@@ -32,7 +32,9 @@ object RadioExportPage:
     includeHeader: Boolean = true,
     generatedCsv: Option[String] = None,
     message: Option[String] = None,
-    error: Option[String] = None
+    error: Option[String] = None,
+    currentEventName: Option[String] = None,
+    availableEvents: Seq[String] = Seq.empty
   ): String =
     doctype("html")(
       html(lang := "en")(
@@ -44,7 +46,12 @@ object RadioExportPage:
           link(rel := "stylesheet", href := "/css/admin.css")
         ),
         body(
-          NavigationBar.render(NavigationBar.ActivePage.ExportRadio, Some(currentUser)),
+          NavigationBar.render(
+            activePage = NavigationBar.ActivePage.ExportRadio,
+            currentUser = Some(currentUser),
+            currentEventName = currentEventName,
+            availableEvents = availableEvents
+          ),
           div(cls := "admin-container")(
             div(cls := "admin-header")(
               div(

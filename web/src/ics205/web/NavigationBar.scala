@@ -25,14 +25,17 @@ import scalatags.Text.tags2.nav
 object NavigationBar:
 
   enum ActivePage:
-    case Plan, Radio, ExportRadio, UserAdmin, Login, None
+    case Plan, Radio, ExportRadio, Events, UserAdmin, Login, None
 
   def render(
     activePage: ActivePage = ActivePage.None,
-    currentUser: Option[AuthenticatedUser] = None
+    currentUser: Option[AuthenticatedUser] = None,
+    currentEventName: Option[String] = None,
+    availableEvents: Seq[String] = Seq.empty
   ): Frag =
     val showUserAdmin = currentUser.exists(_.hasPermission(Permission.EditUsers))
     val isExportActive = activePage == ActivePage.ExportRadio
+    val isEventsActive = activePage == ActivePage.Events
 
     nav(
       cls := "navbar navbar-expand navbar-dark bg-dark",
@@ -80,6 +83,46 @@ object NavigationBar:
               )
             )
           ),
+          li(cls := "nav-item")(
+            a(
+              cls := s"nav-link ${if activePage == ActivePage.Events then "active" else ""}".trim,
+              href := "/events",
+              if activePage == ActivePage.Events then attr("aria-current") := "page" else cls := ""
+            )("Events")
+          ),
+          if availableEvents.nonEmpty then
+            li(cls := "nav-item dropdown")(
+              a(
+                cls := "nav-link dropdown-toggle",
+                href := "#",
+                id := "navbarDropdownEvent",
+                attr("role") := "button",
+                attr("data-bs-toggle") := "dropdown",
+                attr("aria-expanded") := "false"
+              )(
+                "Event: ",
+                strong(currentEventName.filter(_.nonEmpty).getOrElse(availableEvents.head))
+              ),
+              ul(cls := "dropdown-menu", attr("aria-labelledby") := "navbarDropdownEvent")(
+                availableEvents.map { evName =>
+                  li(
+                    a(
+                      cls := s"dropdown-item ${if currentEventName.contains(evName) then "active" else ""}".trim,
+                      href := s"/events/select?name=${java.net.URLEncoder.encode(evName, "UTF-8")}"
+                    )(evName)
+                  )
+                },
+                li(hr(cls := "dropdown-divider")),
+                li(
+                  a(
+                    cls := s"dropdown-item ${if activePage == ActivePage.Events then "active" else ""}".trim,
+                    href := "/events"
+                  )("Manage Events")
+                )
+              )
+            )
+          else
+            span(),
           if showUserAdmin then
             li(cls := "nav-item")(
               a(

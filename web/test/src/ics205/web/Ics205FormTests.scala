@@ -65,6 +65,7 @@ class Ics205FormTests extends munit.FunSuite:
       val helper = new FileHelper:
         override val directory: os.Path = tempDirectory
       val store = new Ics205Store(helper)
+      store.saveEvent(ics205.model.Ics205Event("Exercise Event", base.copy(formatVersion = "1.0")))
       val userStore = new ics205.store.UserStore(helper)
       val sessionStore = new ics205.store.InMemJsonSessionStore(helper)
       val passwordService = new ics205.auth.ScalaPassPasswordService
@@ -95,7 +96,7 @@ class Ics205FormTests extends munit.FunSuite:
       assert(!os.exists(tempDirectory / "ics205.json"))
       val saved = post("/", fields)
       assertEquals(saved.status, Status.SeeOther)
-      assert(saved.headers.headers.exists(h => h.name.toString == "Location" && h.value == "/?saved=1"))
+      assert(saved.headers.headers.exists(h => h.name.toString == "Location" && h.value.startsWith("/?saved=1")))
       // Internal format version comes from the stored document, not form input.
       val expected = base.copy(formatVersion = "1.0")
       assertEquals(store.ics205(), expected)
@@ -158,6 +159,7 @@ class Ics205FormTests extends munit.FunSuite:
       val helper = new FileHelper:
         override val directory: os.Path = tempDirectory
       val store = new Ics205Store(helper)
+      store.saveEvent(ics205.model.Ics205Event("Exercise Event", base))
       val userStore = new ics205.store.UserStore(helper)
       val sessionStore = new ics205.store.InMemJsonSessionStore(helper)
       val passwordService = new ics205.auth.ScalaPassPasswordService
@@ -198,6 +200,7 @@ class Ics205FormTests extends munit.FunSuite:
       val helper = new FileHelper:
         override val directory: os.Path = tempDirectory
       val store = new Ics205Store(helper)
+      store.saveEvent(ics205.model.Ics205Event("Exercise Event", base))
       val userStore = new ics205.store.UserStore(helper)
       val sessionStore = new ics205.store.InMemJsonSessionStore(helper)
       val passwordService = new ics205.auth.ScalaPassPasswordService

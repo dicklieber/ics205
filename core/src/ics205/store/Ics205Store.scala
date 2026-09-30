@@ -22,28 +22,258 @@ import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.{Permission, UserId}
 import ics205.model.{Ics205, Ics205Event, Ics205Metadata, OperationalPeriod}
 import ics205.util.FileHelper
+import ics205.util.Ids.generateId
+import io.circe.{Codec, Printer}
+import io.circe.parser.*
+import io.circe.syntax.*
 import jakarta.inject.{Inject, Singleton}
 
+import java.nio.file.NoSuchFileException
 import java.time.{Instant, LocalDateTime}
 
 @Singleton
 class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
-  private val fileName = "ics205.json"
+  val eventsDirectory: os.Path = fileHelper.directory / "events"
 
-  private var current: Ics205Event = fileHelper.loadOrDefault[Ics205Event](fileName) {
-    Ics205Event(
-      Ics205(incidentName = "", operationalPeriod = OperationalPeriod(), channels = Seq.empty),
-      Ics205Metadata()
-    )
+  private var eventsState: Seq[Ics205Event] = loadFromDisk()
+  private var activeEventName: Option[String] = eventsState.headOption.map(_.eventName).filter(_.nonEmpty)
+
+  private def fileNameFor(name: String): String =
+    val trimmed = name.trim
+    val sanitized = trimmed.replaceAll("""[\\/:*?"<>|]""", "_")
+    s"$sanitized.json"
+
+  private def parseEventFile(path: os.Path): Option[Ics205Event] =
+    try
+      if !os.exists(path) || os.isDir(path) then None
+      else
+        val content = os.read(path)
+        parse(content) match
+          case Left(err) =>
+            logger.error("Failed to parse JSON file", err, "File" -> path.last)
+            None
+          case Right(json) =>
+            json.as[Ics205Event] match
+              case Left(err) =>
+                logger.error("Failed to decode Ics205Event from file", err, "File" -> path.last)
+                None
+              case Right(ev) =>
+                val finalEvent = if ev.eventName.isEmpty then
+                  val derivedName = path.last.stripSuffix(".json")
+                  if ev.ics205.incidentName.isEmpty then
+                    ev.copy(eventName = derivedName, ics205 = ev.ics205.copy(incidentName = derivedName))
+                  else
+                    ev.copy(eventName = derivedName)
+                else ev
+                if finalEvent.eventName.trim.nonEmpty then Some(finalEvent) else None
+    catch
+      case _: NoSuchFileException => None
+      case e: Exception =>
+        logger.error("Failed to read file", e, "File" -> path.last)
+        None
+
+  private def loadFromDisk(): Seq[Ics205Event] = synchronized {
+    if os.exists(eventsDirectory) && os.isDir(eventsDirectory) then
+      val files = os.list(eventsDirectory)
+        .filter(p => os.isFile(p) && p.last.endsWith(".json") && !p.last.startsWith("."))
+        .sortBy(_.last.toLowerCase)
+      files.flatMap(parseEventFile)
+    else
+      Seq.empty
   }
 
-  def event(): Ics205Event = synchronized { current }
+  private def writeEventFile(event: Ics205Event): Unit = synchronized {
+    val eventName = if event.eventName.nonEmpty then event.eventName else event.ics205.incidentName
+    val fileName = fileNameFor(eventName)
+    val path = eventsDirectory / fileName
+    val tempPath = eventsDirectory / s".$fileName.tmp.${generateId()}"
+    val json = event.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true))
+    os.write.over(tempPath, json, createFolders = true)
+    try
+      try
+        os.move(tempPath, path, replaceExisting = true, atomicMove = true)
+      catch
+        case _: Exception =>
+          os.move(tempPath, path, replaceExisting = true, atomicMove = false)
+    finally
+      if os.exists(tempPath) then
+        try os.remove(tempPath) catch case _: Exception => ()
+  }
 
-  def ics205Event(): Ics205Event = synchronized { current }
+  def events(): Seq[Ics205Event] = synchronized { eventsState }
 
-  def ics205(): Ics205 = synchronized { current.ics205 }
+  def listEvents(): Seq[Ics205Event] = synchronized { eventsState }
 
-  def metadata(): Ics205Metadata = synchronized { current.metadata }
+  def all(): Seq[Ics205Event] = synchronized { eventsState }
+
+  def getEvent(eventName: String): Option[Ics205Event] = synchronized {
+    val trimmed = eventName.trim
+    if trimmed.isEmpty then None
+    else
+      eventsState.find(_.eventName.equalsIgnoreCase(trimmed))
+        .orElse(eventsState.find(_.ics205.incidentName.equalsIgnoreCase(trimmed)))
+  }
+
+  def findByName(eventName: String): Option[Ics205Event] = getEvent(eventName)
+
+  def event(eventName: String): Option[Ics205Event] = getEvent(eventName)
+
+  def currentEvent(): Option[Ics205Event] = synchronized {
+    activeEventName.flatMap(getEvent)
+      .orElse(eventsState.headOption)
+  }
+
+  def currentEventName: Option[String] = synchronized {
+    currentEvent().map(_.eventName)
+  }
+
+  def setCurrentEvent(eventName: String): Boolean = synchronized {
+    getEvent(eventName) match
+      case Some(ev) =>
+        activeEventName = Some(ev.eventName)
+        true
+      case None =>
+        false
+  }
+
+  def addEvent(event: Ics205Event): Either[String, Ics205Event] = synchronized {
+    val name = if event.eventName.nonEmpty then event.eventName.trim else event.ics205.incidentName.trim
+    if name.isEmpty then
+      Left("Event name cannot be empty")
+    else if getEvent(name).isDefined then
+      Left(s"Event '$name' already exists")
+    else
+      val updatedEvent = if event.eventName != name then event.copy(eventName = name) else event
+      saveEvent(updatedEvent, refreshPrepared = false)
+      Right(updatedEvent)
+  }
+
+  def renameEvent(oldName: String, newName: String): Either[String, Ics205Event] = synchronized {
+    val trimmedNew = newName.trim
+    if trimmedNew.isEmpty then
+      Left("Event name cannot be empty")
+    else if getEvent(trimmedNew).isDefined && !oldName.equalsIgnoreCase(trimmedNew) then
+      Left(s"Event '$trimmedNew' already exists")
+    else
+      getEvent(oldName) match
+        case Some(ev) =>
+          val oldFileName = fileNameFor(ev.eventName)
+          val oldPath = eventsDirectory / oldFileName
+          if os.exists(oldPath) then
+            try os.remove(oldPath) catch case _: Exception => ()
+          val updated = ev.copy(eventName = trimmedNew)
+          writeEventFile(updated)
+          val idx = eventsState.indexWhere(e => e.eventName.equalsIgnoreCase(oldName) || e.ics205.incidentName.equalsIgnoreCase(oldName))
+          eventsState = if idx >= 0 then eventsState.updated(idx, updated) else eventsState :+ updated
+          if activeEventName.exists(_.equalsIgnoreCase(oldName)) then
+            activeEventName = Some(trimmedNew)
+          Right(updated)
+        case None =>
+          Left(s"Event '$oldName' not found")
+  }
+
+  def deleteEvent(eventName: String): Boolean = synchronized {
+    val toDelete = eventsState.find(e => e.eventName.equalsIgnoreCase(eventName) || e.ics205.incidentName.equalsIgnoreCase(eventName))
+    toDelete match
+      case Some(ev) =>
+        val fileName = fileNameFor(ev.eventName)
+        val path = eventsDirectory / fileName
+        if os.exists(path) then
+          try os.remove(path) catch case _: Exception => ()
+
+        val filtered = eventsState.filterNot(e => e.eventName.equalsIgnoreCase(ev.eventName) || e.ics205.incidentName.equalsIgnoreCase(ev.eventName))
+        eventsState = filtered
+        if activeEventName.exists(_.equalsIgnoreCase(ev.eventName)) then
+          activeEventName = eventsState.headOption.map(_.eventName).filter(_.nonEmpty)
+        true
+      case None =>
+        false
+  }
+
+  def saveEvent(event: Ics205Event, refreshPrepared: Boolean = true): Unit = synchronized {
+    saveEvent(event, None, refreshPrepared)
+  }
+
+  def saveEvent(event: Ics205Event, userId: UserId): Unit = synchronized {
+    saveEvent(event, Some(userId), refreshPrepared = true)
+  }
+
+  def saveEvent(event: Ics205Event, userId: UserId, refreshPrepared: Boolean): Unit = synchronized {
+    saveEvent(event, Some(userId), refreshPrepared)
+  }
+
+  def saveEvent(event: Ics205Event, userId: Option[UserId], refreshPrepared: Boolean): Unit = synchronized {
+    val preparedNow = if refreshPrepared then event.ics205.copy(prepared = LocalDateTime.now()) else event.ics205
+    val updatedMetadata = event.metadata.copy(
+      lastEditedBy = userId.orElse(event.metadata.lastEditedBy),
+      savedAt = Instant.now()
+    )
+    val name = if event.eventName.nonEmpty then event.eventName.trim else preparedNow.incidentName.trim
+    val finalName = if name.nonEmpty then name else "Untitled Event"
+    val updatedEvent = event.copy(eventName = finalName, ics205 = preparedNow, metadata = updatedMetadata)
+    val idx = eventsState.indexWhere(e => e.eventName.equalsIgnoreCase(finalName))
+
+    if idx >= 0 then
+      val oldEvent = eventsState(idx)
+      val oldFileName = fileNameFor(oldEvent.eventName)
+      val newFileName = fileNameFor(finalName)
+      if !oldFileName.equalsIgnoreCase(newFileName) then
+        val oldPath = eventsDirectory / oldFileName
+        if os.exists(oldPath) then
+          try os.remove(oldPath) catch case _: Exception => ()
+
+    writeEventFile(updatedEvent)
+
+    val newEvents = if idx >= 0 then
+      eventsState.updated(idx, updatedEvent)
+    else
+      eventsState :+ updatedEvent
+
+    eventsState = newEvents
+    activeEventName = Some(finalName)
+  }
+
+  def save(event: Ics205Event): Unit = synchronized {
+    saveEvent(event)
+  }
+
+  def save(event: Ics205Event, userId: Option[UserId]): Unit = synchronized {
+    saveEvent(event, userId, refreshPrepared = true)
+  }
+
+  def save(event: Ics205Event, userId: Option[UserId], refreshPrepared: Boolean): Unit = synchronized {
+    saveEvent(event, userId, refreshPrepared)
+  }
+
+  def updateMetadata(eventName: String, f: Ics205Metadata => Ics205Metadata): Option[Ics205Metadata] = synchronized {
+    getEvent(eventName).map { ev =>
+      val updatedMetadata = f(ev.metadata)
+      val updatedEvent = ev.copy(metadata = updatedMetadata)
+      saveEvent(updatedEvent, refreshPrepared = false)
+      updatedMetadata
+    }
+  }
+
+  def setUserPermission(eventName: String, userId: UserId, permission: Option[Permission]): Unit = synchronized {
+    updateMetadata(eventName, _.withUserPermission(userId, permission))
+  }
+
+  def setUserPermission(eventName: String, userId: UserId, permission: Permission): Unit = synchronized {
+    updateMetadata(eventName, _.withUserPermission(userId, permission))
+  }
+
+  def removeUserPermission(eventName: String, userId: UserId): Unit = synchronized {
+    updateMetadata(eventName, _.withoutUserPermission(userId))
+  }
+
+  // Backward compatibility methods
+  def event(): Option[Ics205Event] = currentEvent()
+
+  def ics205Event(): Option[Ics205Event] = currentEvent()
+
+  def ics205(): Ics205 = currentEvent().map(_.ics205).getOrElse(Ics205(incidentName = "", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+
+  def metadata(): Ics205Metadata = currentEvent().map(_.metadata).getOrElse(Ics205Metadata())
 
   def save(value: Ics205, refreshPrepared: Boolean = true): Unit = synchronized {
     save(value, None, refreshPrepared)
@@ -62,30 +292,27 @@ class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
   }
 
   def save(value: Ics205, userId: Option[UserId], refreshPrepared: Boolean): Unit = synchronized {
-    val preparedNow = if refreshPrepared then value.copy(prepared = LocalDateTime.now()) else value
-    val updatedMetadata = current.metadata.copy(
-      lastEditedBy = userId.orElse(current.metadata.lastEditedBy),
-      savedAt = Instant.now()
-    )
-    val updatedEvent = current.copy(ics205 = preparedNow, metadata = updatedMetadata)
-    fileHelper.save(fileName, updatedEvent)
-    current = updatedEvent
+    currentEvent() match
+      case Some(curr) =>
+        val updatedEvent = curr.copy(ics205 = value)
+        saveEvent(updatedEvent, userId, refreshPrepared)
+      case None =>
+        val name = if value.incidentName.trim.nonEmpty then value.incidentName.trim else "Event"
+        val newEvent = Ics205Event(name, value, Ics205Metadata())
+        saveEvent(newEvent, userId, refreshPrepared)
   }
 
-  def saveEvent(event: Ics205Event, refreshPrepared: Boolean = true): Unit = synchronized {
-    val preparedNow = if refreshPrepared then event.ics205.copy(prepared = LocalDateTime.now()) else event.ics205
-    val updatedMetadata = event.metadata.copy(savedAt = Instant.now())
-    val updatedEvent = event.copy(ics205 = preparedNow, metadata = updatedMetadata)
-    fileHelper.save(fileName, updatedEvent)
-    current = updatedEvent
-  }
-
-  def updateMetadata(f: Ics205Metadata => Ics205Metadata): Ics205Metadata = synchronized {
-    val updatedMetadata = f(current.metadata)
-    val updatedEvent = current.copy(metadata = updatedMetadata)
-    fileHelper.save(fileName, updatedEvent)
-    current = updatedEvent
-    updatedMetadata
+  def updateMetadata(f: Ics205Metadata => Ics205Metadata): Option[Ics205Metadata] = synchronized {
+    currentEvent() match
+      case Some(curr) =>
+        val updatedMetadata = f(curr.metadata)
+        val updatedEvent = curr.copy(metadata = updatedMetadata)
+        saveEvent(updatedEvent, refreshPrepared = false)
+        Some(updatedMetadata)
+      case None =>
+        val newEvent = Ics205Event("Event", Ics205(incidentName = "", operationalPeriod = OperationalPeriod(), channels = Seq.empty), f(Ics205Metadata()))
+        saveEvent(newEvent, refreshPrepared = false)
+        Some(newEvent.metadata)
   }
 
   def setUserPermission(userId: UserId, permission: Option[Permission]): Unit = synchronized {
@@ -98,4 +325,10 @@ class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
 
   def removeUserPermission(userId: UserId): Unit = synchronized {
     updateMetadata(_.withoutUserPermission(userId))
+  }
+
+  def reload(): Unit = synchronized {
+    eventsState = loadFromDisk()
+    if !activeEventName.exists(name => eventsState.exists(_.eventName.equalsIgnoreCase(name))) then
+      activeEventName = eventsState.headOption.map(_.eventName).filter(_.nonEmpty)
   }

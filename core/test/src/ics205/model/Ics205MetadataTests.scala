@@ -135,14 +135,10 @@ class Ics205MetadataTests extends munit.FunSuite:
     val decoded = decode[Ics205Event](json)
     assertEquals(decoded, Right(event))
 
-  test("Ics205Event decodes legacy plain Ics205 JSON"):
+  test("Ics205Event does not decode plain Ics205 JSON"):
     val legacyJson = basePlan.asJson.noSpaces
     val decoded = decode[Ics205Event](legacyJson)
-    assert(decoded.isRight)
-    val event = decoded.toOption.get
-    assertEquals(event.ics205.incidentName, basePlan.incidentName)
-    assertEquals(event.metadata.permissions, Map.empty)
-    assertEquals(event.metadata.lastEditedBy, None)
+    assert(decoded.isLeft)
 
   test("AuthorizationService.authorizeEvent checks event metadata permissions"):
     val meta = Ics205Metadata(permissions = Map(

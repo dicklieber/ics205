@@ -52,7 +52,12 @@ object RadioPage:
     simple("remarks")(_.remarks)
   )
 
-  def render(plan: Ics205, currentUser: Option[AuthenticatedUser] = None): String =
+  def render(
+    plan: Ics205,
+    currentUser: Option[AuthenticatedUser] = None,
+    currentEventName: Option[String] = None,
+    availableEvents: Seq[String] = Seq.empty
+  ): String =
     def field(label: String, value: String): Frag = div(cls := "radio-field")(dt(label), dd(value))
     doctype("html")(html(lang := "en")(
       head(
@@ -63,7 +68,12 @@ object RadioPage:
         link(rel := "stylesheet", href := "/css/radio.css")
       ),
       body(
-        NavigationBar.render(NavigationBar.ActivePage.Radio, currentUser),
+        NavigationBar.render(
+          activePage = NavigationBar.ActivePage.Radio,
+          currentUser = currentUser,
+          currentEventName = currentEventName,
+          availableEvents = availableEvents
+        ),
         div(cls := "radio-page")(
           header(
             h1("Radio")

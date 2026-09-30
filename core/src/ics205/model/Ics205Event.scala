@@ -23,9 +23,10 @@ import io.circe.{Codec, Decoder, Encoder, HCursor, Json, JsonObject}
 import io.circe.syntax.*
 
 case class Ics205Event(
+  eventName: String,
   ics205: Ics205,
   metadata: Ics205Metadata = Ics205Metadata()
-):
+) derives Codec.AsObject:
   def plan: Ics205 = ics205
 
   def permissionFor(user: User): Option[Permission] =
@@ -71,26 +72,8 @@ case class Ics205Event(
     metadata.isEdit(user)
 
 object Ics205Event:
-  given Codec.AsObject[Ics205Event] = Codec.AsObject.from(
-    (c: HCursor) => {
-      if c.downField("ics205").succeeded then
-        for
-          plan <- c.downField("ics205").as[Ics205]
-          meta <- c.downField("metadata").as[Option[Ics205Metadata]].map(_.getOrElse(Ics205Metadata()))
-        yield Ics205Event(plan, meta)
-      else if c.downField("plan").succeeded then
-        for
-          plan <- c.downField("plan").as[Ics205]
-          meta <- c.downField("metadata").as[Option[Ics205Metadata]].map(_.getOrElse(Ics205Metadata()))
-        yield Ics205Event(plan, meta)
-      else
-        c.as[Ics205].map(plan => Ics205Event(plan, Ics205Metadata()))
-    },
-    (e: Ics205Event) => JsonObject(
-      "ics205" -> e.ics205.asJson,
-      "metadata" -> e.metadata.asJson
-    )
-  )
+  def apply(ics205: Ics205, metadata: Ics205Metadata): Ics205Event =
+    Ics205Event(ics205.incidentName, ics205, metadata)
 
-type Ics205Wrapper = Ics205Event
-val Ics205Wrapper: Ics205Event.type = Ics205Event
+  def apply(ics205: Ics205): Ics205Event =
+    Ics205Event(ics205.incidentName, ics205, Ics205Metadata())

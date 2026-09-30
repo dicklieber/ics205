@@ -83,6 +83,8 @@ class ApplicationModuleTests extends munit.FunSuite:
   test("discovered endpoint groups are served by the web application"):
     val injector = Guice.createInjector(new ApplicationModule)
     val app = injector.getInstance(classOf[WebApplication]).httpApp
+    val store = injector.getInstance(classOf[Ics205Store])
+    store.saveEvent(ics205.model.Ics205Event("Main Event", ics205.model.Ics205(incidentName = "Incident Radio Communications Plan", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty)))
     val userStore = injector.getInstance(classOf[ics205.store.UserStore])
     val sessionStore = injector.getInstance(classOf[ics205.store.SessionStore])
     userStore.add(ics205.auth.User("admin", "hash", ics205.auth.RolePermissions.Admin, enabled = true, id = "test-id"))

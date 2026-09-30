@@ -80,3 +80,22 @@ class NavigationBarTests extends munit.FunSuite:
     val adminHtml = NavigationBar.render(activePage = NavigationBar.ActivePage.UserAdmin, currentUser = Some(adminUser)).render
     assert(adminHtml.contains("href=\"/admin/users\""))
     assert(adminHtml.contains("nav-link active"))
+
+    val eventsHtml = NavigationBar.render(activePage = NavigationBar.ActivePage.Events, currentUser = Some(adminUser)).render
+    assert(eventsHtml.contains("href=\"/events\""))
+    assert(eventsHtml.contains("nav-link active"))
+
+  test("NavigationBar renders event dropdown selector when available events are provided"):
+    val html = NavigationBar.render(
+      activePage = NavigationBar.ActivePage.Plan,
+      currentUser = Some(adminUser),
+      currentEventName = Some("Field Day"),
+      availableEvents = Seq("Field Day", "Marathon 2026")
+    ).render
+
+    assert(html.contains("Event:"))
+    assert(html.contains("Field Day"))
+    assert(html.contains("href=\"/events/select?name=Field+Day\""))
+    assert(html.contains("href=\"/events/select?name=Marathon+2026\""))
+    assert(html.contains("href=\"/events\""))
+    assert(html.contains("Manage Events"))

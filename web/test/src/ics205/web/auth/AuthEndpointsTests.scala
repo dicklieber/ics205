@@ -76,6 +76,7 @@ class AuthEndpointsTests extends munit.FunSuite:
       val session = sessionStore.create("u1")
 
       val icsStore = new ics205.store.Ics205Store(new FileHelper(tempDir))
+      icsStore.saveEvent(ics205.model.Ics205Event("Main Event", ics205.model.Ics205(incidentName = "Incident Radio Communications Plan", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty)))
       val indexEndpoints = new ics205.web.IndexEndpoints(icsStore, authService, security.config)
       val app = Http4sServerInterpreter[IO]().toRoutes(authEndpoints.endpoints ++ indexEndpoints.endpoints).orNotFound
 

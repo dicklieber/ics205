@@ -52,14 +52,16 @@ class Ics205StoreTests extends munit.FunSuite:
     preparedBy = Some(PreparedBy("Operator", Some("WA9NNN"))),
     prepared = now)
 
-  test("missing file loads a blank plan without writing it"):
+  test("missing file starts with no events"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
+      assertEquals(store.events().size, 0)
+      assertEquals(store.currentEvent(), None)
       assertEquals(store.ics205().incidentName, "")
       assertEquals(store.ics205().channels, Seq.empty)
       assertEquals(store.ics205().operationalPeriod.from, None)
       assertEquals(store.ics205().operationalPeriod.to, None)
-      assert(!os.exists(directory / "ics205.json"))
+      assert(!os.exists(directory / "events") && !os.exists(directory / "ics205.json"))
     }
 
   test("save updates memory and a new store loads all model fields"):
@@ -69,7 +71,9 @@ class Ics205StoreTests extends munit.FunSuite:
       val saved = store.ics205()
       assertEquals(saved.copy(prepared = plan.prepared), plan)
       assertEquals(new Ics205Store(helper(directory)).ics205(), saved)
-      os.write.over(directory / "ics205.json", "invalid json")
+      val eventFile = directory / "events" / "Test incident.json"
+      assert(os.exists(eventFile))
+      os.write.over(eventFile, "invalid json")
       assertEquals(store.ics205(), saved)
       assertEquals(new Ics205Store(helper(directory)).ics205().incidentName, "")
     }
@@ -83,7 +87,7 @@ class Ics205StoreTests extends munit.FunSuite:
         channels = Seq(plan.channels.head.copy(remarks = ""))
       )
       store.save(sparse)
-      val json = io.circe.parser.parse(os.read(directory / "ics205.json")).toOption.get
+      val json = io.circe.parser.parse(os.read(directory / "events" / "Test incident.json")).toOption.get
       val ics205Cursor = json.hcursor.downField("ics205")
       assert(!ics205Cursor.keys.get.toSet.contains("preparedBy"))
       assertEquals(ics205Cursor.downField("operationalPeriod").focus, Some(io.circe.Json.obj()))
@@ -121,27 +125,50 @@ class Ics205StoreTests extends munit.FunSuite:
       assertEquals(store.metadata().permissions.get("user-1"), None)
     }
 
-  test("legacy JSON with raw plan at root loads successfully"):
+  test("legacy ics205.json in base directory is ignored and not read"):
     withDirectory { directory =>
       val rawPlanJson = plan.asJson.noSpaces
       os.write(directory / "ics205.json", rawPlanJson)
       val store = new Ics205Store(helper(directory))
-      assertEquals(store.ics205().incidentName, plan.incidentName)
-      assertEquals(store.ics205().channels.size, plan.channels.size)
-      assertEquals(store.metadata().permissions, Map.empty)
+      assertEquals(store.events().size, 0)
+      assertEquals(store.currentEvent(), None)
+      assertEquals(store.ics205().incidentName, "")
+      assertEquals(store.ics205().channels, Seq.empty)
     }
 
-  test("undecodable JSON loads the default"):
+  test("raw plan JSON in events directory is not loaded as Ics205Event"):
     withDirectory { directory =>
-      os.write(directory / "ics205.json", "{}")
+      val rawPlanJson = plan.asJson.noSpaces
+      os.write(directory / "events" / "Drill.json", rawPlanJson, createFolders = true)
+      val store = new Ics205Store(helper(directory))
+      assertEquals(store.events().size, 0)
+      assertEquals(store.currentEvent(), None)
+    }
+
+  test("valid Ics205Event JSON in events directory loads successfully"):
+    withDirectory { directory =>
+      val event = Ics205Event("Drill", plan)
+      os.write(directory / "events" / "Drill.json", event.asJson.noSpaces, createFolders = true)
+      val store = new Ics205Store(helper(directory))
+      assertEquals(store.events().size, 1)
+      assertEquals(store.getEvent("Drill").map(_.eventName), Some("Drill"))
+      assertEquals(store.getEvent("Drill").map(_.ics205.incidentName), Some(plan.incidentName))
+    }
+
+  test("undecodable JSON in events directory loads the default"):
+    withDirectory { directory =>
+      os.write(directory / "events" / "corrupted.json", "{}", createFolders = true)
       assertEquals(new Ics205Store(helper(directory)).ics205().channels, Seq.empty)
     }
 
   test("failed save preserves the previous in-memory plan"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
+      val event = Ics205Event("Test incident", plan)
+      store.saveEvent(event)
       val original = store.ics205()
-      os.makeDir(directory / "ics205.json")
+      os.remove.all(directory / "events")
+      os.write(directory / "events", "not a directory")
       intercept[java.io.IOException] { store.save(plan) }
       assertEquals(store.ics205(), original)
     }
@@ -161,8 +188,12 @@ class Ics205StoreTests extends munit.FunSuite:
   test("event and ics205Event return full event and metadata"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
-      assertEquals(store.event().ics205.incidentName, "")
-      assertEquals(store.ics205Event().ics205.incidentName, "")
+      assertEquals(store.event(), None)
+      assertEquals(store.ics205Event(), None)
+      val event = Ics205Event("Test Event", plan)
+      store.saveEvent(event)
+      assertEquals(store.event().get.ics205.incidentName, "Test incident")
+      assertEquals(store.ics205Event().get.ics205.incidentName, "Test incident")
     }
 
   test("save overloads correctly handle refreshPrepared and userId variations"):
@@ -208,4 +239,80 @@ class Ics205StoreTests extends munit.FunSuite:
 
       store.setUserPermission("user-opt", None)
       assertEquals(store.metadata().permissions.get("user-opt"), None)
+    }
+
+  test("Ics205Store supports multiple events, lookup by eventName, adding and deleting events"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      val event1 = Ics205Event("Field Day", plan.copy(incidentName = "Field Day 2026"))
+      val event2 = Ics205Event("Marathon", plan.copy(incidentName = "City Marathon"))
+
+      store.saveEvent(event1)
+      store.saveEvent(event2)
+
+      assert(os.exists(directory / "events" / "Field Day.json"))
+      assert(os.exists(directory / "events" / "Marathon.json"))
+
+      assertEquals(store.events().size, 2)
+      assertEquals(store.listEvents().map(_.eventName), Seq("Field Day", "Marathon"))
+
+      val retrieved1 = store.getEvent("Field Day")
+      assert(retrieved1.isDefined)
+      assertEquals(retrieved1.get.ics205.incidentName, "Field Day 2026")
+
+      val retrieved2 = store.findByName("marathon")
+      assert(retrieved2.isDefined)
+      assertEquals(retrieved2.get.ics205.incidentName, "City Marathon")
+
+      // Switching active event
+      store.setCurrentEvent("Marathon")
+      assertEquals(store.currentEventName, Some("Marathon"))
+      assertEquals(store.ics205().incidentName, "City Marathon")
+
+      // Setting per-event user permission
+      store.setUserPermission("Field Day", "user-fd", ics205.auth.Permission.EditPlans)
+      assertEquals(store.getEvent("Field Day").get.metadata.permissions.get("user-fd"), Some(ics205.auth.Permission.EditPlans))
+      assertEquals(store.getEvent("Marathon").get.metadata.permissions.get("user-fd"), None)
+
+      // Persistence across reloads
+      val reloaded = new Ics205Store(helper(directory))
+      assertEquals(reloaded.events().size, 2)
+      assertEquals(reloaded.getEvent("Field Day").get.metadata.permissions.get("user-fd"), Some(ics205.auth.Permission.EditPlans))
+
+      // Delete event removes its file
+      assert(store.deleteEvent("Field Day"))
+      assert(!os.exists(directory / "events" / "Field Day.json"))
+      assert(os.exists(directory / "events" / "Marathon.json"))
+      assertEquals(store.events().size, 1)
+      assertEquals(store.getEvent("Field Day"), None)
+      assertEquals(store.getEvent("Marathon").isDefined, true)
+    }
+
+  test("each Ics205Event has its own file and event renaming cleans up old file"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      val event = Ics205Event("Alpha Event", plan.copy(incidentName = "Alpha Incident"))
+      store.saveEvent(event)
+      assert(os.exists(directory / "events" / "Alpha Event.json"))
+
+      // Rename event
+      assert(store.renameEvent("Alpha Event", "Beta Event").isRight)
+      assert(!os.exists(directory / "events" / "Alpha Event.json"))
+      assert(os.exists(directory / "events" / "Beta Event.json"))
+
+      val reloaded = new Ics205Store(helper(directory))
+      assertEquals(reloaded.events().size, 1)
+      assertEquals(reloaded.events().head.eventName, "Beta Event")
+    }
+
+  test("Ics205Store sanitizes special characters in event file names"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      val event = Ics205Event("Drill: North/South? <Special>", plan.copy(incidentName = "Special Drill"))
+      store.saveEvent(event)
+      assert(os.exists(directory / "events" / "Drill_ North_South_ _Special_.json"))
+
+      val reloaded = new Ics205Store(helper(directory))
+      assertEquals(reloaded.events().size, 1)
+      assertEquals(reloaded.getEvent("Drill: North/South? <Special>").isDefined, true)
     }
