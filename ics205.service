@@ -1,0 +1,63 @@
+[Unit]
+Description=ICS-205 Incident Radio Communications Plan Service
+Documentation=https://github.com/dlieber/ics205
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ics205
+Group=ics205
+
+# Directory layout and state management
+WorkingDirectory=/var/lib/ics205
+StateDirectory=ics205
+LogsDirectory=ics205
+ConfigurationDirectory=ics205
+
+# Environment configuration
+Environment="JAVA_HOME=/usr/lib/jvm/default-java"
+Environment="JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=true"
+Environment="JAR_PATH=/opt/ics205/ics205.jar"
+EnvironmentFile=-/etc/default/ics205
+EnvironmentFile=-/etc/ics205/ics205.env
+
+# Execution
+ExecStart=/usr/bin/env java $JAVA_OPTS -jar $JAR_PATH
+
+# Process management and restart policy
+Restart=on-failure
+RestartSec=5s
+StartLimitIntervalSec=60s
+StartLimitBurst=3
+TimeoutStopSec=30s
+KillMode=mixed
+
+# Resource limits
+LimitNOFILE=65536
+
+# Security hardening and sandboxing
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+MemoryDenyWriteExecute=false
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ics205
+
+[Install]
+WantedBy=multi-user.target

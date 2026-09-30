@@ -267,3 +267,91 @@ Inject `AuthSecurity` into your endpoint class.
 
      override val endpoints = List(configEndpoint)
    ```
+
+## Deployment
+
+### 1. Build Fat JAR (Assembly)
+
+To build a standalone executable fat JAR containing all compiled classes, dependencies, and web assets:
+
+```bash
+./mill web.assembly
+```
+
+The resulting fat JAR is output to:
+```text
+out/web/assembly.dest/out.jar
+```
+
+### 2. Linux Server Setup
+
+#### System Prerequisites
+- Java Runtime Environment (JRE/JDK 17 or 21+ LTS):
+  ```bash
+  # Debian / Ubuntu
+  sudo apt update && sudo apt install -y openjdk-21-jre-headless
+  ```
+
+#### Create Dedicated System User and Directories
+Create a dedicated system user and group without login shell privileges, along with installation and working directories:
+
+```bash
+sudo useradd --system --no-create-home --user-group --shell /usr/sbin/nologin ics205
+sudo mkdir -p /opt/ics205 /var/lib/ics205
+sudo cp out/web/assembly.dest/out.jar /opt/ics205/ics205.jar
+sudo chown -R ics205:ics205 /opt/ics205 /var/lib/ics205
+sudo chmod 750 /var/lib/ics205
+```
+
+### 3. Systemd Service Configuration
+
+A production-ready systemd service unit file is provided at `ics205.service`.
+
+1. Copy the service unit to `/etc/systemd/system/`:
+   ```bash
+   sudo cp ics205.service /etc/systemd/system/ics205.service
+   sudo chmod 644 /etc/systemd/system/ics205.service
+   ```
+
+2. (Optional) Customize environment variables by creating `/etc/default/ics205` or `/etc/ics205/ics205.env`:
+   ```bash
+   sudo mkdir -p /etc/ics205
+   sudo tee /etc/ics205/ics205.env > /dev/null << 'EOF'
+   JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=true
+   JAR_PATH=/opt/ics205/ics205.jar
+   EOF
+   sudo chmod 600 /etc/ics205/ics205.env
+   ```
+
+3. Initialize the admin user in the working directory before starting the service:
+   ```bash
+   sudo -u ics205 -s /bin/bash -c "cd /var/lib/ics205 && java -jar /opt/ics205/ics205.jar --create-user"
+   ```
+
+4. Reload systemd, enable, and start the service:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now ics205.service
+   ```
+
+### 4. Service Management and Monitoring
+
+- **Check status**:
+  ```bash
+  sudo systemctl status ics205.service
+  ```
+- **View live logs**:
+  ```bash
+  sudo journalctl -u ics205 -f
+  ```
+- **Restart service**:
+  ```bash
+  sudo systemctl restart ics205.service
+  ```
+
+### 5. Reverse Proxy and HTTPS Setup
+
+In production, place the application behind a reverse proxy (such as Nginx, Caddy, or Apache) with TLS/HTTPS enabled:
+- Configure proxy forwarding to `http://127.0.0.1:8080`.
+- Ensure `X-Forwarded-For` and `X-Forwarded-Proto` headers are preserved.
+- When serving over HTTPS, ensure `-Dauth.secureCookie=true` is set in `JAVA_OPTS` to enforce `Secure` attributes on session cookies.
