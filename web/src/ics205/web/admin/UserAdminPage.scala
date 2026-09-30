@@ -92,7 +92,7 @@ object UserAdminPage:
                           form(
                             method := "post",
                             action := "/admin/users/delete",
-                            onsubmit := s"return confirm('Are you sure you want to delete user \\'${user.username}\\'?');"
+                            attr("data-confirm") := s"Are you sure you want to delete user '${user.username}'?"
                           )(
                             input(tpe := "hidden", name := "id", value := user.id),
                             button(tpe := "submit", cls := "btn btn-danger btn-sm")("Delete")
@@ -188,7 +188,17 @@ object UserAdminPage:
                 )
               )
             )
-          )
+          ),
+          script(raw(
+            """document.addEventListener('submit', function(e) {
+              |  var form = e.target;
+              |  if (form && form.hasAttribute('data-confirm')) {
+              |    if (!confirm(form.getAttribute('data-confirm'))) {
+              |      e.preventDefault();
+              |    }
+              |  }
+              |});""".stripMargin
+          ))
         )
       )
     ).render

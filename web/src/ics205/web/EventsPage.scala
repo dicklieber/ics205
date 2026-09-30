@@ -137,7 +137,7 @@ object EventsPage:
                             form(
                               method := "post",
                               action := "/events/delete",
-                              onsubmit := s"return confirm('Are you sure you want to delete event \\'${ev.eventName}\\'?');"
+                              attr("data-confirm") := s"Are you sure you want to delete event '${ev.eventName}'?"
                             )(
                               input(tpe := "hidden", name := "eventName", value := ev.eventName),
                               button(tpe := "submit", cls := "btn btn-danger btn-sm")("Delete")
@@ -183,7 +183,17 @@ object EventsPage:
               )
             else
               span()
-          )
+          ),
+          script(raw(
+            """document.addEventListener('submit', function(e) {
+              |  var form = e.target;
+              |  if (form && form.hasAttribute('data-confirm')) {
+              |    if (!confirm(form.getAttribute('data-confirm'))) {
+              |      e.preventDefault();
+              |    }
+              |  }
+              |});""".stripMargin
+          ))
         )
       )
     ).render
