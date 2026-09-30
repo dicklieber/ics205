@@ -1,0 +1,25 @@
+@use "variables" as vars;
+@use "mixins" as mix;
+
+@mixin dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: vars.$spacing-md;
+  padding-bottom: 12px;
+  border-bottom: 1px solid vars.$color-border-light;
+
+  h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: vars.$color-text-main;
+  }
+}
+
+@mixin dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: vars.$spacing-sm;
+  margin-top: vars.$spacing-md;
+}

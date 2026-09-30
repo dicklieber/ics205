@@ -1,0 +1,49 @@
+@use "variables" as vars;
+@use "mixins" as mix;
+
+.admin-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: vars.$spacing-xl;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: vars.$spacing-xl;
+  padding-bottom: vars.$spacing-md;
+  border-bottom: 2px solid vars.$color-border;
+
+  h1 {
+    margin: 0;
+    color: vars.$color-text-main;
+    font-size: 24px;
+  }
+}
+
+.nav-links {
+  display: flex;
+  gap: vars.$spacing-md;
+
+  a {
+    color: vars.$color-primary;
+    text-decoration: none;
+    font-weight: 500;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.card {
+  @include mix.card-container;
+
+  h2 {
+    margin-top: 0;
+    margin-bottom: vars.$spacing-md;
+    color: vars.$color-text-main;
+    font-size: 18px;
+  }
+}

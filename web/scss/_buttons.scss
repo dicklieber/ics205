@@ -1,0 +1,22 @@
+@use "variables" as vars;
+@use "mixins" as mix;
+
+.btn {
+  @include mix.button-base;
+}
+
+.btn-primary {
+  @include mix.button-variant(vars.$color-primary, vars.$color-text-light, vars.$color-primary-hover);
+}
+
+.btn-secondary {
+  @include mix.button-variant(vars.$color-bg-page, vars.$color-text-body, vars.$color-border-light, vars.$color-border);
+}
+
+.btn-danger {
+  @include mix.button-variant(vars.$color-danger, vars.$color-text-light, vars.$color-danger-hover);
+}
+
+.btn-sm {
+  @include mix.button-sm;
+}

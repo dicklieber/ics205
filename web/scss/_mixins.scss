@@ -1,0 +1,114 @@
+@use "variables" as vars;
+
+// Focus state mixins
+@mixin focus-ring($border-color: vars.$color-primary-focus, $shadow-color: vars.$color-focus-ring) {
+  border-color: $border-color;
+  box-shadow: 0 0 0 3px $shadow-color;
+  outline: none;
+}
+
+@mixin focus-outline($color: vars.$color-focus-outline, $offset: 1px) {
+  outline: 2px solid $color;
+  outline-offset: $offset;
+}
+
+// Button mixins
+@mixin button-base {
+  display: inline-block;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+  border-radius: vars.$radius-sm;
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+@mixin button-variant($bg, $color, $hover-bg, $border-color: transparent) {
+  background-color: $bg;
+  color: $color;
+  @if $border-color != transparent {
+    border-color: $border-color;
+  }
+
+  &:hover,
+  &:focus {
+    background-color: $hover-bg;
+    color: $color;
+  }
+}
+
+@mixin button-sm {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+// Dialog mixins
+@mixin modal-dialog($max-width: 580px, $padding: 24px, $shadow: vars.$shadow-dialog) {
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-lg;
+  padding: $padding;
+  box-shadow: $shadow;
+  font-family: vars.$font-sans;
+  width: 90%;
+  max-width: $max-width;
+  background: vars.$color-bg-white;
+  color: vars.$color-text-main;
+  box-sizing: border-box;
+}
+
+@mixin dialog-backdrop($bg: vars.$backdrop-color) {
+  &::backdrop {
+    background: $bg;
+  }
+}
+
+// Table mixins
+@mixin table-base {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+@mixin table-scroll-container {
+  overflow-x: auto;
+  background: vars.$color-bg-white;
+}
+
+@mixin table-zebra($even-bg: vars.$color-bg-subtle-alt) {
+  tbody tr:nth-child(even) {
+    background-color: $even-bg;
+  }
+}
+
+// Status / Alert / Badge mixins
+@mixin alert-variant($bg, $color, $border) {
+  background-color: $bg;
+  color: $color;
+  border: 1px solid $border;
+}
+
+@mixin badge-variant($bg, $color) {
+  background-color: $bg;
+  color: $color;
+}
+
+// Card container mixin
+@mixin card-container {
+  background: vars.$color-bg-card;
+  border-radius: vars.$radius-md;
+  box-shadow: vars.$shadow-card;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+// Text wrapping utility
+@mixin text-wrap-break {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

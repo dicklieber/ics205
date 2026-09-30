@@ -1,0 +1,27 @@
+@use "variables" as vars;
+@use "mixins" as mix;
+@use "layout";
+@use "forms";
+@use "tables";
+@use "buttons";
+@use "status";
+
+body {
+  font-family: vars.$font-sans;
+  margin: 0;
+  padding: 0;
+  background-color: vars.$color-bg-page;
+  color: vars.$color-text-body;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.actions-cell {
+  display: flex;
+  gap: vars.$spacing-sm;
+
+  form {
+    display: inline;
+    margin: 0;
+  }
+}

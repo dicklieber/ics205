@@ -1,0 +1,230 @@
+@use "variables" as vars;
+@use "mixins" as mix;
+@use "dialogs" as dlg;
+
+.toolbar,
+.error {
+  margin-bottom: 12px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  flex-wrap: wrap;
+
+  button {
+    font-size: 10pt;
+  }
+}
+
+.error {
+  @include mix.alert-variant(vars.$color-error-bg, vars.$color-error-text, #ffcaca);
+  padding: 12px;
+}
+
+button {
+  cursor: pointer;
+  padding: 6px 10px;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+}
+
+.toolbar p,
+.row-toolbar p {
+  margin: 0;
+  font-size: 10pt;
+  font-weight: bold;
+  min-width: 14ch;
+}
+
+#status,
+#row-status,
+#clipboard-status {
+  min-width: 28ch;
+  font-weight: normal;
+}
+
+#plan-form .sheet {
+  box-shadow: 0 4px 16px #0003;
+}
+
+label {
+  display: block;
+  cursor: pointer;
+}
+
+input:not([type=hidden]),
+select,
+textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 2px;
+  font: inherit;
+  color: inherit;
+  border: 1px solid vars.$color-border-input;
+  border-radius: vars.$radius-xs;
+  background: vars.$color-bg-white;
+}
+
+input[readonly],
+textarea[readonly],
+select:disabled {
+  background-color: vars.$color-bg-page;
+  color: vars.$color-text-header;
+  cursor: default;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  @include mix.focus-outline(vars.$color-focus-outline, 1px);
+}
+
+textarea {
+  resize: vertical;
+}
+
+.field label {
+  font-size: 9pt;
+}
+
+.table-scroll {
+  @include mix.table-scroll-container;
+}
+
+.channels {
+  min-width: 1250px;
+
+  thead th:nth-child(1) { width: 44px; }
+  thead th:nth-child(2) { width: 72px; }
+  thead th:nth-child(3) { width: 100px; }
+  thead th:nth-child(4) { width: 140px; }
+  thead th:nth-child(5) { width: 105px; }
+  thead th:nth-child(6) { width: 105px; }
+  thead th:nth-child(7) { width: 95px; }
+  thead th:nth-child(8) { width: 95px; }
+  thead th:nth-child(9) { width: 62px; }
+  thead th:nth-child(10) { width: 95px; }
+  thead th:nth-child(11) { width: 220px; }
+  thead th:nth-child(12) { width: 88px; }
+
+  thead th:first-child,
+  .row-number {
+    text-align: center;
+  }
+
+  input[type=number] {
+    -moz-appearance: textfield;
+  }
+
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .row-controls {
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  td {
+    vertical-align: middle;
+  }
+
+  textarea {
+    display: block;
+    box-sizing: border-box;
+    overflow-y: hidden;
+    resize: none;
+  }
+}
+
+.ctcss-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  select {
+    font-size: 7pt;
+    padding: 1px 0;
+  }
+}
+
+.row-controls button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  line-height: 0;
+}
+
+.row-toolbar {
+  display: flex;
+  align-items: center;
+  gap: vars.$spacing-sm;
+  margin-top: vars.$spacing-sm;
+
+  button + button {
+    margin-left: 0;
+  }
+}
+
+.channel-numbers-dialog {
+  @include mix.modal-dialog(280px, 16px, vars.$shadow-dialog-sm);
+  @include mix.dialog-backdrop(vars.$backdrop-color-alt);
+  font: 10pt vars.$font-sans;
+  min-width: 280px;
+
+  h3 {
+    margin: 0 0 12px 0;
+    font-size: 11pt;
+  }
+
+  .dialog-body {
+    display: flex;
+    flex-direction: column;
+    gap: vars.$spacing-sm;
+    margin-bottom: vars.$spacing-md;
+
+    label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    input {
+      width: 80px;
+    }
+  }
+
+  .dialog-actions {
+    @include dlg.dialog-actions;
+    margin-top: 0;
+  }
+}
+
+.prepared-by > label {
+  flex: 1;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+@media print {
+  .toolbar,
+  .row-toolbar,
+  .channel-numbers-dialog,
+  .channels th:last-child,
+  .channels td:last-child,
+  #clipboard-status,
+  #row-status,
+  #status {
+    display: none !important;
+  }
+}

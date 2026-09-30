@@ -1,0 +1,27 @@
+@use "variables" as vars;
+@use "mixins" as mix;
+
+table.users-table {
+  @include mix.table-base;
+  font-size: 14px;
+
+  th,
+  td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid vars.$color-border;
+  }
+
+  th {
+    background-color: vars.$color-bg-subtle;
+    font-weight: 600;
+    color: vars.$color-text-header;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  tr:hover {
+    background-color: vars.$color-bg-subtle;
+  }
+}

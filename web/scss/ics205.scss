@@ -1,0 +1,212 @@
+@use "variables" as vars;
+@use "mixins" as mix;
+
+@page {
+  size: letter landscape;
+  margin: 0.45in;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: vars.$color-bg-app;
+  color: vars.$color-text-black;
+  font: 10pt vars.$font-print;
+}
+
+.sheet {
+  width: 10.1in;
+  margin: 24px auto;
+  padding: 0.12in 0;
+  background: vars.$color-bg-white;
+}
+
+h1 {
+  margin: 0 0 6px;
+  text-align: center;
+  text-transform: uppercase;
+  font-size: 15pt;
+}
+
+.form {
+  border: 2px solid vars.$color-border-black;
+}
+
+.metadata {
+  display: grid;
+  grid-template-columns: 32% 34% 34%;
+  border-bottom: 2px solid vars.$color-border-black;
+}
+
+.field {
+  padding: 4px 6px;
+  min-height: 0.65in;
+  line-height: 1.5;
+
+  & + .field {
+    border-left: 2px solid vars.$color-border-black;
+  }
+
+  strong {
+    display: block;
+  }
+}
+
+.period {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.value {
+  @include mix.text-wrap-break;
+}
+
+.incident-name {
+  font-size: 12pt;
+}
+
+.section-label {
+  padding: 4px 6px;
+}
+
+.channels {
+  @include mix.table-base;
+  table-layout: fixed;
+  font-size: 8pt;
+
+  th,
+  td {
+    border: 1px solid vars.$color-border-black;
+    padding: 4px;
+    overflow-wrap: anywhere;
+  }
+
+  th:first-child,
+  td:first-child {
+    border-left: 0;
+  }
+
+  th:last-child,
+  td:last-child {
+    border-right: 0;
+  }
+
+  th {
+    height: 0.5in;
+    font-weight: normal;
+    vertical-align: bottom;
+  }
+
+  td {
+    vertical-align: top;
+  }
+}
+
+.channel-row {
+  height: 0.45in;
+}
+
+.instructions {
+  min-height: 1.35in;
+  padding: 4px 6px;
+  border-top: 1px solid vars.$color-border-black;
+
+  .value {
+    margin-top: 6px;
+  }
+}
+
+.prepared-by {
+  display: flex;
+  flex-wrap: wrap;
+  gap: vars.$spacing-sm;
+  padding: 4px 6px;
+  border-top: 2px solid vars.$color-border-black;
+}
+
+.name-line {
+  flex: 1;
+}
+
+.signature {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+
+  .entry {
+    flex: 1;
+  }
+}
+
+.entry {
+  display: inline-block;
+  min-width: 60px;
+  border-bottom: 1px solid vars.$color-border-black;
+  overflow-wrap: anywhere;
+}
+
+.footer {
+  display: grid;
+  grid-template-columns: 20% 20% 60%;
+  border-top: 1px solid vars.$color-border-black;
+
+  > * {
+    padding: 4px 6px;
+
+    & + * {
+      border-left: 1px solid vars.$color-border-black;
+    }
+  }
+}
+
+@media screen {
+  .sheet {
+    box-shadow: vars.$shadow-sheet;
+    padding: 0.25in;
+    width: 10.6in;
+  }
+}
+
+@media print {
+  body {
+    background: vars.$color-bg-white;
+  }
+
+  .sheet {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    break-after: page;
+
+    &:last-child {
+      break-after: auto;
+    }
+  }
+
+  tr,
+  .metadata,
+  .prepared-by,
+  .footer {
+    break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+}
+
+.channels col:nth-child(1) { width: 3%; }
+.channels col:nth-child(2) { width: 5%; }
+.channels col:nth-child(3) { width: 9%; }
+.channels col:nth-child(4) { width: 14%; }
+.channels col:nth-child(5) { width: 8.5%; }
+.channels col:nth-child(6) { width: 8.5%; }
+.channels col:nth-child(7) { width: 8.5%; }
+.channels col:nth-child(8) { width: 8.5%; }
+.channels col:nth-child(9) { width: 4.5%; }
+.channels col:nth-child(10) { width: 8.5%; }
+.channels col:nth-child(11) { width: 22%; }

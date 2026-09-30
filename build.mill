@@ -1,6 +1,7 @@
 //| mvnDeps: [
 //|   "com.lihaoyi::mill-contrib-buildinfo:$MILL_VERSION",
-//|   "com.lihaoyi::mill-contrib-scoverage:$MILL_VERSION"
+//|   "com.lihaoyi::mill-contrib-scoverage:$MILL_VERSION",
+//|   "de.larsgrefer.sass:sass-embedded-host:3.7.3"
 //| ]
 
 /*
@@ -26,6 +27,7 @@ import mill.*
 import mill.contrib.buildinfo.BuildInfo
 import mill.contrib.scoverage.ScoverageModule
 import mill.scalalib.*
+import de.larsgrefer.sass.embedded.{SassCompiler, SassCompilerFactory}
 
 object core extends ScalaModule with BuildInfo with ScoverageModule:
   def scalaVersion = "3.7.4"
@@ -91,6 +93,30 @@ object web extends ScalaModule with ScoverageModule:
     mvn"com.lihaoyi::scalatags:0.13.1"
   )
   def mainClass = Some("ics205.web.Main")
+  def scssSources = Task.Sources(moduleDir / "scss")
+  def compileScss = Task {
+    val outDir = Task.dest / "css"
+    os.makeDir.all(outDir)
+    val compiler = SassCompilerFactory.bundled()
+    try {
+      for (srcRoot <- scssSources()) {
+        val srcDir = srcRoot.path
+        if (os.exists(srcDir)) {
+          for (file <- os.list(srcDir) if file.ext == "scss" && !file.last.startsWith("_")) {
+            val output = compiler.compileFile(file.toIO)
+            val targetCss = outDir / s"${file.baseName}.css"
+            os.write.over(targetCss, output.getCss)
+          }
+        }
+      }
+    } finally {
+      compiler.close()
+    }
+    PathRef(Task.dest)
+  }
+  def resources = Task {
+    super.resources() ++ Seq(compileScss())
+  }
   object test extends ScalaTests with TestModule.Munit with ScoverageTests:
     def mvnDeps = Seq(mvn"org.scalameta::munit:1.0.0")
     def forkArgs = Task { Seq("-Dics205.test=true") }

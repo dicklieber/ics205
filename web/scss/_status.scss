@@ -1,0 +1,38 @@
+@use "variables" as vars;
+@use "mixins" as mix;
+
+.alert {
+  padding: 12px 16px;
+  border-radius: vars.$radius-sm;
+  margin-bottom: vars.$spacing-lg;
+  font-size: 14px;
+}
+
+.alert-success {
+  @include mix.alert-variant(vars.$color-success-bg, vars.$color-success-text, vars.$color-success-border);
+}
+
+.alert-error {
+  @include mix.alert-variant(vars.$color-danger-bg, vars.$color-danger-text, vars.$color-danger-border);
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: vars.$radius-sm;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.badge-role {
+  @include mix.badge-variant(vars.$color-role-bg, vars.$color-role-text);
+  margin-right: vars.$spacing-xs;
+}
+
+.badge-active {
+  @include mix.badge-variant(vars.$color-success-bg, vars.$color-success-text);
+}
+
+.badge-disabled {
+  @include mix.badge-variant(vars.$color-danger-bg, vars.$color-danger-text);
+}
