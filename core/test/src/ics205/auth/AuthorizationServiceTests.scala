@@ -27,7 +27,7 @@ class AuthorizationServiceTests extends munit.FunSuite:
   test("admin has all system permissions"):
     assertEquals(AuthorizationService.authorize(admin, Permission.ViewUsers), Right(admin))
     assertEquals(AuthorizationService.authorize(admin, Permission.EditUsers), Right(admin))
-    assertEquals(AuthorizationService.authorize(admin, Permission.ConfigureSystem), Right(admin))
+    assertEquals(AuthorizationService.authorize(admin, Permission.Debug), Right(admin))
     assertEquals(AuthorizationService.authorize(admin, Permission.ViewPlans), Right(admin))
     assertEquals(AuthorizationService.authorize(admin, Permission.EditPlans), Right(admin))
 
@@ -35,7 +35,7 @@ class AuthorizationServiceTests extends munit.FunSuite:
     assertEquals(AuthorizationService.authorize(editor, Permission.ViewPlans), Right(editor))
     assertEquals(AuthorizationService.authorize(editor, Permission.EditPlans), Right(editor))
     assert(AuthorizationService.authorize(editor, Permission.ViewUsers).isLeft)
-    assert(AuthorizationService.authorize(editor, Permission.ConfigureSystem).isLeft)
+    assert(AuthorizationService.authorize(editor, Permission.Debug).isLeft)
 
   test("viewer and user have view permission but not edit permission"):
     assertEquals(AuthorizationService.authorize(viewer, Permission.ViewPlans), Right(viewer))

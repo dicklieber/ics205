@@ -39,6 +39,7 @@ trait SessionStore:
   def deleteAllForUser(userId: UserId): Unit
   def all(): Seq[Session]
   def cleanExpired(): Unit
+  def reload(): Unit = ()
 
 @Singleton
 class InMemJsonSessionStore @Inject()(fileHelper: FileHelper, config: AuthConfig) extends SessionStore with LazyLogging:
@@ -155,5 +156,15 @@ class InMemJsonSessionStore @Inject()(fileHelper: FileHelper, config: AuthConfig
 
   override def cleanExpired(): Unit = synchronized {
     if cleanExpiredInternal() then
+      persist()
+  }
+
+  override def reload(): Unit = synchronized {
+    sessions.clear()
+    val loaded = loadFromDisk()
+    val now = Instant.now()
+    val valid = loaded.filter(_.expiresAt.isAfter(now))
+    valid.foreach(s => sessions.put(s.id, s))
+    if valid.length != loaded.length then
       persist()
   }

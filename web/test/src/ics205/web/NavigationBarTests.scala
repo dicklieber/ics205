@@ -47,6 +47,8 @@ class NavigationBarTests extends munit.FunSuite:
     assert(html.contains("Log in"))
     assert(html.contains("Log out"))
     assert(!html.contains("User Management"))
+    assert(!html.contains("navbarDropdownDebug"))
+    assert(!html.contains("Reload Files"))
     assert(!html.contains("Logged in as:"))
 
   test("NavigationBar shows User Management when user has EditUsers permission"):
@@ -57,6 +59,19 @@ class NavigationBarTests extends munit.FunSuite:
     assert(html.contains("adminUser"))
     assert(html.contains("href=\"/logout\""))
     assert(!html.contains("href=\"/login\""))
+
+  test("NavigationBar shows Debug menu and Reload Files when user has Debug permission"):
+    val html = NavigationBar.render(activePage = NavigationBar.ActivePage.None, currentUser = Some(adminUser)).render
+    assert(html.contains("navbarDropdownDebug"))
+    assert(html.contains("Debug"))
+    assert(html.contains("Reload Files"))
+    assert(html.contains("href=\"/debug/reload-files\""))
+
+  test("NavigationBar hides Debug menu when user lacks Debug permission"):
+    val html = NavigationBar.render(activePage = NavigationBar.ActivePage.Radio, currentUser = Some(viewerUser)).render
+    assert(!html.contains("navbarDropdownDebug"))
+    assert(!html.contains("Reload Files"))
+    assert(!html.contains("href=\"/debug/reload-files\""))
 
   test("NavigationBar hides User Management when user lacks EditUsers permission"):
     val html = NavigationBar.render(activePage = NavigationBar.ActivePage.Radio, currentUser = Some(viewerUser)).render

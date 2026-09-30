@@ -93,7 +93,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       assert(body.contains("<select"))
       assert(body.contains("id=\"role\""))
       assert(body.contains("Role Permissions Reference:"))
-      assert(body.contains("ConfigureSystem, EditPlans, EditUsers, ViewPlans, ViewUsers"))
+      assert(body.contains("Debug, EditPlans, EditUsers, ViewPlans, ViewUsers"))
     }
 
   test("GET /admin/users?edit=<id> renders edit form with user details"):

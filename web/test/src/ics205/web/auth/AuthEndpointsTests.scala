@@ -293,14 +293,14 @@ class AuthEndpointsTests extends munit.FunSuite:
       val adminSession = sessionStore.create("u-admin")
       val editorSession = sessionStore.create("u-editor")
 
-      // Admin has ConfigureSystem permission
+      // Admin has Debug permission
       val adminRes = app.run(
         Request[IO](Method.GET, Uri.unsafeFromString("/admin-only"))
           .putHeaders(Header.Raw(CIString("Cookie"), s"session=${adminSession.id}"))
       ).unsafeRunSync()
       assertEquals(adminRes.status, Status.Ok)
 
-      // Editor does not have ConfigureSystem permission -> 403 Forbidden
+      // Editor does not have Debug permission -> 403 Forbidden
       val editorRes = app.run(
         Request[IO](Method.GET, Uri.unsafeFromString("/admin-only"))
           .putHeaders(Header.Raw(CIString("Cookie"), s"session=${editorSession.id}"))
@@ -364,7 +364,7 @@ class TestProtectedEndpoints @Inject()(security: AuthSecurity) extends ApiEndpoi
       .serverLogicSuccess(user => _ => IO.pure(s"${user.username}:${user.roles.mkString(",")}"))
 
   private val adminOnlyEndpoint =
-    security.authorizedEndpoint(Permission.ConfigureSystem)
+    security.authorizedEndpoint(Permission.Debug)
       .get
       .in("admin-only")
       .out(stringBody)

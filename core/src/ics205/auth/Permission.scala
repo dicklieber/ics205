@@ -23,7 +23,7 @@ import io.circe.{Codec, Decoder, Encoder}
 enum Permission:
   case ViewUsers
   case EditUsers
-  case ConfigureSystem
+  case Debug
   case ViewPlans
   case EditPlans
 
@@ -43,7 +43,7 @@ enum RolePermissions(val permissions: Set[Permission]):
   case Admin extends RolePermissions(Set(
     Permission.ViewUsers,
     Permission.EditUsers,
-    Permission.ConfigureSystem,
+    Permission.Debug,
     Permission.ViewPlans,
     Permission.EditPlans
   ))

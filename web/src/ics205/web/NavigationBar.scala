@@ -34,6 +34,7 @@ object NavigationBar:
     availableEvents: Seq[String] = Seq.empty
   ): Frag =
     val showUserAdmin = currentUser.exists(_.hasPermission(Permission.EditUsers))
+    val showDebug = currentUser.exists(_.hasPermission(Permission.Debug))
     val isExportActive = activePage == ActivePage.ExportRadio
     val isEventsActive = activePage == ActivePage.Events
 
@@ -130,6 +131,27 @@ object NavigationBar:
                 href := "/admin/users",
                 if activePage == ActivePage.UserAdmin then attr("aria-current") := "page" else cls := ""
               )("User Management")
+            )
+          else
+            span(),
+          if showDebug then
+            li(cls := "nav-item dropdown")(
+              a(
+                cls := "nav-link dropdown-toggle",
+                href := "#",
+                id := "navbarDropdownDebug",
+                attr("role") := "button",
+                attr("data-bs-toggle") := "dropdown",
+                attr("aria-expanded") := "false"
+              )("Debug"),
+              ul(cls := "dropdown-menu", attr("aria-labelledby") := "navbarDropdownDebug")(
+                li(
+                  a(
+                    cls := "dropdown-item",
+                    href := "/debug/reload-files"
+                  )("Reload Files")
+                )
+              )
             )
           else
             span()

@@ -258,7 +258,7 @@ Inject `AuthSecurity` into your endpoint class.
 2. **Requiring a permission**:
    ```scala
    class AdminEndpoints @Inject()(security: AuthSecurity) extends ApiEndpoints:
-     private val configEndpoint = security.authorizedEndpoint(Permission.ConfigureSystem)
+     private val configEndpoint = security.authorizedEndpoint(Permission.Debug)
        .post
        .in("config")
        .in(jsonBody[ConfigUpdate])
