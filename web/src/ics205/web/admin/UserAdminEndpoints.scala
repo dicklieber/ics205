@@ -20,7 +20,7 @@ package ics205.web.admin
 
 import cats.effect.IO
 import ics205.auth.{PasswordService, Permission, RolePermissions, User}
-import ics205.store.UserStore
+import ics205.store.{SessionStore, UserStore}
 import ics205.web.ApiEndpoints
 import ics205.web.auth.AuthSecurity
 import jakarta.inject.{Inject, Singleton}
@@ -34,6 +34,7 @@ import java.nio.charset.StandardCharsets
 @Singleton
 class UserAdminEndpoints @Inject()(
   userStore: UserStore,
+  sessionStore: SessionStore,
   passwordService: PasswordService,
   security: AuthSecurity
 ) extends ApiEndpoints:
@@ -79,7 +80,9 @@ class UserAdminEndpoints @Inject()(
           if username.isEmpty then
             (StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Username cannot be empty.")}")
           else if password.isEmpty then
-            (StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Password cannot be empty.")}")
+            (StatusCode.SeeOther, s"/admin/users?err=${ ("Password cannot be empty.")}")
+          else if password.length < 8 then
+            (StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Password must be at least 8 characters.")}")
           else
             val passwordHash = passwordService.hash(password)
             val newUser = User(
@@ -115,6 +118,8 @@ class UserAdminEndpoints @Inject()(
             (StatusCode.SeeOther, s"/admin/users?err=${urlEncode("User ID is missing.")}")
           else if username.isEmpty then
             (StatusCode.SeeOther, s"/admin/users?edit=${urlEncode(id)}&err=${urlEncode("Username cannot be empty.")}")
+          else if password.nonEmpty && password.length < 8 then
+            (StatusCode.SeeOther, s"/admin/users?edit=${urlEncode(id)}&err=${urlEncode("Password must be at least 8 characters.")}")
           else
             userStore.findById(id) match
               case None =>
@@ -129,6 +134,8 @@ class UserAdminEndpoints @Inject()(
                 )
                 userStore.update(updated) match
                   case Right(_) =>
+                    if password.nonEmpty || existing.role != role || !enabled then
+                      sessionStore.deleteAllForUser(existing.id)
                     (StatusCode.SeeOther, s"/admin/users?msg=${urlEncode(s"User '$username' updated successfully.")}")
                   case Left(err) =>
                     (StatusCode.SeeOther, s"/admin/users?edit=${urlEncode(id)}&err=${urlEncode(err)}")
@@ -145,6 +152,7 @@ class UserAdminEndpoints @Inject()(
         IO.blocking {
           val id = formData.getOrElse("id", "")
           if id.nonEmpty then
+            sessionStore.deleteAllForUser(id)
             userStore.delete(id)
             (StatusCode.SeeOther, s"/admin/users?msg=${urlEncode("User deleted successfully.")}")
           else

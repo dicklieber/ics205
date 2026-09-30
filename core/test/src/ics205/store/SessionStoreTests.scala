@@ -92,6 +92,25 @@ class SessionStoreTests extends munit.FunSuite:
       assertEquals(reloadedStore.find(session.id), None)
     }
 
+  test("cleanExpired and create purge expired sessions from memory and disk"):
+    withDirectory { dir =>
+      val shortLifetimeConfig = AuthConfig(sessionLifetime = Duration.ofMillis(10))
+      val store = new InMemJsonSessionStore(helper(dir), shortLifetimeConfig)
+      val s1 = store.create("user-1")
+      val s2 = store.create("user-2")
+      Thread.sleep(25) // Ensure both are expired
+
+      // cleanExpired removes expired sessions
+      store.cleanExpired()
+      assertEquals(store.all(), Seq.empty)
+
+      // Creating a new session also cleans up expired sessions
+      val s3 = store.create("user-3")
+      assertEquals(store.all().map(_.id), Seq(s3.id))
+      val freshStore = new InMemJsonSessionStore(helper(dir))
+      assertEquals(freshStore.all().map(_.id), Seq(s3.id))
+    }
+
   test("corrupted or malformed session JSON defaults gracefully to empty"):
     withDirectory { dir =>
       os.write(dir / "sessions.json", "{ not valid json }")

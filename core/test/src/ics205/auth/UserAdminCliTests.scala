@@ -78,7 +78,7 @@ class UserAdminCliTests extends munit.FunSuite:
       val out = new ByteArrayOutputStream()
       val err = new ByteArrayOutputStream()
       val exitCode = UserAdminCli.run(
-        args = Array("-u", "operator1", "--password", "oppass", "--role", "User"),
+        args = Array("-u", "operator1", "--password", "operatorpass", "--role", "User"),
         userStore = userStore,
         passwordService = passwordService,
         out = new PrintStream(out),
@@ -166,6 +166,22 @@ class UserAdminCliTests extends munit.FunSuite:
 
       assertEquals(exitCode, 1)
       assert(err.toString.contains("Password cannot be empty"))
+    }
+
+  test("UserAdminCli rejects passwords shorter than 8 characters"):
+    withTempStore { (userStore, passwordService) =>
+      val out = new ByteArrayOutputStream()
+      val err = new ByteArrayOutputStream()
+      val exitCode = UserAdminCli.run(
+        args = Array("--username", "validuser", "--password", "short"),
+        userStore = userStore,
+        passwordService = passwordService,
+        out = new PrintStream(out),
+        err = new PrintStream(err)
+      )
+
+      assertEquals(exitCode, 1)
+      assert(err.toString.contains("Password must be at least 8 characters"))
     }
 
   test("UserAdminCli fails on duplicate username"):

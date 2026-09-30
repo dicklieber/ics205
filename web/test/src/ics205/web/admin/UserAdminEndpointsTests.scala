@@ -43,7 +43,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       val passwordService = new ScalaPassPasswordService()
       val authService = new AuthenticationService(userStore, passwordService, sessionStore)
       val security = new AuthSecurity(authService, config)
-      val adminEndpoints = new UserAdminEndpoints(userStore, passwordService, security)
+      val adminEndpoints = new UserAdminEndpoints(userStore, sessionStore, passwordService, security)
 
       val allServerEndpoints: List[ServerEndpoint[Any, IO]] = adminEndpoints.endpoints
       val httpApp = Http4sServerInterpreter[IO]().toRoutes(allServerEndpoints).orNotFound
@@ -173,16 +173,49 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       val res2 = app.run(req2).unsafeRunSync()
       assertEquals(res2.status, Status.SeeOther)
       assert(res2.headers.get(CIString("Location")).get.head.value.contains("err="))
+
+      val formShortPass = UrlForm("username" -> "testuser", "password" -> "short")
+      val req3 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+        .withEntity(formShortPass)
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val res3 = app.run(req3).unsafeRunSync()
+      assertEquals(res3.status, Status.SeeOther)
+      assert(res3.headers.get(CIString("Location")).get.head.value.contains("err="))
     }
 
-  test("POST /admin/users/edit updates user roles, enabled state, and optionally password"):
+  test("POST /admin/users/edit rejects short passwords when updated"):
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("originalpass")
       userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
       userStore.add(User("alice", hash, RolePermissions.User, enabled = true, id = "u-edit"))
       val session = authService.authenticate("admin", "originalpass").get
 
-      // Update without password change
+      val editForm = UrlForm(
+        "id" -> "u-edit",
+        "username" -> "alice",
+        "password" -> "short",
+        "role" -> "user",
+        "enabled" -> "true"
+      )
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
+        .withEntity(editForm)
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val res = app.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+      assert(res.headers.get(CIString("Location")).get.head.value.contains("err="))
+    }
+
+  test("POST /admin/users/edit updates user roles, enabled state, and optionally password, revoking active sessions"):
+    withContext { (_, userStore, sessionStore, passwordService, authService, _, _, app) =>
+      val hash = passwordService.hash("originalpass")
+      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("alice", hash, RolePermissions.User, enabled = true, id = "u-edit"))
+      val adminSession = authService.authenticate("admin", "originalpass").get
+      val aliceSession1 = authService.authenticate("alice", "originalpass").get
+
+      assert(sessionStore.find(aliceSession1.id).isDefined)
+
+      // Update role/enabled -> revokes alice sessions
       val editForm1 = UrlForm(
         "id" -> "u-edit",
         "username" -> "alice_updated",
@@ -192,7 +225,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       )
       val req1 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
         .withEntity(editForm1)
-        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${adminSession.id}"))
       val res1 = app.run(req1).unsafeRunSync()
       assertEquals(res1.status, Status.SeeOther)
 
@@ -201,8 +234,14 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       assertEquals(u1.role, RolePermissions.Editor)
       assertEquals(u1.enabled, false)
       assertEquals(u1.passwordHash, hash) // Hash preserved
+      assertEquals(sessionStore.find(aliceSession1.id), None) // Alice session revoked
 
-      // Update with new password
+      // Create new session for alice (after re-enabling)
+      userStore.update(u1.copy(enabled = true))
+      val aliceSession2 = authService.authenticate("alice_updated", "originalpass").get
+      assert(sessionStore.find(aliceSession2.id).isDefined)
+
+      // Update with new password -> revokes alice sessions
       val editForm2 = UrlForm(
         "id" -> "u-edit",
         "username" -> "alice_updated",
@@ -212,7 +251,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       )
       val req2 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
         .withEntity(editForm2)
-        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${adminSession.id}"))
       val res2 = app.run(req2).unsafeRunSync()
       assertEquals(res2.status, Status.SeeOther)
 
@@ -220,14 +259,18 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       assertEquals(u2.role, RolePermissions.Admin)
       assertEquals(u2.enabled, true)
       assert(passwordService.verify("newsecret456", u2.passwordHash))
+      assertEquals(sessionStore.find(aliceSession2.id), None) // Alice session revoked
     }
 
-  test("POST /admin/users/delete deletes the specified user"):
-    withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
+  test("POST /admin/users/delete deletes the specified user and revokes active sessions"):
+    withContext { (_, userStore, sessionStore, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
       userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
       userStore.add(User("delete_me", hash, RolePermissions.User, enabled = true, id = "u-del"))
       val session = authService.authenticate("admin", "password").get
+      val delSession = authService.authenticate("delete_me", "password").get
+
+      assert(sessionStore.find(delSession.id).isDefined)
 
       val form = UrlForm("id" -> "u-del")
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/delete"))
@@ -237,4 +280,5 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       val res = app.run(req).unsafeRunSync()
       assertEquals(res.status, Status.SeeOther)
       assert(userStore.findById("u-del").isEmpty)
+      assertEquals(sessionStore.find(delSession.id), None)
     }

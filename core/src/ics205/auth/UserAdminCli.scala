@@ -118,6 +118,10 @@ object UserAdminCli:
       err.println("Error: Password cannot be empty.")
       return 1
 
+    if password.length < 8 then
+      err.println("Error: Password must be at least 8 characters.")
+      return 1
+
     val hash = passwordService.hash(password)
     val user = User(
       username = username,

@@ -99,7 +99,17 @@ class InMemJsonSessionStore @Inject()(fileHelper: FileHelper, config: AuthConfig
       if os.exists(tempPath) then
         try os.remove(tempPath) catch case _: Exception => ()
 
+  private def cleanExpiredInternal(): Boolean =
+    val now = Instant.now()
+    val expired = sessions.filter(_._2.expiresAt.isBefore(now)).keys.toList
+    if expired.nonEmpty then
+      expired.foreach(sessions.remove)
+      true
+    else
+      false
+
   override def create(userId: UserId): Session = synchronized {
+    cleanExpiredInternal()
     val now = Instant.now()
     val expiresAt = now.plus(config.sessionLifetime)
     val session = Session(
@@ -144,9 +154,6 @@ class InMemJsonSessionStore @Inject()(fileHelper: FileHelper, config: AuthConfig
   }
 
   override def cleanExpired(): Unit = synchronized {
-    val now = Instant.now()
-    val expired = sessions.filter(_._2.expiresAt.isBefore(now)).keys.toList
-    if expired.nonEmpty then
-      expired.foreach(sessions.remove)
+    if cleanExpiredInternal() then
       persist()
   }
