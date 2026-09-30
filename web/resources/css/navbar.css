@@ -212,8 +212,140 @@
     text-decoration: none;
 }
 
+/* About Dialog */
+.about-dialog {
+    border: 1px solid #dfe1e6;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 12px 32px rgba(9, 30, 66, 0.25);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    width: 90%;
+    max-width: 580px;
+    background: #ffffff;
+    color: #172b4d;
+    box-sizing: border-box;
+}
+
+.about-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.about-dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #ebecf0;
+}
+
+.about-dialog-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #172b4d;
+}
+
+.about-close-x {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: #6b778c;
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+.about-close-x:hover,
+.about-close-x:focus {
+    color: #172b4d;
+}
+
+.about-dialog-body {
+    max-height: 65vh;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+.about-section {
+    margin-bottom: 16px;
+}
+
+.about-section:last-child {
+    margin-bottom: 0;
+}
+
+.about-section h4 {
+    margin: 0 0 8px 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #42526e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.about-dl {
+    display: flex;
+    flex-direction: column;
+    margin: 0 0 8px 0;
+    padding: 0;
+    font-size: 0.9rem;
+}
+
+.about-field {
+    display: flex;
+    flex-direction: row;
+    padding: 4px 8px;
+    border-bottom: 1px solid #f4f5f7;
+}
+
+.about-field dt {
+    width: 42%;
+    min-width: 140px;
+    font-weight: 500;
+    color: #5e6c84;
+    margin: 0;
+    padding: 0;
+}
+
+.about-field dd {
+    width: 58%;
+    margin: 0;
+    padding: 0;
+    color: #172b4d;
+    word-break: break-all;
+    font-family: SFMono-Medium, "SF Mono", "Segoe UI Mono", "Roboto Mono", Menlo, Consolas, Courier, monospace;
+    font-size: 0.85rem;
+}
+
+.about-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 12px;
+    border-top: 1px solid #ebecf0;
+}
+
+.about-dialog-actions .btn {
+    display: inline-block;
+    padding: 6px 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border-radius: 4px;
+    border: 1px solid #0052cc;
+    background-color: #0052cc;
+    color: #ffffff;
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.1s ease;
+}
+
+.about-dialog-actions .btn:hover,
+.about-dialog-actions .btn:focus {
+    background-color: #0065ff;
+}
+
 @media print {
-    .navbar {
+    .navbar, .about-dialog {
         display: none !important;
     }
 }

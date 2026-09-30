@@ -18,7 +18,9 @@
 
 package ics205.web
 
+import ics205.BuildInfo
 import ics205.auth.{AuthenticatedUser, RolePermissions}
+import ics205.util.FileHelper
 
 class NavigationBarTests extends munit.FunSuite:
 
@@ -114,3 +116,47 @@ class NavigationBarTests extends munit.FunSuite:
     assert(html.contains("href=\"/events/select?name=Marathon+2026\""))
     assert(html.contains("href=\"/events\""))
     assert(html.contains("Manage Events"))
+
+  test("NavigationBar renders About menu item and dialog with BuildInfo, FileHelper directory, and Java info"):
+    val tempDir = os.temp.dir(prefix = "nav-test-")
+    try
+      val helper = new FileHelper(tempDir)
+      val html = NavigationBar.render(
+        activePage = NavigationBar.ActivePage.Plan,
+        currentUser = Some(adminUser),
+        fileHelper = helper
+      ).render
+
+      // About menu item
+      assert(html.contains("id=\"navbarAbout\""))
+      assert(html.contains(">About</a>"))
+
+      // About dialog presence and close trigger
+      assert(html.contains("<dialog id=\"about-dialog\" class=\"about-dialog\""))
+      assert(html.contains(s"About ${BuildInfo.name}"))
+      assert(html.contains("id=\"about-dialog-close\""))
+      assert(html.contains("id=\"about-dialog-close-x\""))
+
+      // All fields from BuildInfo
+      assert(html.contains("<dt>name</dt><dd>ICS-205</dd>"))
+      assert(html.contains(s"<dt>appName</dt><dd>${BuildInfo.appName}</dd>"))
+      assert(html.contains(s"<dt>productName</dt><dd>${BuildInfo.productName}</dd>"))
+      assert(html.contains(s"<dt>version</dt><dd>${BuildInfo.version}</dd>"))
+      assert(html.contains(s"<dt>scalaVersion</dt><dd>${BuildInfo.scalaVersion}</dd>"))
+      assert(html.contains(s"<dt>millVersion</dt><dd>${BuildInfo.millVersion}</dd>"))
+
+      // ics205.util.FileHelper.directory
+      assert(html.contains("<dt>ics205.util.FileHelper.directory</dt>"))
+      assert(html.contains(s"<dd>${tempDir.toString}</dd>"))
+
+      // Java version info
+      assert(html.contains("<dt>java.version</dt>"))
+      assert(html.contains(s"<dd>${System.getProperty("java.version")}</dd>"))
+      assert(html.contains("<dt>java.vendor</dt>"))
+      assert(html.contains(s"<dd>${System.getProperty("java.vendor")}</dd>"))
+      assert(html.contains("<dt>java.vm.name</dt>"))
+      assert(html.contains(s"<dd>${System.getProperty("java.vm.name")}</dd>"))
+      assert(html.contains("<dt>java.home</dt>"))
+      assert(html.contains(s"<dd>${System.getProperty("java.home")}</dd>"))
+    finally
+      os.remove.all(tempDir)
