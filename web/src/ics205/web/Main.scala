@@ -64,7 +64,7 @@ class WebApplication @Inject() (endpointsSet: java.util.Set[ApiEndpoints]) exten
 
   def run: IO[Unit] =
     EmberServerBuilder.default[IO]
-      .withHost(host"localhost")
+bib      .withHost(ipv4"0.0.0.0")
       .withPort(port"8080")
       .withHttpApp(httpApp)
       .build
