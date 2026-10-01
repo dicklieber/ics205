@@ -18,9 +18,12 @@
 
 package ics205.exporter
 
+object TestDiscoveredRadio extends RadioExport:
+  val definition: RadioExportDefinition = StandardRadioFormats.base.copy(name = "Test Mock Radio")
+
 class RadioExportDefinitionsTests extends munit.FunSuite:
 
-  test("RadioExportDefinitions contains registered definitions"):
+  test("RadioExportDefinitions discovers implementations via ClassGraph automatically"):
     val definitions = new RadioExportDefinitions()
     val list = definitions.listDefinitions
     assert(list.nonEmpty, "Definitions list should not be empty")
@@ -28,6 +31,7 @@ class RadioExportDefinitionsTests extends munit.FunSuite:
     assert(list.contains("Yaesu FTM-500"), s"Expected 'Yaesu FTM-500' in $list")
     assert(list.contains("Yaesu FTM-510"), s"Expected 'Yaesu FTM-510' in $list")
     assert(list.contains("Icom ID-52Plus"), s"Expected 'Icom ID-52Plus' in $list")
+    assert(list.contains("Test Mock Radio"), s"Expected 'Test Mock Radio' discovered in $list")
     assertEquals(list, list.sorted)
 
   test("RadioExportDefinitions.get retrieves definition by exact name"):
@@ -37,6 +41,7 @@ class RadioExportDefinitionsTests extends munit.FunSuite:
     assertEquals(definitions.get("Yaesu FTM-500").name, "Yaesu FTM-500")
     assertEquals(definitions.get("Yaesu FTM-510").name, "Yaesu FTM-510")
     assertEquals(definitions.get("Icom ID-52Plus").name, "Icom ID-52Plus")
+    assertEquals(definitions.get("Test Mock Radio").name, "Test Mock Radio")
 
   test("RadioExportDefinitions.get throws IllegalArgumentException for unknown definition"):
     val definitions = new RadioExportDefinitions()

@@ -53,7 +53,7 @@ object StandardRadioFormats:
     )
   )
 
-object KenwoodTHD75:
+object KenwoodTHD75 extends RadioExport:
   val definition: RadioExportDefinition = StandardRadioFormats.base
     .copy(name = "Kenwood TH-D75")
     .overrideColumn(
@@ -61,7 +61,7 @@ object KenwoodTHD75:
       RadioColumn.direction(CsvColumn.OffsetDirection, minus = "Minus", simplex = "Simplex", plus = "Plus")
     )
 
-object YaesuFTM510:
+object YaesuFTM510 extends RadioExport:
   val definition: RadioExportDefinition = StandardRadioFormats.base
     .copy(name = "Yaesu FTM-510")
     .overrideColumn(
@@ -90,10 +90,10 @@ object YaesuFTM510:
     .insertAfter(CsvColumn.Step, RadioColumn.const(CsvColumn.ClockShift, "N"))
     .insertAfter(CsvColumn.ClockShift, RadioColumn.const(CsvColumn.MemoryGroup, "N"))
 
-object YaesuFTM500:
+object YaesuFTM500 extends RadioExport:
   val definition: RadioExportDefinition = YaesuFTM510.definition.copy(name = "Yaesu FTM-500")
 
-object IcomID52Plus:
+object IcomID52Plus extends RadioExport:
   val definition: RadioExportDefinition = StandardRadioFormats.base
     .copy(name = "Icom ID-52Plus")
     .insertAfter(CsvColumn.ChannelNumber, RadioColumn.const(CsvColumn.Bank, "1"))

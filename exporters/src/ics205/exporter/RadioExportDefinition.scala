@@ -151,6 +151,11 @@ case class RadioExportDefinition(
       val (front, back) = columns.splitAt(idx + 1)
       copy(columns = front ++ List(newCol) ++ back)
 
+trait RadioExportDefinitionProvider:
+  def definition: RadioExportDefinition
+
+type RadioExport = RadioExportDefinitionProvider
+
 trait RadioChannelNameBuilder:
   def apply(ics205Channel: Ics205Channel): String
 
