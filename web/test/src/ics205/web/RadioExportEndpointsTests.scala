@@ -168,6 +168,28 @@ class RadioExportEndpointsTests extends munit.FunSuite:
       assert(body.contains("146.520"))
     }
 
+  test("Save CSV File downloads CSV using the selected header option"):
+    withContext { (_, userStore, _, store, authService, _, app) =>
+      userStore.add(User("csvuser", new ScalaPassPasswordService().hash("password"), RolePermissions.User, enabled = true, id = "csv-user"))
+      val session = authService.authenticate("csvuser", "password").get
+      val exporter = new RadioExporter(new RadioExportDefinitions())
+      Seq(true, false).foreach { includeHeader =>
+        val fields = Map("definition" -> "Kenwood TH-D75", "download" -> "true") ++
+          (if includeHeader then Map("includeHeader" -> "true") else Map.empty[String, String])
+        val req = Request[IO](Method.POST, Uri.unsafeFromString("/export/radio"))
+          .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+          .withEntity(UrlForm(fields.toSeq*))
+        val (res, body) = (for
+          r <- app.run(req)
+          b <- r.as[String]
+        yield (r, b)).unsafeRunSync()
+        assertEquals(res.status, Status.Ok)
+        assertEquals(res.headers.get(CIString("Content-Type")).map(_.head.value), Some("text/csv; charset=utf-8"))
+        assertEquals(res.headers.get(CIString("Content-Disposition")).map(_.head.value), Some("attachment; filename=\"Wildfire Incident_Kenwood TH-D75.json\""))
+        assertEquals(body, exporter.generateCsv("Kenwood TH-D75", store.ics205(), includeHeader))
+      }
+    }
+
   test("PDF export requires a valid session"):
     withContext { (_, _, _, _, _, _, app) =>
       Seq(None, Some("invalid-session")).foreach { session =>

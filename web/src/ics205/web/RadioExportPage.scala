@@ -117,10 +117,14 @@ object RadioExportPage:
                   )
                 ),
 
-                div(style := "margin-top: 24px;")(
+                div(style := "margin-top: 24px; display: flex; gap: 8px; flex-wrap: wrap;")(
                   button(tpe := "submit", cls := "btn btn-primary", id := "generate-button")(
                     "Generate CSV"
-                  )
+                  ),
+                  button(
+                    tpe := "submit", cls := "btn btn-primary", id := "save-csv-button",
+                    name := "download", value := "true"
+                  )("Save CSV File")
                 )
               )
             ),

@@ -110,12 +110,12 @@ class RadioExportEndpoints @Inject()(
     .in(cookie[Option[String]]("ics205_event"))
     .in(query[Option[String]]("event"))
     .in(formBody[Map[String, String]])
-    .out(statusCode.and(header[Option[String]]("Location")).and(htmlBodyUtf8))
+    .out(statusCode.and(header[Option[String]]("Location")).and(header[String]("Content-Type")).and(header[Option[String]]("Content-Disposition")).and(stringBody))
     .serverLogicSuccess[IO] { (sessionIdOpt, eventCookieOpt, eventQueryOpt, formData) =>
       IO.blocking {
         sessionIdOpt.flatMap(id => authService.authenticateSession(id).toOption) match
           case None =>
-            (StatusCode.SeeOther, Some("/login"), "")
+            (StatusCode.SeeOther, Some("/login"), "text/html; charset=utf-8", None, "")
           case Some(user) =>
             val targetName = formData.get("eventName").filter(_.nonEmpty)
               .orElse(eventQueryOpt.filter(_.nonEmpty))
@@ -124,10 +124,10 @@ class RadioExportEndpoints @Inject()(
 
             currentEventOpt match
               case None =>
-                (StatusCode.SeeOther, Some("/events"), "")
+                (StatusCode.SeeOther, Some("/events"), "text/html; charset=utf-8", None, "")
               case Some(currentEvent) =>
                 if !currentEvent.canView(user) && user.role != RolePermissions.Admin then
-                  (StatusCode.Forbidden, None, "You do not have permission to view this radio plan.")
+                  (StatusCode.Forbidden, None, "text/html; charset=utf-8", None, "You do not have permission to view this radio plan.")
                 else
                   val plan = currentEvent.ics205
                   val defsList = definitions.listDefinitions
@@ -146,7 +146,7 @@ class RadioExportEndpoints @Inject()(
                       currentEventName = Some(currentEvent.eventName),
                       availableEvents = authorizedEvents.map(_.eventName)
                     )
-                    (StatusCode.Ok, None, html)
+                    (StatusCode.Ok, None, "text/html; charset=utf-8", None, html)
                   else
                     try
                       val csv = radioExporter.generateCsv(defName, plan, incHeader)
@@ -160,7 +160,13 @@ class RadioExportEndpoints @Inject()(
                         currentEventName = Some(currentEvent.eventName),
                         availableEvents = authorizedEvents.map(_.eventName)
                       )
-                      (StatusCode.Ok, None, html)
+                      if formData.get("download").contains("true") then
+                        val exportName = definitions.get(defName).name
+                        val filename = s"${currentEvent.eventName}_${exportName}.json"
+                          .replaceAll("""[\\/:*?"<>|\p{Cntrl}]""", "_")
+                        (StatusCode.Ok, None, "text/csv; charset=utf-8", Some(s"""attachment; filename="$filename""""), csv)
+                      else
+                        (StatusCode.Ok, None, "text/html; charset=utf-8", None, html)
                     catch
                       case ex: Exception =>
                         val html = RadioExportPage.render(
@@ -174,7 +180,7 @@ class RadioExportEndpoints @Inject()(
                           currentEventName = Some(currentEvent.eventName),
                           availableEvents = authorizedEvents.map(_.eventName)
                         )
-                        (StatusCode.Ok, None, html)
+                        (StatusCode.Ok, None, "text/html; charset=utf-8", None, html)
       }
     }
 
