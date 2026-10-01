@@ -54,7 +54,7 @@ class RadioExportDefinitionTests extends munit.FunSuite:
     val defn = decoded.toOption.get
     assertEquals(defn.name, "Kenwood TH-D75")
     assertEquals(defn.fields.length, 24)
-    assertEquals(defn.fields.head.headerName, "")
+    assertEquals(defn.fields.head.headerName, "Channel Number")
     assertEquals(defn.fields.head.value, FieldValue.FromChannel(ChannelField.ChannelNumber))
 
   test("FTM-510.json resource decodes to valid RadioExportDefinition"):
@@ -65,5 +65,16 @@ class RadioExportDefinitionTests extends munit.FunSuite:
     val defn = decoded.toOption.get
     assertEquals(defn.name, "Yaesu FTM-510")
     assertEquals(defn.fields.length, 21)
-    assertEquals(defn.fields.head.headerName, "")
+    assertEquals(defn.fields.head.headerName, "Channel Number")
+    assertEquals(defn.fields.head.value, FieldValue.FromChannel(ChannelField.ChannelNumber))
+
+  test("ID-52Plus.json resource decodes to valid RadioExportDefinition"):
+    val source = scala.io.Source.fromResource("ID-52Plus.json")
+    val json = try source.mkString finally source.close()
+    val decoded = decode[RadioExportDefinition](json)
+    assert(decoded.isRight, s"Failed to decode ID-52Plus.json: $decoded")
+    val defn = decoded.toOption.get
+    assertEquals(defn.name, "Icom ID-52Plus")
+    assertEquals(defn.fields.length, 24)
+    assertEquals(defn.fields.head.headerName, "Channel Number")
     assertEquals(defn.fields.head.value, FieldValue.FromChannel(ChannelField.ChannelNumber))

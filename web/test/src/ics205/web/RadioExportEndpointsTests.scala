@@ -185,7 +185,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
         yield (r, b)).unsafeRunSync()
         assertEquals(res.status, Status.Ok)
         assertEquals(res.headers.get(CIString("Content-Type")).map(_.head.value), Some("text/csv; charset=utf-8"))
-        assertEquals(res.headers.get(CIString("Content-Disposition")).map(_.head.value), Some("attachment; filename=\"Wildfire Incident_Kenwood TH-D75.json\""))
+        assertEquals(res.headers.get(CIString("Content-Disposition")).map(_.head.value), Some("attachment; filename=\"Wildfire Incident_Kenwood TH-D75.csv\""))
         assertEquals(body, exporter.generateCsv("Kenwood TH-D75", store.ics205(), includeHeader))
       }
     }

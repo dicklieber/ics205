@@ -34,6 +34,8 @@ case class Frequency(mhz: BigDecimal) derives Codec.AsObject:
   def +(other: Frequency): Frequency = Frequency(mhz + other.mhz)
   def -(other: Frequency): Frequency = Frequency(mhz - other.mhz)
   override def toString: String = mhz.toString
+  
+  def abs:Frequency = Frequency(mhz.abs)
 
 case class FrequencyRange(start: Frequency, end: Frequency):
   def contains(frequency: Frequency): Boolean =

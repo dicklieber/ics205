@@ -162,7 +162,7 @@ class RadioExportEndpoints @Inject()(
                       )
                       if formData.get("download").contains("true") then
                         val exportName = definitions.get(defName).name
-                        val filename = s"${currentEvent.eventName}_${exportName}.json"
+                        val filename = s"${currentEvent.eventName}_${exportName}.csv"
                           .replaceAll("""[\\/:*?"<>|\p{Cntrl}]""", "_")
                         (StatusCode.Ok, None, "text/csv; charset=utf-8", Some(s"""attachment; filename="$filename""""), csv)
                       else

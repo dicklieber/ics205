@@ -1,0 +1,104 @@
+{
+  "name": "Icom ID-52Plus",
+  "fields": [
+    {
+      "headerName": "Channel Number",
+      "channelField": "ChannelNumber"
+    },    {
+      "headerName": "Bank",
+      "constant": "1"
+    },
+    {
+      "headerName": "Receive Frequency",
+      "channelField": "Rx"
+    },
+    {
+      "headerName": "Transmit Frequency",
+      "channelField": "Tx"
+    },
+    {
+      "headerName": "Offset Frequency",
+      "channelField": "AbsOffset"
+    },
+    {
+      "headerName": "Offset Direction",
+      "constant": "Simplex"
+    },
+    {
+      "headerName": "Operating Mode",
+      "channelField": "Mode"
+    },
+    {
+      "headerName": "Name",
+      "channelField": "RadioChannelName"
+    },
+    {
+      "headerName": "Tone Mode",
+      "channelField": "CtcssMode"
+    },
+    {
+      "headerName": "CTCSS",
+      "channelField": "CtcssFrequency"
+    },
+    {
+      "headerName": "Rx CTCSS",
+      "channelField": "CtcssFrequency"
+    },
+    {
+      "headerName": "DCS",
+      "constant": "023"
+    },
+    {
+      "headerName": "DCS Polarity",
+      "constant": "Both N"
+    },
+    {
+      "headerName": "Lockout",
+      "constant": "Scan"
+    },
+    {
+      "headerName": "Step",
+      "constant": "5 kHz"
+    },
+    {
+      "headerName": "Fine Step Enable",
+      "constant": "N"
+    },
+    {
+      "headerName": "Fine Step",
+      "constant": "0"
+    },
+    {
+      "headerName": "Digital Squelch",
+      "constant": "0"
+    },
+    {
+      "headerName": "Digital Code",
+      "constant": "0"
+    },
+    {
+      "headerName": "Your Callsign",
+      "constant": "CQCQCQ"
+    },
+    {
+      "headerName": "Rpt-1 Callsign",
+      "constant": ""
+    },
+    {
+      "headerName": "Rpt-2 Callsign",
+      "constant": ""
+    },
+    {
+      "headerName": "Group",
+      "channelField": "ZoneGroup"
+    },
+    {
+      "headerName": "Comment",
+      "channelField": "Remarks"
+    },
+    {
+      "headerName": "",
+      "constant": ""
+    }
+  ]
+}

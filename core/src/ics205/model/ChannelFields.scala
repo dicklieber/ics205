@@ -37,6 +37,10 @@ enum ChannelField(extract: Ics205Channel => String):
   case CtcssFrequency extends ChannelField(_.ctcss.frequency.map(_.hz.toString).getOrElse(""))
   case CtcssMode extends ChannelField(_.ctcss.mode.toString)
   case Remarks extends ChannelField(_.remarks)
+  // ICOM
+//  case OffsetDirIcom extends ChannelField(_.frequency.offsetDirYeasu.toString) // Simplex, DUP+, DUP-
+//  case OffsetDirYeasu extends ChannelField(_.frequency.offsetDirYeasu.toString) // Simplex, DUP+, DUP-
+//  case AbsOffset extends ChannelField(_.frequency.offsetAbs.toString)
 
   def value(channel: Ics205Channel): String = extract(channel)
 

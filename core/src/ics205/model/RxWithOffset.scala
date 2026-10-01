@@ -20,6 +20,8 @@ package ics205.model
 
 import io.circe.Codec
 
+import scala.math.Fractional.Implicits.infixFractionalOps
+
 /**``
  * Represents a radio frequency and an optional frequency offset for transmission.
  *
@@ -40,3 +42,5 @@ case class RxWithOffset(rxFrequency: Frequency, offset: Frequency = Frequency(0)
   lazy val rx: Frequency = rxFrequency
   lazy val tx: Frequency = rxFrequency + offset
   val isSimplex: Boolean = offset.mhz == 0
+
+  def offsetAbs: Frequency = offset.abs

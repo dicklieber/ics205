@@ -65,7 +65,7 @@ class RadioExporterTests extends munit.FunSuite:
 
     val header = records(0).toList.asScala.toList
     assertEquals(header.length, 24)
-    assertEquals(header(0), "")
+    assertEquals(header(0), "Channel Number")
     assertEquals(header(1), "Receive Frequency")
     assertEquals(header(2), "Transmit Frequency")
     assertEquals(header(6), "Name")
@@ -94,7 +94,7 @@ class RadioExporterTests extends munit.FunSuite:
 
     val header = records(0).toList.asScala.toList
     assertEquals(header.length, 21)
-    assertEquals(header(0), "")
+    assertEquals(header(0), "Channel Number")
     assertEquals(header(1), "Receive Frequency")
     assertEquals(header(2), "Transmit Frequency")
     assertEquals(header(6), "AMS")
@@ -111,6 +111,63 @@ class RadioExporterTests extends munit.FunSuite:
     assertEquals(row1(7), "TAC1 Operations")
     assertEquals(row1(19), "Primary tactical channel")
     assertEquals(row1(20), "")
+
+  test("RadioExporter exports ID-52Plus CSV with header"):
+    val csv = exporter.generateCsv("ID-52Plus", sampleIcs205, includeHeader = true)
+    val parser = CSVParser.parse(new StringReader(csv), CSVFormat.DEFAULT)
+    val records = parser.getRecords.asScala.toList
+    assertEquals(records.length, 3)
+
+    val header = records(0).toList.asScala.toList
+    assertEquals(header.length, 24)
+    assertEquals(header(0), "Channel Number")
+    assertEquals(header(1), "Receive Frequency")
+    assertEquals(header(2), "Transmit Frequency")
+    assertEquals(header(3), "Offset Frequency")
+    assertEquals(header(4), "Offset Direction")
+    assertEquals(header(5), "Operating Mode")
+    assertEquals(header(6), "Name")
+    assertEquals(header(7), "Tone Mode")
+    assertEquals(header(8), "CTCSS")
+    assertEquals(header(9), "Rx CTCSS")
+    assertEquals(header(10), "DCS")
+    assertEquals(header(11), "DCS Polarity")
+    assertEquals(header(12), "Lockout")
+    assertEquals(header(13), "Step")
+    assertEquals(header(14), "Fine Step Enable")
+    assertEquals(header(15), "Fine Step")
+    assertEquals(header(16), "Digital Squelch")
+    assertEquals(header(17), "Digital Code")
+    assertEquals(header(18), "Your Callsign")
+    assertEquals(header(19), "Rpt-1 Callsign")
+    assertEquals(header(20), "Rpt-2 Callsign")
+    assertEquals(header(21), "Group")
+    assertEquals(header(22), "Comment")
+    assertEquals(header(23), "")
+
+    val row1 = records(1).toList.asScala.toList
+    assertEquals(row1.length, 24)
+    assertEquals(row1(0), "CH-01")
+    assertEquals(row1(1), "146.520")
+    assertEquals(row1(2), "147.120")
+    assertEquals(row1(3), "0.600")
+    assertEquals(row1(4), "Simplex")
+    assertEquals(row1(5), "Fm")
+    assertEquals(row1(6), "TAC1 Operations")
+    assertEquals(row1(10), "023")
+    assertEquals(row1(11), "Both N")
+    assertEquals(row1(12), "Scan")
+    assertEquals(row1(13), "5 kHz")
+    assertEquals(row1(14), "N")
+    assertEquals(row1(15), "0")
+    assertEquals(row1(16), "0")
+    assertEquals(row1(17), "0")
+    assertEquals(row1(18), "CQCQCQ")
+    assertEquals(row1(19), "")
+    assertEquals(row1(20), "")
+    assertEquals(row1(21), "Zone 1")
+    assertEquals(row1(22), "Primary tactical channel")
+    assertEquals(row1(23), "")
 
   test("RadioExporter exports CSV without header when includeHeader is false"):
     val csv = exporter.generateCsv("TH-D75.json", sampleIcs205, includeHeader = false)
