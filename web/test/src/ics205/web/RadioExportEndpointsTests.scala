@@ -138,7 +138,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
       assert(body.contains("id=\"csv-output\""))
       assert(body.contains("Receive Frequency"))
       assert(body.contains("146.520"))
-      assert(body.contains("147.120"))
+      assert(body.contains("0.600"))
       assert(body.contains("TAC1 Operations"))
       assert(body.contains("Copy to Clipboard"))
     }

@@ -25,7 +25,6 @@ package ics205.exporter
  * @param header The string emitted in the CSV header row.
  */
 enum CsvColumn(val header: String):
-  case Empty extends CsvColumn("")
   case ChannelNumber extends CsvColumn("Channel Number")
   case Bank extends CsvColumn("Bank")
   case ReceiveFrequency extends CsvColumn("Receive Frequency")

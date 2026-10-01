@@ -52,8 +52,14 @@ object RadioColumn:
   def const(header: String, value: Any): RadioColumn =
     RadioColumn(CsvColumn.fromHeader(header), Some(header), (_, _) => Option(value).map(_.toString).getOrElse(""))
 
-  def empty(column: CsvColumn = CsvColumn.Empty): RadioColumn =
+  def empty: RadioColumn =
+    RadioColumn(None, Some(""), (_, _) => "")
+
+  def empty(column: CsvColumn): RadioColumn =
     RadioColumn(Some(column), None, (_, _) => "")
+
+  def empty(header: String): RadioColumn =
+    RadioColumn(CsvColumn.fromHeader(header), Some(header), (_, _) => "")
 
   def channelName(column: CsvColumn = CsvColumn.Name, maxLength: Int = 16): RadioColumn =
     RadioColumn(Some(column), None, (ch, nameBuilder) => nameBuilder(ch).take(maxLength))

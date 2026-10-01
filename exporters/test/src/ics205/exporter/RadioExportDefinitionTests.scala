@@ -53,7 +53,7 @@ class RadioExportDefinitionTests extends munit.FunSuite:
     assertEquals(col.extract(sampleChannel, new RadioChannelNameBuilderDefault()), "5 kHz")
 
   test("RadioColumn extracts empty string"):
-    val col = RadioColumn.empty(CsvColumn.Empty)
+    val col = RadioColumn.empty
     assertEquals(col.header, "")
     assertEquals(col.extract(sampleChannel, new RadioChannelNameBuilderDefault()), "")
 
@@ -106,23 +106,23 @@ class RadioExportDefinitionTests extends munit.FunSuite:
   test("Kenwood TH-D75 definition has expected structure"):
     val defn = KenwoodTHD75.definition
     assertEquals(defn.name, "Kenwood TH-D75")
-    assertEquals(defn.columns.length, 24)
+    assertEquals(defn.columns.length, 10)
     assertEquals(defn.headers.head, "Channel Number")
-    assertEquals(defn.headers.last, "")
+    assertEquals(defn.headers.last, "Comment")
 
   test("Yaesu FTM-500 and FTM-510 definitions have expected structure"):
     val ftm510 = YaesuFTM510.definition
     assertEquals(ftm510.name, "Yaesu FTM-510")
-    assertEquals(ftm510.columns.length, 21)
+    assertEquals(ftm510.columns.length, 10)
     assertEquals(ftm510.headers.head, "Channel Number")
 
     val ftm500 = YaesuFTM500.definition
     assertEquals(ftm500.name, "Yaesu FTM-500")
-    assertEquals(ftm500.columns.length, 21)
+    assertEquals(ftm500.columns.length, 10)
 
   test("Icom ID-52Plus definition has expected structure"):
     val id52 = IcomID52Plus.definition
     assertEquals(id52.name, "Icom ID-52Plus")
-    assertEquals(id52.columns.length, 25)
+    assertEquals(id52.columns.length, 11)
     assertEquals(id52.headers(0), "Channel Number")
     assertEquals(id52.headers(1), "Bank")
