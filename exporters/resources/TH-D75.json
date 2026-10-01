@@ -2,7 +2,7 @@
   "name": "Kenwood TH-D75",
   "fields": [
     {
-      "headerName": "",
+      "headerName": "Channel Number",
       "channelField": "ChannelNumber"
     },
     {

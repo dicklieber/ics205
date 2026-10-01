@@ -2,7 +2,7 @@
   "name": "Yaesu FTM-510",
   "fields": [
     {
-      "headerName": "",
+      "headerName": "Channel Number",
       "channelField": "ChannelNumber"
     },
     {
