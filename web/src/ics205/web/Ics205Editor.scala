@@ -28,11 +28,13 @@ private[web] object Ics205Editor:
              currentUser: Option[AuthenticatedUser] = None,
              metadata: Option[Ics205Metadata] = None,
              currentEventName: Option[String] = None,
-             availableEvents: Seq[String] = Seq.empty): String =
+             availableEvents: Seq[String] = Seq.empty,
+             message: Option[String] = None): String =
     val canEdit = currentUser.exists(u => metadata.map(_.canEdit(u)).getOrElse(u.hasPermission(Permission.EditPlans)))
     val values = submitted.getOrElse(Ics205Form.fields(plan))
     val count = values.get("rowCount").flatMap(_.toIntOption).filter(n => n >= 0 && n <= 1000).getOrElse(0)
     val formAction = currentEventName.filter(_.nonEmpty).map(n => s"/?event=${java.net.URLEncoder.encode(n, "UTF-8")}").getOrElse("/")
+    val successMessage = message.orElse(if saved then Some("Plan saved.") else None)
     def field(key: String, caption: String, kind: String = "text"): Frag =
       label(caption, input(name := key, attr("aria-label") := caption, tpe := kind,
         value := values.getOrElse(key, ""),
@@ -57,14 +59,15 @@ private[web] object Ics205Editor:
         form(id := "plan-form", method := "post", action := formAction, attr("data-unsaved") := (canEdit && submitted.isDefined).toString)(
           input(tpe := "hidden", name := "eventName", value := currentEventName.getOrElse("")),
           div(cls := "toolbar")(
-            button(tpe := "submit", if !canEdit then disabled else cls := "")("Save plan"),
-            button(tpe := "button", cls := "renumber-channels-btn", id := "renumber-channels-top", if !canEdit then disabled else cls := "")("Channel numbers"),
-            button(tpe := "button", id := "export-json", cls := "export-btn", title := "Export ICS 205 as pretty JSON")("Export"),
-            button(tpe := "button", id := "import-json", cls := "import-btn", title := "Import ICS 205 JSON file", if !canEdit then disabled else cls := "")("Import"),
-            span(id := "status", attr("role") := "status")(if saved then "Plan saved." else "")
+            button(tpe := "submit", cls := "btn btn-primary", if !canEdit then disabled else ())("Save plan"),
+            button(tpe := "button", cls := "btn btn-primary renumber-channels-btn", id := "renumber-channels-top", if !canEdit then disabled else ())("Channel numbers"),
+            button(tpe := "button", id := "export-json", cls := "btn btn-primary export-btn", title := "Export ICS 205 as pretty JSON")("Export"),
+            button(tpe := "button", id := "import-json", cls := "btn btn-primary import-btn", title := "Import ICS 205 JSON file", if !canEdit then disabled else ())("Import"),
+            span(id := "status", attr("role") := "status")()
           ),
-          div(id := "client-error", cls := "error", attr("role") := "alert", style := "display: none;")(),
-          error.map(message => div(cls := "error", attr("role") := "alert")(message, " Your edits have been kept below.")),
+          successMessage.filter(_.nonEmpty).map(msg => div(cls := "alert alert-success", attr("role") := "status")(msg)),
+          div(id := "client-error", cls := "alert alert-error", attr("role") := "alert", style := "display: none;")(),
+          error.map(message => div(cls := "alert alert-error", attr("role") := "alert")(message, " Your edits have been kept below.")),
           div(cls := "sheet")(
             h1("Incident Radio Communications Plan (ICS 205)"),
             div(cls := "form")(
@@ -85,9 +88,8 @@ private[web] object Ics205Editor:
                 )
               ),
               div(cls := "row-toolbar")(
-                button(tpe := "button", id := "add-row", if !canEdit then disabled else cls := "")("Add channel"),
-                button(tpe := "button", id := "paste-row", disabled)("Paste channel"),
-                button(tpe := "button", id := "renumber-channels", cls := "renumber-channels-btn", if !canEdit then disabled else cls := "")("Channel numbers"),
+                button(tpe := "button", id := "add-row", cls := "btn btn-primary", if !canEdit then disabled else ())("Add channel"),
+                button(tpe := "button", id := "paste-row", cls := "btn btn-primary", disabled)("Paste channel"),
                 span(id := "clipboard-status", attr("role") := "status")(),
                 span(id := "row-status", attr("role") := "status")(),
                 p("Offset is in MHz; use 0 for simplex. CTCSS is in Hz: None disables it, Tone transmits a tone, and TSQL uses the tone for transmit and receive squelch.")
@@ -115,8 +117,8 @@ private[web] object Ics205Editor:
               input(tpe := "number", id := "starting-channel-number", name := "startingChannelNumber", value := "1", step := "1", required)
             ),
             div(cls := "dialog-actions")(
-              button(tpe := "button", id := "channel-numbers-cancel", value := "cancel")("Cancel"),
-              button(tpe := "submit", id := "channel-numbers-ok", value := "ok")("OK")
+              button(tpe := "button", id := "channel-numbers-cancel", cls := "btn btn-secondary", value := "cancel")("Cancel"),
+              button(tpe := "submit", id := "channel-numbers-ok", cls := "btn btn-primary", value := "ok")("OK")
             )
           )
         ) else span(),
@@ -451,7 +453,7 @@ private[web] object Ics205Editor:
           alert(msg);
         }
         if (status) {
-          status.textContent = 'Import failed: ' + msg;
+          status.textContent = '';
         }
       }
 

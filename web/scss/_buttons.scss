@@ -3,6 +3,13 @@
 
 .btn {
   @include mix.button-base;
+
+  &:disabled,
+  &.disabled,
+  &[disabled] {
+    cursor: default;
+    opacity: 0.4;
+  }
 }
 
 .btn-primary {

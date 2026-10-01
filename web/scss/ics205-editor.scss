@@ -1,36 +1,15 @@
 @use "variables" as vars;
 @use "mixins" as mix;
+@use "buttons";
+@use "status";
 @use "dialogs" as dlg;
-
-.toolbar,
-.error {
-  margin-bottom: 12px;
-}
 
 .toolbar {
   display: flex;
   align-items: center;
   gap: vars.$spacing-sm;
   flex-wrap: wrap;
-
-  button {
-    font-size: 10pt;
-  }
-}
-
-.error {
-  @include mix.alert-variant(vars.$color-error-bg, vars.$color-error-text, #ffcaca);
-  padding: 12px;
-}
-
-button {
-  cursor: pointer;
-  padding: 6px 10px;
-
-  &:disabled {
-    cursor: default;
-    opacity: 0.4;
-  }
+  margin-bottom: 12px;
 }
 
 .toolbar p,
@@ -42,9 +21,23 @@ button {
 }
 
 #status,
-#row-status,
 #clipboard-status {
-  min-width: 28ch;
+  font-weight: normal;
+
+  &:not(:empty) {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: vars.$radius-sm;
+    background-color: vars.$color-success-bg;
+    color: vars.$color-success-text;
+    border: 1px solid vars.$color-success-border;
+    font-size: 10pt;
+    font-weight: 500;
+  }
+}
+
+#row-status {
+  min-width: 14ch;
   font-weight: normal;
 }
 
@@ -218,6 +211,7 @@ textarea {
 
 @media print {
   .toolbar,
+  .alert,
   .row-toolbar,
   .channel-numbers-dialog,
   .channels th:last-child,

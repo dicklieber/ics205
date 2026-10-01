@@ -55,6 +55,8 @@ class AssetEndpointsTests extends munit.FunSuite:
     assert(body.contains(".toolbar"))
     assert(body.contains(".channel-numbers-dialog"))
     assert(body.contains(".ctcss-controls"))
+    assert(body.contains(".btn-primary"))
+    assert(body.contains(".alert-success"))
   }
 
   test("serves compiled navbar.css with expected rules") {
