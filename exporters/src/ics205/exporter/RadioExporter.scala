@@ -30,15 +30,18 @@ class RadioExporter @Inject()(definitions: RadioExportDefinitions):
 
   def generateCsv(baseName: String, ics205: Ics205, includeHeader: Boolean): String =
     val definition = definitions.get(baseName)
+    generateCsv(definition, ics205, includeHeader)
+
+  def generateCsv(definition: RadioExportDefinition, ics205: Ics205, includeHeader: Boolean): String =
     val writer = new java.io.StringWriter()
     val printer = new CSVPrinter(writer, CSVFormat.DEFAULT)
     try
       if includeHeader then
-        val headerRow = definition.fields.map(_.headerName)
+        val headerRow = definition.columns.map(_.header)
         printer.printRecord(headerRow.asJava)
 
       for channel <- ics205.channels do
-        val row = definition.fields.map(_.extract(channel, definition.radioChannelNameBuilder))
+        val row = definition.columns.map(_.extract(channel, definition.channelNameBuilder))
         printer.printRecord(row.asJava)
 
       printer.flush()

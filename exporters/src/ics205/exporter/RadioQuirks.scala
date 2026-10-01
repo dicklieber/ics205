@@ -18,34 +18,29 @@
 
 package ics205.exporter
 
-import ics205.model.{Frequency, Ics205, Ics205Channel}
-
+import ics205.model.Ics205Channel
 
 trait RadioQuirksDetail(channel: Ics205Channel):
   def manufacturer: String
   def offset: String = channel.frequency.offsetAbs.toString
   def direction: String
 
-
-
-
 class QuirksIcom(channel: Ics205Channel) extends RadioQuirksDetail(channel):
   def manufacturer: String = "Icom"
-  def direction: String = channel.frequency.offset.mhz match
-    case  0 => "Simplex"
-    case f if f < 0 => "DUP-"
-    case f if f > 0 => "DUP+"
-    
+  def direction: String =
+    if channel.frequency.isSimplex || channel.frequency.offset.mhz == BigDecimal(0) then "Simplex"
+    else if channel.frequency.offset.mhz < BigDecimal(0) then "DUP-"
+    else "DUP+"
+
 class QuirksYaseu(channel: Ics205Channel) extends RadioQuirksDetail(channel):
   def manufacturer: String = "Yaesu"
-  def direction: String = channel.frequency.offset.mhz match
-    case  0 => "Simplex"
-    case f if f < 0 => "Minus"
-    case f if f > 0 => "Plus"
-    
+  def direction: String =
+    if channel.frequency.isSimplex || channel.frequency.offset.mhz == BigDecimal(0) then "Simplex"
+    else if channel.frequency.offset.mhz < BigDecimal(0) then "Minus"
+    else "Plus"
+
 class QuirksBao(channel: Ics205Channel) extends QuirksYaseu(channel):
   override def manufacturer: String = "Baofeng"
+
 class QuirksKenwood(channel: Ics205Channel) extends QuirksYaseu(channel):
   override def manufacturer: String = "Kenwood"
-
- 

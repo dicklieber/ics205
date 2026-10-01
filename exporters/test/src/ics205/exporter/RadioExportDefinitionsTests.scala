@@ -20,43 +20,23 @@ package ics205.exporter
 
 class RadioExportDefinitionsTests extends munit.FunSuite:
 
-  test("RadioExportDefinitions discovers and preloads all definitions in resources"):
+  test("RadioExportDefinitions contains registered definitions"):
     val definitions = new RadioExportDefinitions()
     val list = definitions.listDefinitions
     assert(list.nonEmpty, "Definitions list should not be empty")
     assert(list.contains("Kenwood TH-D75"), s"Expected 'Kenwood TH-D75' in $list")
+    assert(list.contains("Yaesu FTM-500"), s"Expected 'Yaesu FTM-500' in $list")
     assert(list.contains("Yaesu FTM-510"), s"Expected 'Yaesu FTM-510' in $list")
     assert(list.contains("Icom ID-52Plus"), s"Expected 'Icom ID-52Plus' in $list")
     assertEquals(list, list.sorted)
 
-  test("RadioExportDefinitions.get retrieves definition by name or baseName"):
+  test("RadioExportDefinitions.get retrieves definition by exact name"):
     val definitions = new RadioExportDefinitions()
-    val byName = definitions.get("Kenwood TH-D75")
-    assertEquals(byName.name, "Kenwood TH-D75")
 
-    val byBase = definitions.get("TH-D75")
-    assertEquals(byBase.name, "Kenwood TH-D75")
-
-    val byFile = definitions.get("TH-D75.json")
-    assertEquals(byFile.name, "Kenwood TH-D75")
-
-    val ftmByName = definitions.get("Yaesu FTM-510")
-    assertEquals(ftmByName.name, "Yaesu FTM-510")
-
-    val ftmByBase = definitions.get("FTM-510")
-    assertEquals(ftmByBase.name, "Yaesu FTM-510")
-
-    val ftmByFile = definitions.get("FTM-510.json")
-    assertEquals(ftmByFile.name, "Yaesu FTM-510")
-
-    val id52ByName = definitions.get("Icom ID-52Plus")
-    assertEquals(id52ByName.name, "Icom ID-52Plus")
-
-    val id52ByBase = definitions.get("ID-52Plus")
-    assertEquals(id52ByBase.name, "Icom ID-52Plus")
-
-    val id52ByFile = definitions.get("ID-52Plus.json")
-    assertEquals(id52ByFile.name, "Icom ID-52Plus")
+    assertEquals(definitions.get("Kenwood TH-D75").name, "Kenwood TH-D75")
+    assertEquals(definitions.get("Yaesu FTM-500").name, "Yaesu FTM-500")
+    assertEquals(definitions.get("Yaesu FTM-510").name, "Yaesu FTM-510")
+    assertEquals(definitions.get("Icom ID-52Plus").name, "Icom ID-52Plus")
 
   test("RadioExportDefinitions.get throws IllegalArgumentException for unknown definition"):
     val definitions = new RadioExportDefinitions()

@@ -19,49 +19,23 @@
 package ics205.exporter
 
 import com.typesafe.scalalogging.LazyLogging
-import io.circe.parser.decode
-import io.github.classgraph.ClassGraph
 import jakarta.inject.{Inject, Singleton}
-
-import scala.jdk.CollectionConverters.*
 
 @Singleton
 class RadioExportDefinitions @Inject()() extends LazyLogging:
 
-  private val (byName, byBaseName) = loadAll()
+  val all: Seq[RadioExportDefinition] = Seq(
+    KenwoodTHD75.definition,
+    YaesuFTM500.definition,
+    YaesuFTM510.definition,
+    IcomID52Plus.definition
+  )
+
+  private val byName: Map[String, RadioExportDefinition] =
+    all.map(d => d.name -> d).toMap
 
   def listDefinitions: Seq[String] =
-    byName.keys.toSeq.sorted
+    all.map(_.name).distinct.sorted
 
   def get(name: String): RadioExportDefinition =
-    byName.get(name)
-      .orElse(byBaseName.get(name))
-      .orElse(byBaseName.get(resolveBaseName(name)))
-      .getOrElse(throw new IllegalArgumentException(s"Unknown radio export definition: '$name'"))
-
-  private def resolveBaseName(name: String): String =
-    val stripped = if name.startsWith("/") then name.substring(1) else name
-    if stripped.endsWith(".json") then stripped.stripSuffix(".json") else stripped
-
-  private def loadAll(): (Map[String, RadioExportDefinition], Map[String, RadioExportDefinition]) =
-    val scan = new ClassGraph().scan()
-    try
-      val jsonResources = scan.getResourcesWithExtension("json").asScala
-      val loaded = jsonResources.flatMap { res =>
-        val content = res.getContentAsString
-        val baseName = res.getPath.split('/').last.stripSuffix(".json")
-        decode[RadioExportDefinition](content) match
-          case Right(definition) =>
-            Some((definition.name -> definition, baseName -> definition))
-          case Left(_) =>
-            None
-      }.toList
-
-      val namesMap = loaded.map(_._1).toMap
-      logger.debug(s"namesMap: $namesMap")
-      val baseNamesMap = loaded.map(_._2).toMap
-      logger.debug(s"baseNamesMap: ${baseNamesMap}")
-
-      (namesMap, baseNamesMap)
-    finally
-      scan.close()
+    byName.getOrElse(name, throw new IllegalArgumentException(s"Unknown radio export definition: '$name'"))
