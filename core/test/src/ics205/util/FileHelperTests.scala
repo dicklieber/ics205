@@ -54,3 +54,25 @@ class FileHelperTests extends munit.FunSuite:
       assertEquals(home, os.home / "AppData" / "Local" / "ICS-205")
     else
       assertEquals(home, os.Path("/var/lib/ics205"))
+
+  test("logDirectory is within FileHelper directory and creates directory"):
+    val tempDir = os.temp.dir()
+    try
+      val helper = new FileHelper(tempDir)
+      assertEquals(helper.logDirectory, tempDir / "log")
+      assert(os.exists(tempDir / "log"))
+    finally
+      os.remove.all(tempDir)
+
+  test("FileHelperLookup resolves directory and log directory"):
+    val tempDir = os.temp.dir()
+    try
+      val helper = new FileHelper(tempDir)
+      val lookup = new FileHelperLookup()
+      assertEquals(lookup.lookup("directory"), tempDir.toString)
+      assertEquals(lookup.lookup("dir"), tempDir.toString)
+      assertEquals(lookup.lookup("log"), (tempDir / "log").toString)
+      assertEquals(lookup.lookup("logDir"), (tempDir / "log").toString)
+      assertEquals(lookup.lookup("logDirectory"), (tempDir / "log").toString)
+    finally
+      os.remove.all(tempDir)

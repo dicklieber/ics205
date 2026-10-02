@@ -25,7 +25,7 @@ import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.{AuthConfig, AuthenticationService, PasswordService, ScalaPassPasswordService}
 import ics205.exporter.{RadioExportDefinitions, RadioExporter}
 import ics205.store.{Ics205Store, InMemJsonSessionStore, SessionStore, UserStore}
-import ics205.util.FileHelper
+import ics205.util.{FileHelper, LoggingConfig}
 import ics205.web.auth.AuthSecurity
 import net.codingwell.scalaguice.ScalaModule
 
@@ -42,6 +42,7 @@ class ApplicationModule(
   override def configure(): Unit =
     val fileHelper = customFileHelper.getOrElse(new FileHelper())
     bind[FileHelper].toInstance(fileHelper)
+    LoggingConfig.init(fileHelper.directory)
 
     val authConfig = AuthConfig.fromConfig(fullConfig)
     bind[AuthConfig].toInstance(authConfig)

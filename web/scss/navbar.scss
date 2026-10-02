@@ -229,7 +229,7 @@
 
 /* About Dialog */
 .about-dialog {
-  @include mix.modal-dialog(580px, vars.$spacing-xl, vars.$shadow-dialog);
+  @include mix.modal-dialog(800px, vars.$spacing-xl, vars.$shadow-dialog);
   @include mix.dialog-backdrop(vars.$backdrop-color);
 }
 
@@ -297,18 +297,20 @@
   }
 
   dt {
-    width: 42%;
-    min-width: 140px;
+    width: 32%;
+    min-width: 220px;
     font-weight: 500;
     color: vars.$color-text-muted;
     margin: 0;
     padding: 6px 10px;
     border-right: 1px solid vars.$color-border;
     background-color: vars.$color-bg-subtle;
+    white-space: nowrap;
   }
 
   dd {
-    width: 58%;
+    width: 68%;
+    flex: 1;
     margin: 0;
     padding: 6px 10px;
     color: vars.$color-text-main;

@@ -24,6 +24,7 @@ import com.google.inject.Guice
 import com.typesafe.scalalogging.LazyLogging
 import ics205.BuildInfo
 import ics205.metrics.ApplicationMetrics
+import ics205.util.LoggingConfig
 import jakarta.inject.Inject
 import org.http4s.ember.server.EmberServerBuilder
 import sttp.tapir.server.http4s.Http4sServerInterpreter
@@ -33,10 +34,11 @@ import scala.jdk.CollectionConverters.*
 
 object Main extends IOApp:
   override def run(args: List[String]): IO[ExitCode] =
-    IO(Guice.createInjector(new ApplicationModule))
-      .flatMap(injector => IO(injector.getInstance(classOf[WebApplication])))
-      .flatMap(_.run)
-      .as(ExitCode.Success)
+    IO(LoggingConfig.init()) *>
+      IO(Guice.createInjector(new ApplicationModule))
+        .flatMap(injector => IO(injector.getInstance(classOf[WebApplication])))
+        .flatMap(_.run)
+        .as(ExitCode.Success)
 
 class WebApplication @Inject() (endpointsSet: java.util.Set[ApiEndpoints]) extends LazyLogging:
 

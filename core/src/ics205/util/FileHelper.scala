@@ -57,6 +57,19 @@ object FileHelper:
     else
       appHome(appName, productName)
 
+  private var activeDir: Option[os.Path] = None
+
+  def setDirectory(dir: os.Path): Unit =
+    activeDir = Some(dir)
+
+  def directory: os.Path =
+    activeDir.getOrElse(defaultDirectory())
+
+  def logDirectory: os.Path =
+    val dir = directory / "log"
+    os.makeDir.all(dir)
+    dir
+
 /** A utility class for handling file-related operations, such as reading and writing JSON-encoded
   * data to files, and managing application-specific directory paths.
   */
@@ -77,6 +90,11 @@ class FileHelper(customDir: Option[os.Path] = None) extends LazyLogging:
     * the production directory.
     */
   val directory: os.Path = customDir.getOrElse(FileHelper.defaultDirectory())
+  FileHelper.activeDir = Some(directory)
+  val logDirectory: os.Path =
+    val dir = directory / "log"
+    os.makeDir.all(dir)
+    dir
   logger.info(s"Data directory: $directory")
 
   def loadOrDefault[T: Decoder](fileName: String)(default: => T): T =
