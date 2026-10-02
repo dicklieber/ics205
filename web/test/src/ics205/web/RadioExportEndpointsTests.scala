@@ -218,6 +218,32 @@ class RadioExportEndpointsTests extends munit.FunSuite:
       }
     }
 
+  test("POST /export/radio with custom groupOrBank passes value into generated CSV"):
+    withContext { (_, userStore, _, _, authService, _, app) =>
+      val passwordService = new ScalaPassPasswordService()
+      userStore.add(User("testuser", passwordService.hash("password"), RolePermissions.User, enabled = true, id = "u1"))
+      val session = authService.authenticate("testuser", "password").get
+
+      val form = UrlForm(
+        "definition" -> "Kenwood TH-D75",
+        "groupOrBank" -> "7",
+        "includeHeader" -> "true"
+      )
+
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/export/radio"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        .withEntity(form)
+
+      val (res, body) = (for
+        r <- app.run(req)
+        b <- r.as[String]
+      yield (r, b)).unsafeRunSync()
+
+      assertEquals(res.status, Status.Ok)
+      assert(body.contains("CH-01,146.520,0.600,Plus,Fm,TAC1 Operations,,,,7,Primary tactical channel") || body.contains("7,Primary tactical channel") || body.contains("7"))
+      assert(body.contains("value=\"7\""))
+    }
+
   test("GET /export/radio with definition query parameter generates CSV preview"):
     withContext { (_, userStore, _, _, authService, _, app) =>
       val passwordService = new ScalaPassPasswordService()

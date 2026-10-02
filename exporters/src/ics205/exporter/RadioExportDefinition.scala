@@ -22,6 +22,17 @@ import ics205.model.Ics205Channel
 import scala.annotation.targetName
 
 /**
+ * Describes memory channel grouping schemes supported by various radios (e.g., Memory Group or Memory Bank).
+ *
+ * @param column Canonical CSV column identifier associated with this grouping scheme.
+ * @param label Human-readable label for the UI prompt.
+ * @param default Default group/bank value if none is specified by the user.
+ */
+enum RadioGrouping(val column: CsvColumn, val label: String, val default: String):
+  case Group extends RadioGrouping(CsvColumn.Group, "Memory Group", "1")
+  case Bank  extends RadioGrouping(CsvColumn.Bank, "Memory Bank", "1")
+
+/**
  * Represents a single column in a radio CSV export.
  *
  * @param column Optional canonical CSV column identifier.
@@ -73,11 +84,13 @@ object RadioColumn:
  *
  * @param name Model name (e.g., "Yaesu FTM-500", "Kenwood TH-D75").
  * @param columns Map of column specifications defining CSV output.
+ * @param grouping Optional memory grouping scheme supported by this radio (e.g., Group or Bank).
  * @param channelNameBuilder Component to build radio channel name from channel fields.
  */
 case class RadioExportDefinition(
   name: String,
   columns: Map[CsvColumn, RadioColumn],
+  grouping: Option[RadioGrouping] = None,
   channelNameBuilder: RadioChannelNameBuilder = new RadioChannelNameBuilderDefault()
 ):
   /** Columns ordered deterministically by CsvColumn enum declaration order. */
@@ -85,6 +98,16 @@ case class RadioExportDefinition(
     columns.toSeq.sortBy(_._1.ordinal).map(_._2)
 
   def headers: Seq[String] = orderedColumns.map(_.header)
+
+  /** Configures a grouping scheme and installs the default column value. */
+  def withGrouping(g: RadioGrouping): RadioExportDefinition =
+    copy(grouping = Some(g), columns = columns + (g.column -> RadioColumn.const(g.column, g.default)))
+
+  /** Overrides or sets the value for the radio's group or bank column, if grouping is supported. */
+  def withGroupOrBank(value: String): RadioExportDefinition =
+    grouping match
+      case Some(g) => withColumn(RadioColumn.const(g.column, value))
+      case None    => this
 
   /** Add or override columns */
   def withColumns(newCols: (CsvColumn, RadioColumn)*): RadioExportDefinition =
@@ -105,7 +128,10 @@ object RadioExportDefinition:
     RadioExportDefinition(name, columns.map(c => c.column -> c).toMap)
 
   def apply(name: String, columns: Seq[RadioColumn], channelNameBuilder: RadioChannelNameBuilder): RadioExportDefinition =
-    RadioExportDefinition(name, columns.map(c => c.column -> c).toMap, channelNameBuilder)
+    RadioExportDefinition(name, columns.map(c => c.column -> c).toMap, None, channelNameBuilder)
+
+  def apply(name: String, columns: Seq[RadioColumn], grouping: Option[RadioGrouping], channelNameBuilder: RadioChannelNameBuilder): RadioExportDefinition =
+    RadioExportDefinition(name, columns.map(c => c.column -> c).toMap, grouping, channelNameBuilder)
 
 trait RadioExportDefinitionProvider:
   def definition: RadioExportDefinition

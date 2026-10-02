@@ -56,11 +56,12 @@ class RadioExportEndpoints @Inject()(
     .in(cookie[Option[String]]("ics205_event"))
     .in(query[Option[String]]("event"))
     .in(query[Option[String]]("definition"))
+    .in(query[Option[String]]("groupOrBank"))
     .in(query[Option[Boolean]]("includeHeader"))
     .in(query[Option[String]]("msg"))
     .in(query[Option[String]]("err"))
     .out(statusCode.and(header[Option[String]]("Location")).and(htmlBodyUtf8))
-    .serverLogicSuccess[IO] { (sessionIdOpt, eventCookieOpt, eventQueryOpt, defOpt, incHeaderOpt, msg, err) =>
+    .serverLogicSuccess[IO] { (sessionIdOpt, eventCookieOpt, eventQueryOpt, defOpt, groupOrBankOpt, incHeaderOpt, msg, err) =>
       IO.blocking {
         sessionIdOpt.flatMap(id => authService.authenticateSession(id).toOption) match
           case None =>
@@ -75,24 +76,25 @@ class RadioExportEndpoints @Inject()(
                   (StatusCode.Forbidden, None, "You do not have permission to view this radio plan.")
                 else
                   val plan = currentEvent.ics205
-                  val defsList = definitions.listDefinitions
+                  val allDefs = definitions.all
                   val incHeader = incHeaderOpt.getOrElse(true)
                   val (selectedDef, csvOpt, errorOpt) = defOpt match
                     case Some(defName) =>
                       try
-                        val csv = radioExporter.generateCsv(defName, plan, incHeader)
+                        val csv = radioExporter.generateCsv(defName, plan, incHeader, groupOrBankOpt)
                         (Some(defName), Some(csv), err)
                       catch
                         case ex: Exception =>
                           (Some(defName), None, Some(ex.getMessage))
                     case None =>
-                      (defsList.headOption, None, err)
+                      (allDefs.headOption.map(_.name), None, err)
 
-                  val html = RadioExportPage.render(
+                  val html = RadioExportPage.renderDefinitions(
                     currentUser = user,
                     plan = plan,
-                    definitions = defsList,
+                    definitions = allDefs,
                     selectedDefinition = selectedDef,
+                    groupOrBank = groupOrBankOpt,
                     includeHeader = incHeader,
                     generatedCsv = csvOpt,
                     message = msg,
@@ -130,16 +132,18 @@ class RadioExportEndpoints @Inject()(
                   (StatusCode.Forbidden, None, "text/html; charset=utf-8", None, "You do not have permission to view this radio plan.")
                 else
                   val plan = currentEvent.ics205
-                  val defsList = definitions.listDefinitions
-                  val defName = formData.getOrElse("definition", defsList.headOption.getOrElse("")).trim
+                  val allDefs = definitions.all
+                  val defName = formData.getOrElse("definition", allDefs.headOption.map(_.name).getOrElse("")).trim
                   val incHeader = formData.get("includeHeader").contains("true")
+                  val groupOrBankOpt = formData.get("groupOrBank").map(_.trim).filter(_.nonEmpty)
 
                   if defName.isEmpty then
-                    val html = RadioExportPage.render(
+                    val html = RadioExportPage.renderDefinitions(
                       currentUser = user,
                       plan = plan,
-                      definitions = defsList,
+                      definitions = allDefs,
                       selectedDefinition = None,
+                      groupOrBank = groupOrBankOpt,
                       includeHeader = incHeader,
                       generatedCsv = None,
                       error = Some("Please select a radio export definition."),
@@ -149,12 +153,13 @@ class RadioExportEndpoints @Inject()(
                     (StatusCode.Ok, None, "text/html; charset=utf-8", None, html)
                   else
                     try
-                      val csv = radioExporter.generateCsv(defName, plan, incHeader)
-                      val html = RadioExportPage.render(
+                      val csv = radioExporter.generateCsv(defName, plan, incHeader, groupOrBankOpt)
+                      val html = RadioExportPage.renderDefinitions(
                         currentUser = user,
                         plan = plan,
-                        definitions = defsList,
+                        definitions = allDefs,
                         selectedDefinition = Some(defName),
+                        groupOrBank = groupOrBankOpt,
                         includeHeader = incHeader,
                         generatedCsv = Some(csv),
                         currentEventName = Some(currentEvent.eventName),
@@ -169,11 +174,12 @@ class RadioExportEndpoints @Inject()(
                         (StatusCode.Ok, None, "text/html; charset=utf-8", None, html)
                     catch
                       case ex: Exception =>
-                        val html = RadioExportPage.render(
+                        val html = RadioExportPage.renderDefinitions(
                           currentUser = user,
                           plan = plan,
-                          definitions = defsList,
+                          definitions = allDefs,
                           selectedDefinition = Some(defName),
+                          groupOrBank = groupOrBankOpt,
                           includeHeader = incHeader,
                           generatedCsv = None,
                           error = Some(s"Failed to generate CSV: ${ex.getMessage}"),

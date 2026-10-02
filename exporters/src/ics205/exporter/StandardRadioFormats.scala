@@ -44,7 +44,7 @@ object StandardRadioFormats:
 object KenwoodTHD75 extends RadioExport:
   val definition: RadioExportDefinition = StandardRadioFormats.base
     .copy(name = "Kenwood TH-D75")
-    .withColumn(RadioColumn.const(CsvColumn.Group, "1"))
+    .withGrouping(RadioGrouping.Group)
     .withColumn(
       RadioColumn.direction(CsvColumn.OffsetDirection, minus = "Minus", simplex = "Simplex", plus = "Plus")
     )
@@ -63,7 +63,7 @@ object YaesuFTM500 extends RadioExport:
 object IcomID52Plus extends RadioExport:
   val definition: RadioExportDefinition = StandardRadioFormats.base
     .copy(name = "Icom ID-52Plus")
-    .withColumn(RadioColumn.const(CsvColumn.Bank, "1"))
+    .withGrouping(RadioGrouping.Bank)
     .withColumn(
       RadioColumn.direction(CsvColumn.OffsetDirection, minus = "DUP-", simplex = "Simplex", plus = "DUP+")
     )

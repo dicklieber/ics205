@@ -107,6 +107,7 @@ class RadioExportDefinitionTests extends munit.FunSuite:
   test("Kenwood TH-D75 definition has expected structure"):
     val defn = KenwoodTHD75.definition
     assertEquals(defn.name, "Kenwood TH-D75")
+    assertEquals(defn.grouping, Some(RadioGrouping.Group))
     assertEquals(defn.columns.size, 11)
     assertEquals(defn.headers.head, "Channel Number")
     assertEquals(defn.headers.last, "Comment")
@@ -114,16 +115,30 @@ class RadioExportDefinitionTests extends munit.FunSuite:
   test("Yaesu FTM-500 and FTM-510 definitions have expected structure"):
     val ftm510 = YaesuFTM510.definition
     assertEquals(ftm510.name, "Yaesu FTM-510")
+    assertEquals(ftm510.grouping, None)
     assertEquals(ftm510.columns.size, 11)
     assertEquals(ftm510.headers.head, "Channel Number")
 
     val ftm500 = YaesuFTM500.definition
     assertEquals(ftm500.name, "Yaesu FTM-500")
+    assertEquals(ftm500.grouping, None)
     assertEquals(ftm500.columns.size, 11)
 
   test("Icom ID-52Plus definition has expected structure"):
     val id52 = IcomID52Plus.definition
     assertEquals(id52.name, "Icom ID-52Plus")
+    assertEquals(id52.grouping, Some(RadioGrouping.Bank))
     assertEquals(id52.columns.size, 11)
     assertEquals(id52.headers(0), "Channel Number")
     assertEquals(id52.headers(1), "Bank")
+
+  test("RadioExportDefinition withGroupOrBank dynamically overrides group/bank value"):
+    val kenwood = KenwoodTHD75.definition.withGroupOrBank("5")
+    assertEquals(kenwood.columns(CsvColumn.Group).extract(sampleChannel, new RadioChannelNameBuilderDefault()), "5")
+
+    val icom = IcomID52Plus.definition.withGroupOrBank("B")
+    assertEquals(icom.columns(CsvColumn.Bank).extract(sampleChannel, new RadioChannelNameBuilderDefault()), "B")
+
+    val yaesu = YaesuFTM500.definition.withGroupOrBank("99")
+    assertEquals(yaesu.columns.contains(CsvColumn.Group), false)
+    assertEquals(yaesu.columns.contains(CsvColumn.Bank), false)

@@ -160,6 +160,17 @@ class RadioExporterTests extends munit.FunSuite:
     assertEquals(row1(6), "TAC1 Operations")
     assertEquals(row1(10), "Primary tactical channel")
 
+  test("RadioExporter exports with custom groupOrBank parameter"):
+    val kenwoodCsv = exporter.generateCsv("Kenwood TH-D75", sampleIcs205, includeHeader = true, groupOrBank = Some("4"))
+    val kenwoodRecords = CSVParser.parse(new StringReader(kenwoodCsv), CSVFormat.DEFAULT).getRecords.asScala.toList
+    assertEquals(kenwoodRecords(1).get(9), "4")
+    assertEquals(kenwoodRecords(2).get(9), "4")
+
+    val icomCsv = exporter.generateCsv("Icom ID-52Plus", sampleIcs205, includeHeader = true, groupOrBank = Some("C"))
+    val icomRecords = CSVParser.parse(new StringReader(icomCsv), CSVFormat.DEFAULT).getRecords.asScala.toList
+    assertEquals(icomRecords(1).get(1), "C")
+    assertEquals(icomRecords(2).get(1), "C")
+
   test("RadioExporter exports CSV without header when includeHeader is false"):
     val csv = exporter.generateCsv("Kenwood TH-D75", sampleIcs205, includeHeader = false)
     val parser = CSVParser.parse(new StringReader(csv), CSVFormat.DEFAULT)

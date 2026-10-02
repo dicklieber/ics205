@@ -19,16 +19,18 @@
 package ics205.web
 
 import ics205.auth.{AuthenticatedUser, Permission}
+import ics205.exporter.{RadioExportDefinition, RadioGrouping}
 import ics205.model.Ics205
 import scalatags.Text.all.*
 
 object RadioExportPage:
 
-  def render(
+  def renderDefinitions(
     currentUser: AuthenticatedUser,
     plan: Ics205,
-    definitions: Seq[String],
+    definitions: Seq[RadioExportDefinition],
     selectedDefinition: Option[String] = None,
+    groupOrBank: Option[String] = None,
     includeHeader: Boolean = true,
     generatedCsv: Option[String] = None,
     message: Option[String] = None,
@@ -36,6 +38,42 @@ object RadioExportPage:
     currentEventName: Option[String] = None,
     availableEvents: Seq[String] = Seq.empty
   ): String =
+    render(
+      currentUser = currentUser,
+      plan = plan,
+      definitions = definitions.map(_.name),
+      selectedDefinition = selectedDefinition,
+      groupOrBank = groupOrBank,
+      includeHeader = includeHeader,
+      generatedCsv = generatedCsv,
+      message = message,
+      error = error,
+      currentEventName = currentEventName,
+      availableEvents = availableEvents,
+      groupings = definitions.flatMap(d => d.grouping.map(g => d.name -> g)).toMap
+    )
+
+  def render(
+    currentUser: AuthenticatedUser,
+    plan: Ics205,
+    definitions: Seq[String],
+    selectedDefinition: Option[String] = None,
+    groupOrBank: Option[String] = None,
+    includeHeader: Boolean = true,
+    generatedCsv: Option[String] = None,
+    message: Option[String] = None,
+    error: Option[String] = None,
+    currentEventName: Option[String] = None,
+    availableEvents: Seq[String] = Seq.empty,
+    groupings: Map[String, RadioGrouping] = Map.empty
+  ): String =
+    val groupingsEntries = groupings.map { case (name, g) =>
+      val escName = name.replace("\\", "\\\\").replace("\"", "\\\"")
+      val escLabel = g.label.replace("\\", "\\\\").replace("\"", "\\\"")
+      val escDefault = g.default.replace("\\", "\\\\").replace("\"", "\\\"")
+      s""""$escName": {"type": "${g.toString}", "label": "$escLabel", "default": "$escDefault"}"""
+    }.mkString("{", ", ", "}")
+
     doctype("html")(
       html(lang := "en")(
         head(
@@ -101,6 +139,25 @@ object RadioExportPage:
                   )
                 ),
 
+                div(
+                  id := "grouping-container",
+                  cls := "form-group",
+                  style := "display: none; margin-top: 16px;"
+                )(
+                  label(id := "grouping-label", attr("for") := "groupOrBank")("Memory Group / Bank"),
+                  input(
+                    tpe := "text",
+                    id := "groupOrBank",
+                    name := "groupOrBank",
+                    cls := "form-control",
+                    value := groupOrBank.getOrElse(""),
+                    style := "width: 100%; max-width: 200px; padding: 8px 10px; border: 1px solid #dfe1e6; border-radius: 4px; font-size: 11pt; background: #fff;"
+                  ),
+                  p(id := "grouping-help", cls := "form-help")(
+                    "Specify the destination memory group or bank number for imported channels."
+                  )
+                ),
+
                 div(cls := "form-group", style := "margin-top: 16px;")(
                   label(
                     cls := "checkbox-group",
@@ -126,7 +183,75 @@ object RadioExportPage:
                     name := "download", value := "true"
                   )("Save CSV File")
                 )
-              )
+              ),
+              script(raw(
+                s"""(function() {
+                   |  const radioGroupings = $groupingsEntries;
+                   |  const defSelect = document.getElementById('definition');
+                   |  const groupingContainer = document.getElementById('grouping-container');
+                   |  const groupingLabel = document.getElementById('grouping-label');
+                   |  const groupingInput = document.getElementById('groupOrBank');
+                   |  const groupingHelp = document.getElementById('grouping-help');
+                   |  const form = document.getElementById('export-form');
+                   |
+                   |  function getStorageKey(radioName) {
+                   |    return 'ics205_export_' + radioName + '_group';
+                   |  }
+                   |
+                   |  function updateGroupingField() {
+                   |    if (!defSelect || !groupingContainer || !groupingInput) return;
+                   |    const selectedRadio = defSelect.value;
+                   |    const meta = radioGroupings[selectedRadio];
+                   |
+                   |    if (meta) {
+                   |      groupingContainer.style.display = 'block';
+                   |      if (groupingLabel) groupingLabel.textContent = meta.label;
+                   |      if (groupingHelp) groupingHelp.textContent = 'Specify the destination ' + meta.label.toLowerCase() + ' for imported channels.';
+                   |
+                   |      const saved = localStorage.getItem(getStorageKey(selectedRadio));
+                   |      if (saved !== null && saved !== '') {
+                   |        groupingInput.value = saved;
+                   |      } else if (!groupingInput.value || groupingInput.dataset.lastRadio !== selectedRadio) {
+                   |        groupingInput.value = meta.default;
+                   |      }
+                   |      groupingInput.dataset.lastRadio = selectedRadio;
+                   |    } else {
+                   |      groupingContainer.style.display = 'none';
+                   |    }
+                   |  }
+                   |
+                   |  if (defSelect) {
+                   |    defSelect.addEventListener('change', updateGroupingField);
+                   |  }
+                   |
+                   |  if (groupingInput) {
+                   |    groupingInput.addEventListener('input', function() {
+                   |      if (defSelect && groupingContainer.style.display !== 'none') {
+                   |        const selectedRadio = defSelect.value;
+                   |        const val = groupingInput.value.trim();
+                   |        if (val) {
+                   |          localStorage.setItem(getStorageKey(selectedRadio), val);
+                   |        }
+                   |      }
+                   |    });
+                   |  }
+                   |
+                   |  if (form) {
+                   |    form.addEventListener('submit', function() {
+                   |      if (defSelect && groupingInput && groupingContainer.style.display !== 'none') {
+                   |        const selectedRadio = defSelect.value;
+                   |        const val = groupingInput.value.trim();
+                   |        if (val) {
+                   |          localStorage.setItem(getStorageKey(selectedRadio), val);
+                   |        }
+                   |      }
+                   |    });
+                   |  }
+                   |
+                   |  updateGroupingField();
+                   |})();
+                   |""".stripMargin
+              ))
             ),
 
             generatedCsv.map { csv =>

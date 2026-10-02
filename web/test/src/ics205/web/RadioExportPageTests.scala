@@ -82,3 +82,22 @@ class RadioExportPageTests extends munit.FunSuite:
     assert(html.contains("Val1,Val2"))
     assert(html.contains("Copy to Clipboard"))
     assert(html.contains("copyCsvToClipboard()"))
+
+  test("RadioExportPage renders grouping controls and persistence script with groupings"):
+    import ics205.exporter.{KenwoodTHD75, IcomID52Plus, YaesuFTM500}
+    val html = RadioExportPage.renderDefinitions(
+      currentUser = sampleUser,
+      plan = samplePlan,
+      definitions = Seq(KenwoodTHD75.definition, IcomID52Plus.definition, YaesuFTM500.definition),
+      selectedDefinition = Some("Kenwood TH-D75"),
+      groupOrBank = Some("3"),
+      includeHeader = true,
+      generatedCsv = None
+    )
+
+    assert(html.contains("id=\"grouping-container\""))
+    assert(html.contains("id=\"groupOrBank\""))
+    assert(html.contains("value=\"3\""))
+    assert(html.contains("localStorage.getItem(getStorageKey(selectedRadio))"))
+    assert(html.contains("Memory Group"))
+    assert(html.contains("Memory Bank"))
