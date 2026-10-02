@@ -21,6 +21,7 @@ package ics205.web
 import cats.effect.IO
 import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, RolePermissions}
 import ics205.exporter.{RadioExportDefinitions, RadioExporter}
+import ics205.log.Ics205ActivityLogger
 import ics205.model.Ics205Event
 import ics205.store.Ics205Store
 import jakarta.inject.{Inject, Singleton}
@@ -82,6 +83,16 @@ class RadioExportEndpoints @Inject()(
                     case Some(defName) =>
                       try
                         val csv = radioExporter.generateCsv(defName, plan, incHeader, groupOrBankOpt)
+                        Ics205ActivityLogger.logCsvExport(
+                          username = user.username,
+                          eventName = currentEvent.eventName,
+                          radio = defName,
+                          incidentName = Option(plan.incidentName).filter(_.nonEmpty),
+                          channelCount = Some(plan.channels.size),
+                          includeHeader = Some(incHeader),
+                          groupOrBank = groupOrBankOpt,
+                          download = Some(false)
+                        )
                         (Some(defName), Some(csv), err)
                       catch
                         case ex: Exception =>
@@ -154,6 +165,17 @@ class RadioExportEndpoints @Inject()(
                   else
                     try
                       val csv = radioExporter.generateCsv(defName, plan, incHeader, groupOrBankOpt)
+                      val isDownload = formData.get("download").contains("true")
+                      Ics205ActivityLogger.logCsvExport(
+                        username = user.username,
+                        eventName = currentEvent.eventName,
+                        radio = defName,
+                        incidentName = Option(plan.incidentName).filter(_.nonEmpty),
+                        channelCount = Some(plan.channels.size),
+                        includeHeader = Some(incHeader),
+                        groupOrBank = groupOrBankOpt,
+                        download = Some(isDownload)
+                      )
                       val html = RadioExportPage.renderDefinitions(
                         currentUser = user,
                         plan = plan,
@@ -165,7 +187,7 @@ class RadioExportEndpoints @Inject()(
                         currentEventName = Some(currentEvent.eventName),
                         availableEvents = authorizedEvents.map(_.eventName)
                       )
-                      if formData.get("download").contains("true") then
+                      if isDownload then
                         val exportName = definitions.get(defName).name
                         val filename = s"${currentEvent.eventName}_${exportName}.csv"
                           .replaceAll("""[\\/:*?"<>|\p{Cntrl}]""", "_")

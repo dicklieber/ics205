@@ -276,6 +276,18 @@ private[web] object Ics205Editor:
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
+          const eventNameInput = document.querySelector('[name=eventName]');
+          const currentEventName = eventNameInput ? eventNameInput.value : '';
+          fetch('/export/log', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventName: currentEventName || plan.incidentName || '',
+              incidentName: plan.incidentName || '',
+              channelCount: Array.isArray(plan.channels) ? plan.channels.length : 0,
+              format: 'json'
+            })
+          }).catch(() => {});
         });
       }
     })();
@@ -581,6 +593,19 @@ private[web] object Ics205Editor:
               refresh();
               changed();
               status.textContent = 'Unsaved changes (imported ' + file.name + ')';
+              const eventNameInput = form.querySelector('[name=eventName]');
+              const currentEventName = eventNameInput ? eventNameInput.value : '';
+              fetch('/import/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  eventName: currentEventName || plan.incidentName || '',
+                  incidentName: plan.incidentName || '',
+                  channelCount: rawChannels.length,
+                  fileName: file.name,
+                  format: 'json'
+                })
+              }).catch(() => {});
             } catch (err) {
               showError('Error processing ICS 205 import: ' + err.message);
             } finally {

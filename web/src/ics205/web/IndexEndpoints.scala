@@ -20,6 +20,7 @@ package ics205.web
 
 import cats.effect.IO
 import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, Permission, RolePermissions}
+import ics205.log.Ics205ActivityLogger
 import ics205.model.{Ics205, Ics205Event, Ics205Metadata, OperationalPeriod}
 import ics205.store.{Ics205Store, UserStore}
 import jakarta.inject.{Inject, Singleton}
@@ -162,6 +163,13 @@ class IndexEndpoints @Inject() (
                       try
                         val updatedEvent = currentEvent.copy(ics205 = plan)
                         store.saveEvent(updatedEvent, Some(user.id), refreshPrepared = false)
+                        Ics205ActivityLogger.logUpdate(
+                          username = user.username,
+                          eventName = updatedEvent.eventName,
+                          incidentName = Option(plan.incidentName).filter(_.nonEmpty),
+                          channelCount = Some(plan.channels.size),
+                          action = Some("save")
+                        )
                         val redirectUrl = s"/?saved=1&event=${encode(currentEvent.eventName)}"
                         Right((StatusCode.SeeOther, redirectUrl))
                       catch
@@ -342,6 +350,13 @@ class IndexEndpoints @Inject() (
                   case Left(errorMsg) =>
                     (StatusCode.SeeOther, None, s"/events?err=${encode(errorMsg)}", "")
                   case Right(created) =>
+                    Ics205ActivityLogger.logUpdate(
+                      username = user.username,
+                      eventName = created.eventName,
+                      incidentName = Option(created.ics205.incidentName).filter(_.nonEmpty),
+                      channelCount = Some(created.ics205.channels.size),
+                      action = Some("create")
+                    )
                     val cookieHeader = s"ics205_event=${encode(created.eventName)}; Path=/; SameSite=Lax"
                     (StatusCode.SeeOther, Some(cookieHeader), s"/?event=${encode(created.eventName)}&saved=1", "")
       }
@@ -434,6 +449,13 @@ class IndexEndpoints @Inject() (
                       )
                       val finalEvent = renamedEv.copy(eventName = newName, ics205 = updatedPlan, metadata = updatedMetadata)
                       store.saveEvent(finalEvent, userId = Some(user.id), refreshPrepared = false)
+                      Ics205ActivityLogger.logUpdate(
+                        username = user.username,
+                        eventName = finalEvent.eventName,
+                        incidentName = Option(finalEvent.ics205.incidentName).filter(_.nonEmpty),
+                        channelCount = Some(finalEvent.ics205.channels.size),
+                        action = Some("metadata")
+                      )
 
                       val cookieHeader = if !newName.equalsIgnoreCase(origName) then
                         Some(s"ics205_event=${encode(newName)}; Path=/; SameSite=Lax")
@@ -463,6 +485,11 @@ class IndexEndpoints @Inject() (
                 (StatusCode.SeeOther, "/events?err=Cannot+delete+unnamed+event", "")
               else
                 if store.deleteEvent(eventName) then
+                  Ics205ActivityLogger.logUpdate(
+                    username = user.username,
+                    eventName = eventName,
+                    action = Some("delete")
+                  )
                   (StatusCode.SeeOther, s"/events?msg=Event+'${encode(eventName)}'+deleted+successfully", "")
                 else
                   (StatusCode.SeeOther, "/events?err=Event+not+found", "")

@@ -21,6 +21,7 @@ package ics205.web
 import cats.effect.IO
 import ics205.auth.{AuthConfig, AuthenticationService, RolePermissions}
 import ics205.exporter.Ics205PdfExporter
+import ics205.log.Ics205ActivityLogger
 import ics205.store.Ics205Store
 import jakarta.inject.{Inject, Singleton}
 import sttp.model.StatusCode
@@ -64,6 +65,13 @@ class PdfExportEndpoints @Inject()(
                   if !currentEvent.canView(user) && user.role != RolePermissions.Admin then
                     (StatusCode.Forbidden, None, "text/plain", None, "no-store", Array.emptyByteArray)
                   else
+                    Ics205ActivityLogger.logExport(
+                      username = user.username,
+                      eventName = currentEvent.eventName,
+                      format = "pdf",
+                      incidentName = Option(currentEvent.ics205.incidentName).filter(_.nonEmpty),
+                      channelCount = Some(currentEvent.ics205.channels.size)
+                    )
                     (StatusCode.Ok, None, "application/pdf", Some("attachment; filename=\"ics205.pdf\""),
                       "no-store", exporter.generatePdf(currentEvent.ics205))
         }

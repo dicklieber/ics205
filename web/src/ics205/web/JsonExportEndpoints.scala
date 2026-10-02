@@ -20,6 +20,7 @@ package ics205.web
 
 import cats.effect.IO
 import ics205.auth.{AuthConfig, AuthenticationService, RolePermissions}
+import ics205.log.Ics205ActivityLogger
 import ics205.model.Ics205Json
 import ics205.store.Ics205Store
 import jakarta.inject.{Inject, Singleton}
@@ -63,6 +64,13 @@ class JsonExportEndpoints @Inject()(
                   if !currentEvent.canView(user) && user.role != RolePermissions.Admin then
                     (StatusCode.Forbidden, None, "text/plain", None, "no-store", "")
                   else
+                    Ics205ActivityLogger.logExport(
+                      username = user.username,
+                      eventName = currentEvent.eventName,
+                      format = "json",
+                      incidentName = Option(currentEvent.ics205.incidentName).filter(_.nonEmpty),
+                      channelCount = Some(currentEvent.ics205.channels.size)
+                    )
                     val sanitizedName = if currentEvent.eventName.trim.nonEmpty then
                       currentEvent.eventName.trim.replaceAll("""[\\/:*?"<>|]""", "_")
                     else "ics205"
