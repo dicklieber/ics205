@@ -119,6 +119,7 @@ class UserAdminEndpoints @Inject()(
             case Right(_) =>
               val username = formData.getOrElse("username", "").trim
               val password = formData.getOrElse("password", "")
+              val confirmPassword = formData.getOrElse("confirmPassword", formData.getOrElse("confirm_password", ""))
               val defaultRole = if isInitial then "admin" else "user"
               val roleInput = formData.getOrElse("role", formData.getOrElse("roles", defaultRole)).trim
               val role = RolePermissions.fromString(roleInput).getOrElse(if isInitial then RolePermissions.Admin else RolePermissions.User)
@@ -130,6 +131,8 @@ class UserAdminEndpoints @Inject()(
                 Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Password cannot be empty.")}"))
               else if password.length < 8 then
                 Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Password must be at least 8 characters.")}"))
+              else if password != confirmPassword then
+                Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Passwords do not match.")}"))
               else
                 val passwordHash = passwordService.hash(password)
                 val newUser = User(
@@ -160,6 +163,7 @@ class UserAdminEndpoints @Inject()(
           val id = formData.getOrElse("id", "")
           val username = formData.getOrElse("username", "").trim
           val password = formData.getOrElse("password", "")
+          val confirmPassword = formData.getOrElse("confirmPassword", formData.getOrElse("confirm_password", ""))
           val roleInput = formData.getOrElse("role", formData.getOrElse("roles", "user")).trim
           val role = RolePermissions.fromString(roleInput).getOrElse(RolePermissions.User)
           val enabled = formData.get("enabled").contains("true")
@@ -170,6 +174,8 @@ class UserAdminEndpoints @Inject()(
             (StatusCode.SeeOther, s"/admin/users?edit=${urlEncode(id)}&err=${urlEncode("Username cannot be empty.")}")
           else if password.nonEmpty && password.length < 8 then
             (StatusCode.SeeOther, s"/admin/users?edit=${urlEncode(id)}&err=${urlEncode("Password must be at least 8 characters.")}")
+          else if (password.nonEmpty || confirmPassword.nonEmpty) && password != confirmPassword then
+            (StatusCode.SeeOther, s"/admin/users?edit=${urlEncode(id)}&err=${urlEncode("Passwords do not match.")}")
           else
             userStore.findById(id) match
               case None =>

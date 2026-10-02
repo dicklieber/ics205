@@ -151,6 +151,20 @@ object UserAdminPage:
                 ),
 
                 div(cls := "form-group")(
+                  label(attr("for") := "confirmPassword")(if isEdit then "Confirm New Password" else "Confirm Password"),
+                  input(
+                    tpe := "password",
+                    id := "confirmPassword",
+                    name := "confirmPassword",
+                    if !isEdit then required else cls := ""
+                  ),
+                  p(cls := "form-help")(
+                    if isEdit then "Leave blank to keep current password."
+                    else "Re-enter the password to confirm."
+                  )
+                ),
+
+                div(cls := "form-group")(
                   label(attr("for") := "role")("Role"),
                   select(
                     id := "role",
@@ -207,6 +221,15 @@ object UserAdminPage:
               |  var form = e.target;
               |  if (form && form.hasAttribute('data-confirm')) {
               |    if (!confirm(form.getAttribute('data-confirm'))) {
+              |      e.preventDefault();
+              |      return;
+              |    }
+              |  }
+              |  if (form) {
+              |    var pass = form.querySelector('input[name="password"]');
+              |    var confirmPass = form.querySelector('input[name="confirmPassword"]');
+              |    if (pass && confirmPass && pass.value !== confirmPass.value) {
+              |      alert('Passwords do not match.');
               |      e.preventDefault();
               |    }
               |  }

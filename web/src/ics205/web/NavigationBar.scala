@@ -27,7 +27,7 @@ import scalatags.Text.tags2.nav
 object NavigationBar:
 
   enum ActivePage:
-    case Plan, Radio, ExportRadio, Events, UserAdmin, Login, None
+    case Plan, Radio, ExportRadio, Events, UserAdmin, ChangePassword, Login, None
 
   def render(
     activePage: ActivePage = ActivePage.None,
@@ -194,6 +194,13 @@ object NavigationBar:
                       "Logged in as: ",
                       strong(user.username)
                     )
+                  ),
+                  li(cls := "nav-item")(
+                    a(
+                      cls := s"nav-link ${if activePage == ActivePage.ChangePassword then "active" else ""}".trim,
+                      href := "/change-password",
+                      if activePage == ActivePage.ChangePassword then attr("aria-current") := "page" else cls := ""
+                    )("Change Password")
                   ),
                   li(cls := "nav-item")(
                     a(cls := "nav-link", href := "/logout")("Log out")

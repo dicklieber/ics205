@@ -78,6 +78,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       val form = UrlForm(
         "username" -> "initialadmin",
         "password" -> "adminpass123",
+        "confirmPassword" -> "adminpass123",
         "role" -> "admin"
       )
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
@@ -125,6 +126,8 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       assert(body.contains("bob"))
       assert(body.contains("u-admin"))
       assert(body.contains("Add New User"))
+      assert(body.contains("id=\"password\""))
+      assert(body.contains("id=\"confirmPassword\""))
       assert(body.contains("<select"))
       assert(body.contains("id=\"role\""))
       assert(body.contains("Role Permissions Reference:"))
@@ -149,6 +152,8 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       assert(body.contains("Edit User: targetuser"))
       assert(body.contains("action=\"/admin/users/edit\""))
       assert(body.contains("value=\"targetuser\""))
+      assert(body.contains("id=\"password\""))
+      assert(body.contains("id=\"confirmPassword\""))
       assert(body.contains("<select"))
       assert(body.contains("selected"))
     }
@@ -164,6 +169,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
         val form = UrlForm(
           "username" -> "newuser",
           "password" -> "secret123",
+          "confirmPassword" -> "secret123",
           "role" -> "editor",
           "enabled" -> "true"
         )
@@ -209,35 +215,59 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       assertEquals(res2.status, Status.SeeOther)
       assert(res2.headers.get(CIString("Location")).get.head.value.contains("err="))
 
-      val formShortPass = UrlForm("username" -> "testuser", "password" -> "short")
+      val formShortPass = UrlForm("username" -> "testuser", "password" -> "short", "confirmPassword" -> "short")
       val req3 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
         .withEntity(formShortPass)
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       val res3 = app.run(req3).unsafeRunSync()
       assertEquals(res3.status, Status.SeeOther)
       assert(res3.headers.get(CIString("Location")).get.head.value.contains("err="))
+
+      val formMismatchPass = UrlForm("username" -> "testuser", "password" -> "password123", "confirmPassword" -> "different123")
+      val req4 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+        .withEntity(formMismatchPass)
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val res4 = app.run(req4).unsafeRunSync()
+      assertEquals(res4.status, Status.SeeOther)
+      assert(res4.headers.get(CIString("Location")).get.head.value.contains("Passwords+do+not+match"))
     }
 
-  test("POST /admin/users/edit rejects short passwords when updated"):
+  test("POST /admin/users/edit rejects short or mismatched passwords when updated"):
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("originalpass")
       userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
       userStore.add(User("alice", hash, RolePermissions.User, enabled = true, id = "u-edit"))
       val session = authService.authenticate("admin", "originalpass").get
 
-      val editForm = UrlForm(
+      val editFormShort = UrlForm(
         "id" -> "u-edit",
         "username" -> "alice",
         "password" -> "short",
+        "confirmPassword" -> "short",
         "role" -> "user",
         "enabled" -> "true"
       )
-      val req = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
-        .withEntity(editForm)
+      val req1 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
+        .withEntity(editFormShort)
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
-      val res = app.run(req).unsafeRunSync()
-      assertEquals(res.status, Status.SeeOther)
-      assert(res.headers.get(CIString("Location")).get.head.value.contains("err="))
+      val res1 = app.run(req1).unsafeRunSync()
+      assertEquals(res1.status, Status.SeeOther)
+      assert(res1.headers.get(CIString("Location")).get.head.value.contains("err="))
+
+      val editFormMismatch = UrlForm(
+        "id" -> "u-edit",
+        "username" -> "alice",
+        "password" -> "newsecret456",
+        "confirmPassword" -> "wrongsecret456",
+        "role" -> "user",
+        "enabled" -> "true"
+      )
+      val req2 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
+        .withEntity(editFormMismatch)
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val res2 = app.run(req2).unsafeRunSync()
+      assertEquals(res2.status, Status.SeeOther)
+      assert(res2.headers.get(CIString("Location")).get.head.value.contains("Passwords+do+not+match"))
     }
 
   test("POST /admin/users/edit updates user roles, enabled state, and optionally password, revoking active sessions"):
@@ -281,6 +311,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
         "id" -> "u-edit",
         "username" -> "alice_updated",
         "password" -> "newsecret456",
+        "confirmPassword" -> "newsecret456",
         "role" -> "admin",
         "enabled" -> "true"
       )

@@ -60,6 +60,8 @@ class NavigationBarTests extends munit.FunSuite:
     assert(html.contains("href=\"/admin/users\""))
     assert(html.contains("Logged in as:"))
     assert(html.contains("adminUser"))
+    assert(html.contains("Change Password"))
+    assert(html.contains("href=\"/change-password\""))
     assert(html.contains("href=\"/logout\""))
     assert(!html.contains("href=\"/login\""))
 
@@ -84,6 +86,8 @@ class NavigationBarTests extends munit.FunSuite:
     assert(!html.contains("User Management"))
     assert(html.contains("Logged in as:"))
     assert(html.contains("viewerUser"))
+    assert(html.contains("Change Password"))
+    assert(html.contains("href=\"/change-password\""))
     assert(html.contains("href=\"/logout\""))
 
   test("NavigationBar marks the active page with active class and aria-current"):
@@ -101,6 +105,11 @@ class NavigationBarTests extends munit.FunSuite:
     val adminHtml = NavigationBar.render(activePage = NavigationBar.ActivePage.UserAdmin, currentUser = Some(adminUser)).render
     assert(adminHtml.contains("href=\"/admin/users\""))
     assert(adminHtml.contains("nav-link active"))
+
+    val changePassHtml = NavigationBar.render(activePage = NavigationBar.ActivePage.ChangePassword, currentUser = Some(adminUser)).render
+    assert(changePassHtml.contains("href=\"/change-password\""))
+    assert(changePassHtml.contains("nav-link active"))
+    assert(changePassHtml.contains("aria-current=\"page\""))
 
     val eventsHtml = NavigationBar.render(activePage = NavigationBar.ActivePage.Events, currentUser = Some(adminUser)).render
     assert(eventsHtml.contains("href=\"/events\""))

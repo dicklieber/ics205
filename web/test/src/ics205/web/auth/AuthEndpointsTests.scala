@@ -26,7 +26,7 @@ import ics205.util.FileHelper
 import ics205.web.ApiEndpoints
 import io.circe.parser.parse
 import jakarta.inject.{Inject, Singleton}
-import org.http4s.{Header, Headers, Method, Request, Status, Uri}
+import org.http4s.{Header, Headers, Method, Request, Status, Uri, UrlForm}
 import org.typelevel.ci.CIString
 import sttp.tapir.*
 import sttp.tapir.json.circe.*
@@ -366,6 +366,169 @@ class AuthEndpointsTests extends munit.FunSuite:
           .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       ).unsafeRunSync()
       assertEquals(res2.status, Status.Unauthorized)
+    }
+
+  test("GET /change-password without session redirects to /login"):
+    withContext { (_, _, _, _, _, _, _, app) =>
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/change-password"))
+      val res = app.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+      val location = res.headers.get(CIString("Location")).map(_.head.value)
+      assertEquals(location, Some("/login?redirect=%2Fchange-password"))
+    }
+
+  test("GET /password redirects to /change-password"):
+    withContext { (_, _, _, _, _, _, _, app) =>
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/password?msg=hello"))
+      val res = app.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+      val location = res.headers.get(CIString("Location")).map(_.head.value)
+      assertEquals(location, Some("/change-password?msg=hello"))
+    }
+
+  test("GET /change-password with valid session renders change password page"):
+    withContext { (_, userStore, sessionStore, passwordService, _, _, _, app) =>
+      val hash = passwordService.hash("mypassword")
+      userStore.add(User("alice", hash, RolePermissions.User, enabled = true, id = "u1"))
+      val session = sessionStore.create("u1")
+
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/change-password"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val (res, body) = (for
+        r <- app.run(req)
+        b <- r.as[String]
+      yield (r, b)).unsafeRunSync()
+
+      assertEquals(res.status, Status.Ok)
+      assert(body.contains("Change Password"))
+      assert(body.contains("id=\"currentPassword\""))
+      assert(body.contains("id=\"newPassword\""))
+      assert(body.contains("id=\"confirmPassword\""))
+      assert(body.contains("Logged in as:"))
+      assert(body.contains("alice"))
+    }
+
+  test("POST /change-password validates current password, minimum length, and password match"):
+    withContext { (_, userStore, sessionStore, passwordService, authService, _, _, app) =>
+      val hash = passwordService.hash("correctOldPass123")
+      userStore.add(User("bob", hash, RolePermissions.User, enabled = true, id = "u-bob"))
+      val session = sessionStore.create("u-bob")
+
+      // Empty current password
+      val formEmptyCurrent = UrlForm("currentPassword" -> "", "newPassword" -> "newPass12345", "confirmPassword" -> "newPass12345")
+      val res1 = app.run(
+        Request[IO](Method.POST, Uri.unsafeFromString("/change-password"))
+          .withEntity(formEmptyCurrent)
+          .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      ).unsafeRunSync()
+      assertEquals(res1.status, Status.SeeOther)
+      assert(res1.headers.get(CIString("Location")).get.head.value.contains("err=Current+password+cannot+be+empty."))
+
+      // Empty new password
+      val formEmptyNew = UrlForm("currentPassword" -> "correctOldPass123", "newPassword" -> "", "confirmPassword" -> "")
+      val res2 = app.run(
+        Request[IO](Method.POST, Uri.unsafeFromString("/change-password"))
+          .withEntity(formEmptyNew)
+          .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      ).unsafeRunSync()
+      assertEquals(res2.status, Status.SeeOther)
+      assert(res2.headers.get(CIString("Location")).get.head.value.contains("err=Password+cannot+be+empty."))
+
+      // Short new password (< 8 chars)
+      val formShortNew = UrlForm("currentPassword" -> "correctOldPass123", "newPassword" -> "short", "confirmPassword" -> "short")
+      val res3 = app.run(
+        Request[IO](Method.POST, Uri.unsafeFromString("/change-password"))
+          .withEntity(formShortNew)
+          .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      ).unsafeRunSync()
+      assertEquals(res3.status, Status.SeeOther)
+      assert(res3.headers.get(CIString("Location")).get.head.value.contains("err=Password+must+be+at+least+8+characters."))
+
+      // Password mismatch
+      val formMismatch = UrlForm("currentPassword" -> "correctOldPass123", "newPassword" -> "brandNewPass1", "confirmPassword" -> "brandNewPass2")
+      val res4 = app.run(
+        Request[IO](Method.POST, Uri.unsafeFromString("/change-password"))
+          .withEntity(formMismatch)
+          .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      ).unsafeRunSync()
+      assertEquals(res4.status, Status.SeeOther)
+      assert(res4.headers.get(CIString("Location")).get.head.value.contains("err=Passwords+do+not+match."))
+
+      // Wrong current password
+      val formWrongCurrent = UrlForm("currentPassword" -> "wrongOldPass123", "newPassword" -> "brandNewPass123", "confirmPassword" -> "brandNewPass123")
+      val res5 = app.run(
+        Request[IO](Method.POST, Uri.unsafeFromString("/change-password"))
+          .withEntity(formWrongCurrent)
+          .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      ).unsafeRunSync()
+      assertEquals(res5.status, Status.SeeOther)
+      assert(res5.headers.get(CIString("Location")).get.head.value.contains("err=Current+password+is+incorrect."))
+
+      // Successful password change
+      val formSuccess = UrlForm("currentPassword" -> "correctOldPass123", "newPassword" -> "brandNewPass123", "confirmPassword" -> "brandNewPass123")
+      val res6 = app.run(
+        Request[IO](Method.POST, Uri.unsafeFromString("/change-password"))
+          .withEntity(formSuccess)
+          .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      ).unsafeRunSync()
+      assertEquals(res6.status, Status.SeeOther)
+      assert(res6.headers.get(CIString("Location")).get.head.value.contains("msg=Password+changed+successfully."))
+
+      // Old password no longer authenticates, new password authenticates
+      assert(authService.authenticate("bob", "correctOldPass123").isEmpty)
+      val newAuth = authService.authenticate("bob", "brandNewPass123")
+      assert(newAuth.isDefined)
+    }
+
+  test("POST /change-password via JSON handles authentication, validation, and updates password"):
+    withContext { (_, userStore, sessionStore, passwordService, authService, _, _, app) =>
+      val hash = passwordService.hash("mysecretpass")
+      userStore.add(User("carol", hash, RolePermissions.User, enabled = true, id = "u-carol"))
+      val session = sessionStore.create("u-carol")
+
+      // Unauthorized without session
+      val resNoAuth = app.run(
+        Request[IO](Method.POST, Uri.unsafeFromString("/change-password"))
+          .withEntity("""{"currentPassword":"mysecretpass","newPassword":"newsecretpass123"}""")
+          .putHeaders(Header.Raw(CIString("Content-Type"), "application/json"))
+      ).unsafeRunSync()
+      assertEquals(resNoAuth.status, Status.Unauthorized)
+
+      // Invalid current password
+      val resBadOld = app.run(
+        Request[IO](Method.POST, Uri.unsafeFromString("/change-password"))
+          .withEntity("""{"currentPassword":"wrongpass","newPassword":"newsecretpass123"}""")
+          .putHeaders(
+            Header.Raw(CIString("Content-Type"), "application/json"),
+            Header.Raw(CIString("Cookie"), s"session=${session.id}")
+          )
+      ).unsafeRunSync()
+      assertEquals(resBadOld.status, Status.BadRequest)
+
+      // Mismatched confirm password
+      val resMismatch = app.run(
+        Request[IO](Method.POST, Uri.unsafeFromString("/change-password"))
+          .withEntity("""{"currentPassword":"mysecretpass","newPassword":"newsecretpass123","confirmPassword":"differentpass"}""")
+          .putHeaders(
+            Header.Raw(CIString("Content-Type"), "application/json"),
+            Header.Raw(CIString("Cookie"), s"session=${session.id}")
+          )
+      ).unsafeRunSync()
+      assertEquals(resMismatch.status, Status.BadRequest)
+
+      // Success
+      val resSuccess = app.run(
+        Request[IO](Method.POST, Uri.unsafeFromString("/change-password"))
+          .withEntity("""{"currentPassword":"mysecretpass","newPassword":"newsecretpass123","confirmPassword":"newsecretpass123"}""")
+          .putHeaders(
+            Header.Raw(CIString("Content-Type"), "application/json"),
+            Header.Raw(CIString("Cookie"), s"session=${session.id}")
+          )
+      ).unsafeRunSync()
+      assertEquals(resSuccess.status, Status.Ok)
+
+      assert(authService.authenticate("carol", "mysecretpass").isEmpty)
+      assert(authService.authenticate("carol", "newsecretpass123").isDefined)
     }
 
 class TestProtectedEndpoints @Inject()(security: AuthSecurity) extends ApiEndpoints:
