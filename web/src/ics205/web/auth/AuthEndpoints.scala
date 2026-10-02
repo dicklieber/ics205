@@ -23,6 +23,7 @@ import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, PasswordService, ScalaPassPasswordService}
 import ics205.store.{SessionStore, UserStore}
 import ics205.web.ApiEndpoints
+import ics205.web.util.RequestUtils
 import io.circe.Codec
 import io.circe.derivation.{Configuration, ConfiguredCodec}
 import io.circe.syntax.*
@@ -134,44 +135,79 @@ class AuthEndpoints @Inject()(
   private val loginPostEndpoint: ServerEndpoint[Any, IO] =
     endpoint.post
       .in("login")
+      .in(extractFromRequest(identity))
       .in(header[Option[String]]("Content-Type"))
       .in(stringBody)
       .errorOut(statusCode.and(header[Option[String]]("Location")).and(header[Option[String]]("Content-Type")).and(stringBody))
       .out(statusCode.and(header[Option[String]]("Location")).and(setCookies).and(header[Option[String]]("Content-Type")).and(stringBody))
-      .serverLogic[IO] { (contentType, body) =>
+      .serverLogic[IO] { (serverRequest, contentType, body) =>
         IO.blocking {
+          val ip = RequestUtils.clientIp(serverRequest)
+          val userAgent = serverRequest.header("User-Agent").getOrElse("unknown")
           val isJson = contentType.exists(_.toLowerCase.contains("application/json"))
           if isJson then
             io.circe.parser.decode[LoginRequest](body) match
-              case Left(_) =>
+              case Left(err) =>
+                logger.info(s"Login failed from IP $ip (User-Agent: $userAgent): Invalid JSON body - ${err.getMessage}")
                 Left((StatusCode.BadRequest, None, Some("text/plain; charset=utf-8"), "Invalid JSON body"))
               case Right(req) =>
-                authService.authenticate(req.username, req.password) match
-                  case Some(session) =>
+                val username = req.username.trim
+                userStore.findByUsername(username) match
+                  case None =>
+                    logger.info(s"Login failed for user '$username' from IP $ip (User-Agent: $userAgent): User does not exist")
+                    Left((StatusCode.Unauthorized, None, Some("text/plain; charset=utf-8"), "Invalid username or password"))
+                  case Some(user) if !user.enabled =>
+                    logger.info(s"Login failed for user '$username' (id: '${user.id}') from IP $ip (User-Agent: $userAgent): User is disabled")
+                    Left((StatusCode.Unauthorized, None, Some("text/plain; charset=utf-8"), "Invalid username or password"))
+                  case Some(user) if !passwordService.verify(req.password, user.passwordHash) =>
+                    logger.info(s"Login failed for user '$username' (id: '${user.id}') from IP $ip (User-Agent: $userAgent): Incorrect password")
+                    Left((StatusCode.Unauthorized, None, Some("text/plain; charset=utf-8"), "Invalid username or password"))
+                  case Some(user) =>
+                    val session = sessionStore.create(user.id)
                     val cookieMeta = security.sessionCookieWithMeta(session.id)
                     authService.authenticateSession(session.id) match
-                      case Right(user) =>
-                        val respJson = LoginResponse("Login successful", user).asJson.noSpaces
+                      case Right(authUser) =>
+                        logger.info(s"Login successful for user '${authUser.username}' (id: '${authUser.id}', role: ${authUser.role}) from IP $ip (User-Agent: $userAgent)")
+                        val respJson = LoginResponse("Login successful", authUser).asJson.noSpaces
                         Right((StatusCode.Ok, None, List(cookieMeta), Some("application/json"), respJson))
                       case Left(err) =>
+                        logger.info(s"Login failed for user '$username' from IP $ip (User-Agent: $userAgent): ${err.message}")
                         Left((StatusCode(err.status), None, Some("text/plain; charset=utf-8"), err.message))
-                  case None =>
-                    Left((StatusCode.Unauthorized, None, Some("text/plain; charset=utf-8"), "Invalid username or password"))
           else
             val formData = parseFormData(body)
             val username = formData.getOrElse("username", "").trim
             val password = formData.getOrElse("password", "")
             val redirect = formData.get("redirect").filter(r => r.startsWith("/") && !r.startsWith("//"))
+            val redirectInfo = redirect.map(r => s", redirect: '$r'").getOrElse("")
 
-            authService.authenticate(username, password) match
-              case Some(session) =>
-                val cookieMeta = security.sessionCookieWithMeta(session.id)
-                val target = redirect.getOrElse("/")
-                Right((StatusCode.SeeOther, Some(target), List(cookieMeta), None, ""))
-              case None =>
-                val redirectParam = redirect.map(r => s"&redirect=${urlEncode(r)}").getOrElse("")
-                val target = s"/login?err=${urlEncode("Invalid username or password")}$redirectParam"
-                Left((StatusCode.SeeOther, Some(target), None, ""))
+            if username.isEmpty || password.isEmpty then
+              logger.info(s"Login failed from IP $ip (User-Agent: $userAgent$redirectInfo): Empty username or password provided (username: '$username')")
+              val redirectParam = redirect.map(r => s"&redirect=${urlEncode(r)}").getOrElse("")
+              val target = s"/login?err=${urlEncode("Invalid username or password")}$redirectParam"
+              Left((StatusCode.SeeOther, Some(target), None, ""))
+            else
+              userStore.findByUsername(username) match
+                case None =>
+                  logger.info(s"Login failed for user '$username' from IP $ip (User-Agent: $userAgent$redirectInfo): User does not exist")
+                  val redirectParam = redirect.map(r => s"&redirect=${urlEncode(r)}").getOrElse("")
+                  val target = s"/login?err=${urlEncode("Invalid username or password")}$redirectParam"
+                  Left((StatusCode.SeeOther, Some(target), None, ""))
+                case Some(user) if !user.enabled =>
+                  logger.info(s"Login failed for user '$username' (id: '${user.id}') from IP $ip (User-Agent: $userAgent$redirectInfo): User is disabled")
+                  val redirectParam = redirect.map(r => s"&redirect=${urlEncode(r)}").getOrElse("")
+                  val target = s"/login?err=${urlEncode("Invalid username or password")}$redirectParam"
+                  Left((StatusCode.SeeOther, Some(target), None, ""))
+                case Some(user) if !passwordService.verify(password, user.passwordHash) =>
+                  logger.info(s"Login failed for user '$username' (id: '${user.id}') from IP $ip (User-Agent: $userAgent$redirectInfo): Incorrect password")
+                  val redirectParam = redirect.map(r => s"&redirect=${urlEncode(r)}").getOrElse("")
+                  val target = s"/login?err=${urlEncode("Invalid username or password")}$redirectParam"
+                  Left((StatusCode.SeeOther, Some(target), None, ""))
+                case Some(user) =>
+                  val session = sessionStore.create(user.id)
+                  val cookieMeta = security.sessionCookieWithMeta(session.id)
+                  val target = redirect.getOrElse("/")
+                  logger.info(s"Login successful for user '${user.username}' (id: '${user.id}', role: ${user.role}) from IP $ip (User-Agent: $userAgent$redirectInfo)")
+                  Right((StatusCode.SeeOther, Some(target), List(cookieMeta), None, ""))
         }
       }
 
@@ -226,13 +262,15 @@ class AuthEndpoints @Inject()(
   private val changePasswordPostEndpoint: ServerEndpoint[Any, IO] =
     endpoint.post
       .in("change-password")
+      .in(extractFromRequest(identity))
       .in(cookie[Option[String]](config.cookieName))
       .in(header[Option[String]]("Content-Type"))
       .in(stringBody)
       .errorOut(statusCode.and(header[Option[String]]("Location")).and(header[Option[String]]("Content-Type")).and(stringBody))
       .out(statusCode.and(header[Option[String]]("Location")).and(header[Option[String]]("Content-Type")).and(stringBody))
-      .serverLogic[IO] { (sessionIdOpt, contentType, body) =>
+      .serverLogic[IO] { (serverRequest, sessionIdOpt, contentType, body) =>
         IO.blocking {
+          val ip = RequestUtils.clientIp(serverRequest)
           val isJson = contentType.exists(_.toLowerCase.contains("application/json"))
           sessionIdOpt match
             case Some(sessionId) =>
@@ -261,6 +299,7 @@ class AuthEndpoints @Inject()(
                             else
                               val newHash = passwordService.hash(newPassword)
                               userStore.update(storedUser.copy(passwordHash = newHash))
+                              logger.info(s"User '${authUser.username}' (id: '${authUser.id}') changed their password from IP $ip")
                               val respJson = ChangePasswordResponse("Password changed successfully.").asJson.noSpaces
                               Right((StatusCode.Ok, None, Some("application/json"), respJson))
                       else
@@ -282,6 +321,7 @@ class AuthEndpoints @Inject()(
                         else
                           val newHash = passwordService.hash(newPassword)
                           userStore.update(storedUser.copy(passwordHash = newHash))
+                          logger.info(s"User '${authUser.username}' (id: '${authUser.id}') changed their password from IP $ip")
                           Right((StatusCode.SeeOther, Some(s"/change-password?msg=${urlEncode("Password changed successfully.")}"), None, ""))
                     case None =>
                       if isJson then

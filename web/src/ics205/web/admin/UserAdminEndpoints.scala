@@ -19,10 +19,12 @@
 package ics205.web.admin
 
 import cats.effect.IO
+import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.{AuthenticatedUser, PasswordService, Permission, RolePermissions, User}
 import ics205.store.{SessionStore, UserStore}
 import ics205.web.ApiEndpoints
 import ics205.web.auth.AuthSecurity
+import ics205.web.util.RequestUtils
 import jakarta.inject.{Inject, Singleton}
 import sttp.model.StatusCode
 import sttp.tapir.*
@@ -37,7 +39,7 @@ class UserAdminEndpoints @Inject()(
   sessionStore: SessionStore,
   passwordService: PasswordService,
   security: AuthSecurity
-) extends ApiEndpoints:
+) extends ApiEndpoints with LazyLogging:
 
   private def urlEncode(s: String): String =
     URLEncoder.encode(s, StandardCharsets.UTF_8)
@@ -92,12 +94,14 @@ class UserAdminEndpoints @Inject()(
   private val createUserEndpoint: ServerEndpoint[Any, IO] =
     endpoint.post
       .in("admin" / "users" / "create")
+      .in(extractFromRequest(identity))
       .in(cookie[Option[String]](security.config.cookieName))
       .in(formBody[Map[String, String]])
       .errorOut(statusCode.and(stringBody))
       .out(statusCode.and(header[String]("Location")))
-      .serverLogic[IO] { (sessionIdOpt, formData) =>
+      .serverLogic[IO] { (serverRequest, sessionIdOpt, formData) =>
         IO.blocking {
+          val ip = RequestUtils.clientIp(serverRequest)
           val users = userStore.all()
           val isInitial = users.isEmpty
 
@@ -116,7 +120,7 @@ class UserAdminEndpoints @Inject()(
 
           authorized match
             case Left(err) => Left(err)
-            case Right(_) =>
+            case Right(adminOpt) =>
               val username = formData.getOrElse("username", "").trim
               val password = formData.getOrElse("password", "")
               val confirmPassword = formData.getOrElse("confirmPassword", formData.getOrElse("confirm_password", ""))
@@ -144,8 +148,11 @@ class UserAdminEndpoints @Inject()(
                 userStore.add(newUser) match
                   case Right(_) =>
                     if isInitial then
+                      logger.info(s"Initial admin user '$username' (id: '${newUser.id}', role: ${newUser.role}, enabled: ${newUser.enabled}) created from IP $ip")
                       Right((StatusCode.SeeOther, s"/login?msg=${urlEncode(s"User '$username' created successfully. Please log in.")}"))
                     else
+                      val adminName = adminOpt.map(_.username).getOrElse("unknown")
+                      logger.info(s"Admin '$adminName' created user '$username' (id: '${newUser.id}', role: ${newUser.role}, enabled: ${newUser.enabled}) from IP $ip")
                       Right((StatusCode.SeeOther, s"/admin/users?msg=${urlEncode(s"User '$username' created successfully.")}"))
                   case Left(err) =>
                     Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode(err)}"))
@@ -156,10 +163,12 @@ class UserAdminEndpoints @Inject()(
     security.authorizedEndpoint(Permission.EditUsers)
       .post
       .in("admin" / "users" / "edit")
+      .in(extractFromRequest(identity))
       .in(formBody[Map[String, String]])
       .out(statusCode.and(header[String]("Location")))
-      .serverLogicSuccess { _ => formData =>
+      .serverLogicSuccess { adminUser => (serverRequest, formData) =>
         IO.blocking {
+          val ip = RequestUtils.clientIp(serverRequest)
           val id = formData.getOrElse("id", "")
           val username = formData.getOrElse("username", "").trim
           val password = formData.getOrElse("password", "")
@@ -181,15 +190,25 @@ class UserAdminEndpoints @Inject()(
               case None =>
                 (StatusCode.SeeOther, s"/admin/users?err=${urlEncode("User not found.")}")
               case Some(existing) =>
-                val passwordHash = if password.nonEmpty then passwordService.hash(password) else existing.passwordHash
+                val passwordChanged = password.nonEmpty
+                val passwordHash = if passwordChanged then passwordService.hash(password) else existing.passwordHash
                 val updated = existing.copy(
                   username = username,
                   passwordHash = passwordHash,
                   role = role,
                   enabled = enabled
                 )
+                val changedFields = List(
+                  if existing.username != username then Some(s"username: '${existing.username}' -> '$username'") else None,
+                  if existing.role != role then Some(s"role: ${existing.role} -> $role") else None,
+                  if existing.enabled != enabled then Some(s"enabled: ${existing.enabled} -> $enabled") else None,
+                  if passwordChanged then Some("password: changed") else None
+                ).flatten
+
                 userStore.update(updated) match
                   case Right(_) =>
+                    val changesSummary = if changedFields.nonEmpty then changedFields.mkString(", ") else "none"
+                    logger.info(s"Admin '${adminUser.username}' updated user '${existing.username}' (id: '$id') from IP $ip - changed fields: [$changesSummary]")
                     if password.nonEmpty || existing.role != role || !enabled then
                       sessionStore.deleteAllForUser(existing.id)
                     (StatusCode.SeeOther, s"/admin/users?msg=${urlEncode(s"User '$username' updated successfully.")}")
@@ -202,14 +221,19 @@ class UserAdminEndpoints @Inject()(
     security.authorizedEndpoint(Permission.EditUsers)
       .post
       .in("admin" / "users" / "delete")
+      .in(extractFromRequest(identity))
       .in(formBody[Map[String, String]])
       .out(statusCode.and(header[String]("Location")))
-      .serverLogicSuccess { _ => formData =>
+      .serverLogicSuccess { adminUser => (serverRequest, formData) =>
         IO.blocking {
+          val ip = RequestUtils.clientIp(serverRequest)
           val id = formData.getOrElse("id", "")
           if id.nonEmpty then
+            val userOpt = userStore.findById(id)
             sessionStore.deleteAllForUser(id)
             userStore.delete(id)
+            val username = userOpt.map(_.username).getOrElse(id)
+            logger.info(s"Admin '${adminUser.username}' deleted user '$username' (id: '$id') from IP $ip")
             (StatusCode.SeeOther, s"/admin/users?msg=${urlEncode("User deleted successfully.")}")
           else
             (StatusCode.SeeOther, s"/admin/users?err=${urlEncode("User ID is missing.")}")

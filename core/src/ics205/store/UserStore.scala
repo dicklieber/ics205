@@ -93,6 +93,7 @@ class UserStore @Inject()(fileHelper: FileHelper, config: AuthConfig) extends La
       val updated = usersState :+ user
       persist(updated)
       usersState = updated
+      logger.info(s"Added user '${user.username}' (id: '${user.id}', role: ${user.role}, enabled: ${user.enabled})")
       Right(user)
   }
 
@@ -109,14 +110,18 @@ class UserStore @Inject()(fileHelper: FileHelper, config: AuthConfig) extends La
           val updated = usersState.updated(idx, user)
           persist(updated)
           usersState = updated
+          logger.info(s"Updated user '${user.username}' (id: '${user.id}', role: ${user.role}, enabled: ${user.enabled})")
           Right(user)
   }
 
   def delete(id: UserId): Boolean = synchronized {
+    val maybeUser = usersState.find(_.id == id)
     val filtered = usersState.filterNot(_.id == id)
     if filtered.length != usersState.length then
       persist(filtered)
       usersState = filtered
+      val username = maybeUser.map(_.username).getOrElse(id)
+      logger.info(s"Deleted user '$username' (id: '$id')")
       true
     else
       false
