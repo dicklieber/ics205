@@ -31,6 +31,22 @@ case class AuthConfig(
 )
 
 object AuthConfig:
+  private def parseBoolean(config: Config, path: String, default: Boolean): Boolean =
+    if !config.hasPath(path) then default
+    else
+      try
+        config.getBoolean(path)
+      catch
+        case _: Exception =>
+          try
+            val raw = config.getString(path).trim.stripPrefix("\"").stripSuffix("\"").trim.toLowerCase
+            raw match
+              case "true" | "1" | "yes" | "on" | "t" | "y" => true
+              case "false" | "0" | "no" | "off" | "f" | "n" => false
+              case _ => default
+          catch
+            case _: Exception => default
+
   def fromConfig(config: Config): AuthConfig =
     val authConf = if config.hasPath("auth") then config.getConfig("auth") else config
     AuthConfig(
@@ -38,7 +54,7 @@ object AuthConfig:
       sessionFileName = if authConf.hasPath("sessionFileName") then authConf.getString("sessionFileName") else "sessions.json",
       sessionLifetime = if authConf.hasPath("sessionLifetime") then authConf.getDuration("sessionLifetime") else Duration.ofHours(24),
       cookieName = if authConf.hasPath("cookieName") then authConf.getString("cookieName") else "session",
-      secureCookie = if authConf.hasPath("secureCookie") then authConf.getBoolean("secureCookie") else false
+      secureCookie = parseBoolean(authConf, "secureCookie", false)
     )
 
   def apply(config: Config): AuthConfig = fromConfig(config)

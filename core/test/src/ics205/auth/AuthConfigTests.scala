@@ -49,6 +49,34 @@ class AuthConfigTests extends munit.FunSuite:
     assertEquals(config.cookieName, "custom_session")
     assertEquals(config.secureCookie, true)
 
+  test("AuthConfig resiliently parses secureCookie from strings and various truthy/falsy representations"):
+    val testCases = Seq(
+      ("true", true),
+      ("\"true\"", true),
+      ("\"1\"", true),
+      ("\"yes\"", true),
+      ("\"on\"", true),
+      ("\"TRUE\"", true),
+      ("false", false),
+      ("\"false\"", false),
+      ("\"0\"", false),
+      ("\"no\"", false),
+      ("\"off\"", false),
+      ("\"\"", false),
+      ("\"invalid\"", false)
+    )
+
+    for ((valueStr, expected) <- testCases) do
+      val conf = ConfigFactory.parseString(s"auth.secureCookie = $valueStr")
+      val parsed = AuthConfig.fromConfig(conf)
+      assertEquals(parsed.secureCookie, expected, s"Failed for input: $valueStr")
+
+    // Test flat parsing as well
+    for ((valueStr, expected) <- testCases) do
+      val conf = ConfigFactory.parseString(s"secureCookie = $valueStr")
+      val parsed = AuthConfig.fromConfig(conf)
+      assertEquals(parsed.secureCookie, expected, s"Failed for flat input: $valueStr")
+
   test("AuthConfig parses flat custom Config without auth prefix"):
     val custom = ConfigFactory.parseString(
       """
