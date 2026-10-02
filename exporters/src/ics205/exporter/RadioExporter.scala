@@ -37,11 +37,11 @@ class RadioExporter @Inject()(definitions: RadioExportDefinitions):
     val printer = new CSVPrinter(writer, CSVFormat.DEFAULT)
     try
       if includeHeader then
-        val headerRow = definition.columns.map(_.header)
+        val headerRow = definition.headers
         printer.printRecord(headerRow.asJava)
 
       for channel <- ics205.channels do
-        val row = definition.columns.map(_.extract(channel, definition.channelNameBuilder))
+        val row = definition.orderedColumns.map(_.extract(channel, definition.channelNameBuilder))
         printer.printRecord(row.asJava)
 
       printer.flush()

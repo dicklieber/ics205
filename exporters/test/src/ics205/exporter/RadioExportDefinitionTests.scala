@@ -53,8 +53,8 @@ class RadioExportDefinitionTests extends munit.FunSuite:
     assertEquals(col.extract(sampleChannel, new RadioChannelNameBuilderDefault()), "5 kHz")
 
   test("RadioColumn extracts empty string"):
-    val col = RadioColumn.empty
-    assertEquals(col.header, "")
+    val col = RadioColumn.empty(CsvColumn.Comment)
+    assertEquals(col.header, "Comment")
     assertEquals(col.extract(sampleChannel, new RadioChannelNameBuilderDefault()), "")
 
   test("RadioColumn extracts RadioChannelName via RadioChannelNameBuilder"):
@@ -83,46 +83,47 @@ class RadioExportDefinitionTests extends munit.FunSuite:
     assertEquals(col2.header, "Step")
     assertEquals(col2.extract(sampleChannel, new RadioChannelNameBuilderDefault()), "25 kHz")
 
-  test("RadioExportDefinition overrideColumn replaces column"):
+  test("RadioExportDefinition withColumn overrides existing column definition"):
     val base = RadioExportDefinition("Test", List(
       RadioColumn(CsvColumn.ChannelNumber)(_.channelNumber.getOrElse("")),
       RadioColumn.const(CsvColumn.Step, "5 kHz")
     ))
-    val overridden = base.overrideColumn(CsvColumn.Step, RadioColumn.const(CsvColumn.Step, "12.5 kHz"))
-    assertEquals(overridden.columns.map(_.extract(sampleChannel, new RadioChannelNameBuilderDefault())), List("CH-01", "12.5 kHz"))
+    val overridden = base.withColumn(RadioColumn.const(CsvColumn.Step, "12.5 kHz"))
+    assertEquals(overridden.orderedColumns.map(_.extract(sampleChannel, new RadioChannelNameBuilderDefault())), List("CH-01", "12.5 kHz"))
 
-  test("RadioExportDefinition removeColumns and insertAfter"):
+  test("RadioExportDefinition automatically orders columns by CsvColumn ordinal and withoutColumns removes them"):
     val base = RadioExportDefinition("Test", List(
-      RadioColumn(CsvColumn.ChannelNumber)(_.channelNumber.getOrElse("")),
       RadioColumn(CsvColumn.ReceiveFrequency)(_.frequency.rx.toString),
+      RadioColumn(CsvColumn.ChannelNumber)(_.channelNumber.getOrElse("")),
       RadioColumn(CsvColumn.TransmitFrequency)(_.frequency.tx.toString)
     ))
+    // Bank is ordinal 1 (after ChannelNumber at 0 and before ReceiveFrequency at 2)
     val modified = base
-      .insertAfter(CsvColumn.ChannelNumber, RadioColumn.const(CsvColumn.Bank, "1"))
-      .removeColumns(CsvColumn.TransmitFrequency)
+      .withColumn(RadioColumn.const(CsvColumn.Bank, "1"))
+      .withoutColumns(CsvColumn.TransmitFrequency)
 
     assertEquals(modified.headers, List("Channel Number", "Bank", "Receive Frequency"))
 
   test("Kenwood TH-D75 definition has expected structure"):
     val defn = KenwoodTHD75.definition
     assertEquals(defn.name, "Kenwood TH-D75")
-    assertEquals(defn.columns.length, 10)
+    assertEquals(defn.columns.size, 11)
     assertEquals(defn.headers.head, "Channel Number")
     assertEquals(defn.headers.last, "Comment")
 
   test("Yaesu FTM-500 and FTM-510 definitions have expected structure"):
     val ftm510 = YaesuFTM510.definition
     assertEquals(ftm510.name, "Yaesu FTM-510")
-    assertEquals(ftm510.columns.length, 10)
+    assertEquals(ftm510.columns.size, 11)
     assertEquals(ftm510.headers.head, "Channel Number")
 
     val ftm500 = YaesuFTM500.definition
     assertEquals(ftm500.name, "Yaesu FTM-500")
-    assertEquals(ftm500.columns.length, 10)
+    assertEquals(ftm500.columns.size, 11)
 
   test("Icom ID-52Plus definition has expected structure"):
     val id52 = IcomID52Plus.definition
     assertEquals(id52.name, "Icom ID-52Plus")
-    assertEquals(id52.columns.length, 11)
+    assertEquals(id52.columns.size, 11)
     assertEquals(id52.headers(0), "Channel Number")
     assertEquals(id52.headers(1), "Bank")

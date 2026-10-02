@@ -29,40 +29,24 @@ import scala.annotation.targetName
  * @param extract Function to compute the string representation from a channel.
  */
 case class RadioColumn(
-  column: Option[CsvColumn],
-  headerOverride: Option[String] = None,
+  column: CsvColumn,
   extract: (Ics205Channel, RadioChannelNameBuilder) => String
 ):
   /** CSV header emitted in the output */
-  def header: String = headerOverride.orElse(column.map(_.header)).getOrElse("")
+  def header: String = column.header
 
 object RadioColumn:
   def apply(column: CsvColumn)(f: Ics205Channel => Any): RadioColumn =
-    RadioColumn(Some(column), None, (ch, _) => Option(f(ch)).map(_.toString).getOrElse(""))
-
-  def apply(column: CsvColumn, header: String)(f: Ics205Channel => Any): RadioColumn =
-    RadioColumn(Some(column), Some(header), (ch, _) => Option(f(ch)).map(_.toString).getOrElse(""))
-
-  def apply(header: String)(f: Ics205Channel => Any): RadioColumn =
-    RadioColumn(CsvColumn.fromHeader(header), Some(header), (ch, _) => Option(f(ch)).map(_.toString).getOrElse(""))
+    RadioColumn(column, (ch, _) => Option(f(ch)).map(_.toString).getOrElse(""))
 
   def const(column: CsvColumn, value: Any): RadioColumn =
-    RadioColumn(Some(column), None, (_, _) => Option(value).map(_.toString).getOrElse(""))
-
-  def const(header: String, value: Any): RadioColumn =
-    RadioColumn(CsvColumn.fromHeader(header), Some(header), (_, _) => Option(value).map(_.toString).getOrElse(""))
-
-  def empty: RadioColumn =
-    RadioColumn(None, Some(""), (_, _) => "")
+    RadioColumn(column, (_, _) => Option(value).map(_.toString).getOrElse(""))
 
   def empty(column: CsvColumn): RadioColumn =
-    RadioColumn(Some(column), None, (_, _) => "")
-
-  def empty(header: String): RadioColumn =
-    RadioColumn(CsvColumn.fromHeader(header), Some(header), (_, _) => "")
+    RadioColumn(column, (_, _) => "")
 
   def channelName(column: CsvColumn = CsvColumn.Name, maxLength: Int = 16): RadioColumn =
-    RadioColumn(Some(column), None, (ch, nameBuilder) => nameBuilder(ch).take(maxLength))
+    RadioColumn(column, (ch, nameBuilder) => nameBuilder(ch).take(maxLength))
 
   def direction(
     column: CsvColumn = CsvColumn.OffsetDirection,
@@ -83,79 +67,45 @@ object RadioColumn:
     def :=(f: Ics205Channel => Any): RadioColumn = RadioColumn(col)(f)
     def :=(constVal: String): RadioColumn = RadioColumn.const(col, constVal)
 
-  extension (hdr: String)
-    def :=(f: Ics205Channel => Any): RadioColumn = RadioColumn(hdr)(f)
-    def :=(constVal: String): RadioColumn = RadioColumn.const(hdr, constVal)
-
 /**
  * Definition for exporting ICS-205 channels into a radio-specific CSV format.
+ * Columns are stored in a Map keyed by CsvColumn and emitted in natural CsvColumn enum declaration order.
  *
  * @param name Model name (e.g., "Yaesu FTM-500", "Kenwood TH-D75").
- * @param columns List of column specifications defining CSV output.
+ * @param columns Map of column specifications defining CSV output.
  * @param channelNameBuilder Component to build radio channel name from channel fields.
  */
 case class RadioExportDefinition(
   name: String,
-  columns: List[RadioColumn],
+  columns: Map[CsvColumn, RadioColumn],
   channelNameBuilder: RadioChannelNameBuilder = new RadioChannelNameBuilderDefault()
 ):
-  def headers: List[String] = columns.map(_.header)
+  /** Columns ordered deterministically by CsvColumn enum declaration order. */
+  lazy val orderedColumns: Seq[RadioColumn] =
+    columns.toSeq.sortBy(_._1.ordinal).map(_._2)
 
-  /** Emits columns sorted by the natural CsvColumn enum declaration order. */
-  def sortedColumns: List[RadioColumn] =
-    columns.sortBy { col =>
-      col.column.map(_.ordinal).getOrElse(Int.MaxValue)
-    }
+  def headers: Seq[String] = orderedColumns.map(_.header)
 
-  /** Replaces an existing column by CsvColumn with a new column definition */
-  def overrideColumn(target: CsvColumn, newColumn: RadioColumn): RadioExportDefinition =
-    copy(columns = columns.map(c => if c.column.contains(target) then newColumn else c))
-
-  /** Overrides extraction logic for a specific CsvColumn */
-  def overrideColumn(target: CsvColumn)(f: Ics205Channel => Any): RadioExportDefinition =
-    overrideColumn(target, RadioColumn(target)(f))
-
-  /** Replaces an existing column by header name with a new column definition */
-  @targetName("overrideColumnByHeader")
-  def overrideColumn(header: String, newColumn: RadioColumn): RadioExportDefinition =
-    copy(columns = columns.map(c => if c.header == header then newColumn else c))
-
-  /** Overrides extraction logic for a specific header name */
-  @targetName("overrideColumnByHeaderExtract")
-  def overrideColumn(header: String)(f: Ics205Channel => Any): RadioExportDefinition =
-    overrideColumn(header, RadioColumn(header)(f))
-
-  /** Removes columns by CsvColumn */
-  def removeColumns(cols: CsvColumn*): RadioExportDefinition =
-    val colSet = cols.toSet
-    copy(columns = columns.filterNot(c => c.column.exists(colSet.contains)))
-
-  /** Removes columns by header name */
-  @targetName("removeHeaders")
-  def removeColumns(headers: String*): RadioExportDefinition =
-    val headerSet = headers.toSet
-    copy(columns = columns.filterNot(c => headerSet.contains(c.header)))
-
-  /** Appends additional columns */
-  def addColumns(newCols: RadioColumn*): RadioExportDefinition =
+  /** Add or override columns */
+  def withColumns(newCols: (CsvColumn, RadioColumn)*): RadioExportDefinition =
     copy(columns = columns ++ newCols)
 
-  /** Inserts a new column right after a specific CsvColumn */
-  def insertAfter(target: CsvColumn, newCol: RadioColumn): RadioExportDefinition =
-    val idx = columns.indexWhere(_.column.contains(target))
-    if idx < 0 then addColumns(newCol)
-    else
-      val (front, back) = columns.splitAt(idx + 1)
-      copy(columns = front ++ List(newCol) ++ back)
+  def withColumns(newCols: Iterable[RadioColumn]): RadioExportDefinition =
+    copy(columns = columns ++ newCols.map(c => c.column -> c))
 
-  /** Inserts a new column right after a specific header */
-  @targetName("insertAfterHeader")
-  def insertAfter(targetHeader: String, newCol: RadioColumn): RadioExportDefinition =
-    val idx = columns.indexWhere(_.header == targetHeader)
-    if idx < 0 then addColumns(newCol)
-    else
-      val (front, back) = columns.splitAt(idx + 1)
-      copy(columns = front ++ List(newCol) ++ back)
+  def withColumn(col: RadioColumn): RadioExportDefinition =
+    copy(columns = columns + (col.column -> col))
+
+  /** Remove columns */
+  def withoutColumns(cols: CsvColumn*): RadioExportDefinition =
+    copy(columns = columns -- cols)
+
+object RadioExportDefinition:
+  def apply(name: String, columns: Seq[RadioColumn]): RadioExportDefinition =
+    RadioExportDefinition(name, columns.map(c => c.column -> c).toMap)
+
+  def apply(name: String, columns: Seq[RadioColumn], channelNameBuilder: RadioChannelNameBuilder): RadioExportDefinition =
+    RadioExportDefinition(name, columns.map(c => c.column -> c).toMap, channelNameBuilder)
 
 trait RadioExportDefinitionProvider:
   def definition: RadioExportDefinition
