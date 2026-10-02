@@ -29,7 +29,9 @@ import io.circe.syntax.*
 import jakarta.inject.{Inject, Singleton}
 
 import java.nio.file.NoSuchFileException
-import java.time.{Instant, LocalDateTime}
+import java.time.format.DateTimeFormatter
+import java.time.temporal.TemporalAccessor
+import java.time.{Instant, LocalDateTime, ZoneOffset}
 
 @Singleton
 class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
@@ -82,10 +84,31 @@ class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
       Seq.empty
   }
 
+  private val UtcFormatter: DateTimeFormatter = Ics205Store.UtcFormatter
+
+  def insertTimestamp(fileName: String, timestamp: TemporalAccessor = Instant.now()): String =
+    Ics205Store.insertTimestamp(fileName, timestamp)
+
+  def timestampedFileName(fileName: String, timestamp: TemporalAccessor = Instant.now()): String =
+    Ics205Store.timestampedFileName(fileName, timestamp)
+
   private def writeEventFile(event: Ics205Event): Unit = synchronized {
     val eventName = if event.eventName.nonEmpty then event.eventName else event.ics205.incidentName
     val fileName = fileNameFor(eventName)
     val path = eventsDirectory / fileName
+
+    if os.exists(path) && os.isFile(path) then
+      try
+        val bakDirName = if fileName.endsWith(".json") then fileName.stripSuffix(".json") + ".bak" else s"$fileName.bak"
+        val bakDir = eventsDirectory / bakDirName
+        os.makeDir.all(bakDir)
+        val bakFileName = insertTimestamp(fileName)
+        val bakPath = bakDir / bakFileName
+        os.copy(path, bakPath, replaceExisting = true, createFolders = true)
+      catch
+        case e: Exception =>
+          logger.error(s"Failed to backup existing event file: $fileName", e)
+
     val tempPath = eventsDirectory / s".$fileName.tmp.${generateId()}"
     val json = event.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true))
     os.write.over(tempPath, json, createFolders = true)
@@ -161,6 +184,11 @@ class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
           val oldPath = eventsDirectory / oldFileName
           if os.exists(oldPath) then
             try os.remove(oldPath) catch case _: Exception => ()
+          val oldBakDir = eventsDirectory / (if oldFileName.endsWith(".json") then oldFileName.stripSuffix(".json") + ".bak" else s"$oldFileName.bak")
+          val newFileName = fileNameFor(trimmedNew)
+          val newBakDir = eventsDirectory / (if newFileName.endsWith(".json") then newFileName.stripSuffix(".json") + ".bak" else s"$newFileName.bak")
+          if os.exists(oldBakDir) && oldBakDir != newBakDir then
+            try os.move(oldBakDir, newBakDir, replaceExisting = true) catch case _: Exception => ()
           val updated = ev.copy(eventName = trimmedNew)
           writeEventFile(updated)
           val idx = eventsState.indexWhere(e => e.eventName.equalsIgnoreCase(oldName) || e.ics205.incidentName.equalsIgnoreCase(oldName))
@@ -180,6 +208,9 @@ class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
         val path = eventsDirectory / fileName
         if os.exists(path) then
           try os.remove(path) catch case _: Exception => ()
+        val bakDir = eventsDirectory / (if fileName.endsWith(".json") then fileName.stripSuffix(".json") + ".bak" else s"$fileName.bak")
+        if os.exists(bakDir) then
+          try os.remove.all(bakDir) catch case _: Exception => ()
 
         val filtered = eventsState.filterNot(e => e.eventName.equalsIgnoreCase(ev.eventName) || e.ics205.incidentName.equalsIgnoreCase(ev.eventName))
         eventsState = filtered
@@ -332,3 +363,21 @@ class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
     if !activeEventName.exists(name => eventsState.exists(_.eventName.equalsIgnoreCase(name))) then
       activeEventName = eventsState.headOption.map(_.eventName).filter(_.nonEmpty)
   }
+
+object Ics205Store:
+  private val UtcFormatter: DateTimeFormatter =
+    DateTimeFormatter
+      .ofPattern("yyyyMMdd'T'HHmmss'Z'")
+      .withZone(ZoneOffset.UTC)
+
+  def insertTimestamp(fileName: String, timestamp: TemporalAccessor = Instant.now()): String =
+    val ts = UtcFormatter.format(timestamp)
+    if fileName.toLowerCase.endsWith(".json") then
+      val base = fileName.substring(0, fileName.length - 5)
+      val ext = fileName.substring(fileName.length - 5)
+      s"$base.$ts$ext"
+    else
+      s"$fileName.$ts.json"
+
+  def timestampedFileName(fileName: String, timestamp: TemporalAccessor = Instant.now()): String =
+    insertTimestamp(fileName, timestamp)

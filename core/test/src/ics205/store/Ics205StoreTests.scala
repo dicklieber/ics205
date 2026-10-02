@@ -23,7 +23,7 @@ import ics205.model.*
 import io.circe.Json
 import io.circe.syntax.*
 
-import java.time.LocalDateTime
+import java.time.{Instant, LocalDateTime}
 
 class Ics205StoreTests extends munit.FunSuite:
   private def withDirectory(test: os.Path => Unit): Unit =
@@ -314,4 +314,71 @@ class Ics205StoreTests extends munit.FunSuite:
       val reloaded = new Ics205Store(helper(directory))
       assertEquals(reloaded.events().size, 1)
       assertEquals(reloaded.getEvent("Drill: North/South? <Special>").isDefined, true)
+    }
+
+  test("insertTimestamp formats UTC timestamp before trailing .json extension"):
+    val fixedInstant = Instant.parse("2026-10-02T18:01:05Z")
+    assertEquals(Ics205Store.insertTimestamp("xyxxy.json", fixedInstant), "xyxxy.20261002T180105Z.json")
+    assertEquals(Ics205Store.insertTimestamp("Field Day.json", fixedInstant), "Field Day.20261002T180105Z.json")
+    assertEquals(Ics205Store.insertTimestamp("complex.name.with.dots.json", fixedInstant), "complex.name.with.dots.20261002T180105Z.json")
+    assertEquals(Ics205Store.insertTimestamp("no_extension", fixedInstant), "no_extension.20261002T180105Z.json")
+
+  test("saving an existing event copies previous version to <event>.bak directory with timestamp"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      val initialPlan = plan.copy(incidentName = "Field Day 2026", specialInstructions = "Version 1")
+      val eventV1 = Ics205Event("Field Day", initialPlan)
+
+      // First save: no backup should be created since file didn't exist
+      store.saveEvent(eventV1, refreshPrepared = false)
+      val eventFile = directory / "events" / "Field Day.json"
+      val bakDir = directory / "events" / "Field Day.bak"
+      assert(os.exists(eventFile))
+      assert(!os.exists(bakDir))
+
+      val v1Content = os.read(eventFile)
+
+      // Second save: previous file should be copied to Field Day.bak with timestamp
+      val updatedPlan = plan.copy(incidentName = "Field Day 2026", specialInstructions = "Version 2")
+      val eventV2 = Ics205Event("Field Day", updatedPlan)
+      store.saveEvent(eventV2, refreshPrepared = false)
+
+      assert(os.exists(bakDir) && os.isDir(bakDir))
+      val backupFiles = os.list(bakDir).filter(p => os.isFile(p) && p.last.endsWith(".json"))
+      assertEquals(backupFiles.size, 1)
+      val backupFile = backupFiles.head
+      assert(backupFile.last.startsWith("Field Day."))
+      assert(backupFile.last.endsWith(".json"))
+      assert(backupFile.last.matches("""Field Day\.\d{8}T\d{6}Z\.json"""))
+
+      // The backup file must have the content of Version 1
+      assertEquals(os.read(backupFile), v1Content)
+
+      // The active file must have the content of Version 2
+      val v2Content = os.read(eventFile)
+      assertNotEquals(v2Content, v1Content)
+
+      // Ensure store listEvents ignores the .bak directory
+      val reloaded = new Ics205Store(helper(directory))
+      assertEquals(reloaded.events().size, 1)
+      assertEquals(reloaded.events().head.eventName, "Field Day")
+      assertEquals(reloaded.events().head.ics205.specialInstructions, "Version 2")
+    }
+
+  test("deleting an event cleans up its .bak backup directory"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      val eventV1 = Ics205Event("Campout", plan.copy(incidentName = "Campout"))
+      store.saveEvent(eventV1, refreshPrepared = false)
+      val eventV2 = Ics205Event("Campout", plan.copy(incidentName = "Campout", specialInstructions = "V2"))
+      store.saveEvent(eventV2, refreshPrepared = false)
+
+      val eventFile = directory / "events" / "Campout.json"
+      val bakDir = directory / "events" / "Campout.bak"
+      assert(os.exists(eventFile))
+      assert(os.exists(bakDir))
+
+      assert(store.deleteEvent("Campout"))
+      assert(!os.exists(eventFile))
+      assert(!os.exists(bakDir))
     }
