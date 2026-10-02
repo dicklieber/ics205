@@ -225,8 +225,9 @@ sudo systemctl daemon-reload
 
 # 8. Start and enable service if requested
 if [ "${START_SERVICE}" = "true" ]; then
-  echo "Enabling and starting ${SERVICE_NAME}..."
-  sudo systemctl enable --now "${SERVICE_NAME}"
+  echo "Enabling and restarting ${SERVICE_NAME}..."
+  sudo systemctl enable "${SERVICE_NAME}"
+  sudo systemctl restart "${SERVICE_NAME}"
   
   sleep 2
   if sudo systemctl is-active --quiet "${SERVICE_NAME}"; then

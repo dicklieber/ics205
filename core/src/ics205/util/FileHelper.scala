@@ -24,7 +24,7 @@ import io.circe.parser.*
 import io.circe.syntax.*
 import io.circe.{Decoder, Encoder, Printer}
 
-import java.nio.file.{NoSuchFileException, Paths}
+import java.nio.file.NoSuchFileException
 import jakarta.inject.Inject
 
 object FileHelper:
@@ -32,19 +32,14 @@ object FileHelper:
     val osName = System.getProperty("os.name", "").toLowerCase
 
     if osName.contains("win") then
-      val base = sys.env
-        .get("LOCALAPPDATA")
-        .orElse(sys.env.get("APPDATA"))
-        .getOrElse((os.home / "AppData" / "Local").toString)
-      os.Path(Paths.get(base, appName))
+      os.home / "AppData" / "Local" / appName
     else if osName.contains("mac") then
       os.home / "Library" / "Application Support" / appName
     else
-      os.home / s".$productName"
+      os.Path(s"/var/lib/$productName")
 
   def isTestExecution: Boolean =
     sys.props.get("ics205.test").contains("true") ||
-    sys.env.get("ICS205_TEST").contains("true") ||
     sys.props.contains("munit.suite") ||
     Thread.currentThread().getStackTrace.exists { elem =>
       val name = elem.getClassName
@@ -57,18 +52,10 @@ object FileHelper:
     }
 
   def defaultDirectory(appName: String = BuildInfo.appName, productName: String = BuildInfo.productName): os.Path =
-    sys.props.get("ics205.data.dir")
-      .orElse(sys.env.get("ICS205_DATA_DIR"))
-      .map(os.Path(_))
-      .getOrElse {
-        if isTestExecution then
-          os.temp.dir(prefix = "ics205-test-")
-        else
-          val base = appHome(appName, productName)
-          sys.env.get("PORT").filter(_.nonEmpty) match
-            case Some(port) => base / port
-            case None       => base
-      }
+    if isTestExecution then
+      os.temp.dir(prefix = "ics205-test-")
+    else
+      appHome(appName, productName)
 
 /** A utility class for handling file-related operations, such as reading and writing JSON-encoded
   * data to files, and managing application-specific directory paths.
@@ -84,11 +71,10 @@ class FileHelper(customDir: Option[os.Path] = None) extends LazyLogging:
     * Platform conventions used here:
     *   - Windows: %LOCALAPPDATA%\ICS-205
     *   - macOS:   ~/Library/Application Support/ICS-205
-    *   - Linux:   ~/.ics205
+    *   - Linux:   /var/lib/ics205
     *
-    * In test execution or if configured, an isolated directory is used so unit tests never touch
+    * In test execution, an isolated directory is used so unit tests never touch
     * the production directory.
-    * If PORT is set, append it as a child directory so multiple local test nodes do not share files.
     */
   val directory: os.Path = customDir.getOrElse(FileHelper.defaultDirectory())
   logger.info(s"Data directory: $directory")

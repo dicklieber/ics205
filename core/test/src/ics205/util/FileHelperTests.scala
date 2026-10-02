@@ -51,6 +51,6 @@ class FileHelperTests extends munit.FunSuite:
     if osName.contains("mac") then
       assertEquals(home, os.home / "Library" / "Application Support" / "ICS-205")
     else if osName.contains("win") then
-      assert(home.toString.contains("ICS-205"))
+      assertEquals(home, os.home / "AppData" / "Local" / "ICS-205")
     else
-      assertEquals(home, os.home / ".ics205")
+      assertEquals(home, os.Path("/var/lib/ics205"))
