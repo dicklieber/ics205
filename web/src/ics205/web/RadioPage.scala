@@ -20,11 +20,10 @@ package ics205.web
 
 import ics205.auth.AuthenticatedUser
 import ics205.model.*
-import ics205.exporter.{RadioChannelNameBuilder, RadioChannelNameBuilderDefault}
 import scalatags.Text.all.*
 import scalatags.Text.tags2.section
 
-/** Read-only radio view with generated channel names and expanded nested values. */
+/** Read-only radio view with expanded nested values. */
 object RadioPage:
   private case class Column(label: String, value: Ics205Channel => String, isRadio: Boolean = false)
   private case class Group(label: String, columns: Seq[Column])
@@ -32,10 +31,7 @@ object RadioPage:
     Group(label, Seq(Column(label, value, isRadio)))
   private def decimal(value: BigDecimal): String = value.bigDecimal.toPlainString
 
-  private val channelNameBuilder: RadioChannelNameBuilder = new RadioChannelNameBuilderDefault()
-
   private val groups = Seq(
-    simple("radioChannelName", isRadio = true)(channelNameBuilder.apply),
     simple("function")(_.function),
     simple("name")(_.name),
     simple("assignment")(_.assignment),

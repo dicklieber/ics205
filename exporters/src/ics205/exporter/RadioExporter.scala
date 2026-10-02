@@ -51,7 +51,7 @@ class RadioExporter @Inject()(definitions: RadioExportDefinitions):
         printer.printRecord(headerRow.asJava)
 
       for channel <- ics205.channels do
-        val row = effectiveDef.orderedColumns.map(_.extract(channel, effectiveDef.channelNameBuilder))
+        val row = effectiveDef.orderedColumns.map(_.extract(channel))
         printer.printRecord(row.asJava)
 
       printer.flush()

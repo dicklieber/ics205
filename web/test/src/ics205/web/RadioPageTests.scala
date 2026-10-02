@@ -47,7 +47,7 @@ class RadioPageTests extends munit.FunSuite:
     val headerRows = elements(elements(markup, "thead").head, "tr")
     assertEquals(headerRows.size, 2)
     val first = elements(headerRows.head, "th")
-    assertEquals(first.map(_.getTextContent), Seq("radioChannelName", "function", "name", "assignment", "frequency", "mode", "bandwidth", "ctcss", "remarks"))
+    assertEquals(first.map(_.getTextContent), Seq("function", "name", "assignment", "frequency", "mode", "bandwidth", "ctcss", "remarks"))
     first.foreach { cell =>
       if Set("frequency", "ctcss").contains(cell.getTextContent) then
         assertEquals(cell.getAttribute("colspan"), "2")
@@ -57,7 +57,7 @@ class RadioPageTests extends munit.FunSuite:
     assertEquals(elements(headerRows(1), "th").map(_.getTextContent),
       Seq("rxFrequency (MHz)", "offset (MHz)", "frequency (Hz)", "mode"))
     assertEquals(elements(elements(markup, "tbody").head, "td").map(_.getTextContent),
-      Seq("Repeater All", "Command", "Repeater", "All", "146.94000", "-0.600", "Digital", "Narrow", "100.0", "TSQL", "<script>alert(1)</script>"))
+      Seq("Command", "Repeater", "All", "146.94000", "-0.600", "Digital", "Narrow", "100.0", "TSQL", "<script>alert(1)</script>"))
 
   test("radio columns have radio css class on headers and cells"):
     val markup = table(RadioPage.render(plan))
@@ -67,7 +67,7 @@ class RadioPageTests extends munit.FunSuite:
     val bodyCells = elements(elements(markup, "tbody").head, "td")
 
     val radioFirstRowHeaders = firstRowHeaders.filter(_.getAttribute("class") == "radio").map(_.getTextContent)
-    assertEquals(radioFirstRowHeaders, Seq("radioChannelName", "frequency", "bandwidth", "ctcss"))
+    assertEquals(radioFirstRowHeaders, Seq("frequency", "bandwidth", "ctcss"))
 
     val nonRadioFirstRowHeaders = firstRowHeaders.filter(_.getAttribute("class") != "radio").map(_.getTextContent)
     assertEquals(nonRadioFirstRowHeaders, Seq("function", "name", "assignment", "mode", "remarks"))
@@ -76,7 +76,7 @@ class RadioPageTests extends munit.FunSuite:
     assertEquals(radioSecondRowHeaders, Seq("rxFrequency (MHz)", "offset (MHz)", "frequency (Hz)", "mode"))
 
     val radioBodyCells = bodyCells.filter(_.getAttribute("class") == "radio").map(_.getTextContent)
-    assertEquals(radioBodyCells, Seq("Repeater All", "146.94000", "-0.600", "Narrow", "100.0", "TSQL"))
+    assertEquals(radioBodyCells, Seq("146.94000", "-0.600", "Narrow", "100.0", "TSQL"))
 
     val nonRadioBodyCells = bodyCells.filter(_.getAttribute("class") != "radio").map(_.getTextContent)
     assertEquals(nonRadioBodyCells, Seq("Command", "Repeater", "All", "Digital", "<script>alert(1)</script>"))
@@ -97,5 +97,5 @@ class RadioPageTests extends munit.FunSuite:
     val markup = table(html)
     assertEquals(elements(elements(markup, "thead").head, "tr").size, 2)
     val cell = elements(elements(markup, "tbody").head, "td").head
-    assertEquals(cell.getAttribute("colspan"), "11")
+    assertEquals(cell.getAttribute("colspan"), "10")
     assertEquals(cell.getTextContent, "No channels.")

@@ -28,7 +28,7 @@ object StandardRadioFormats:
     CsvColumn.OffsetFrequency -> RadioColumn(CsvColumn.OffsetFrequency)(_.frequency.offsetAbs.toString),
     CsvColumn.OffsetDirection -> RadioColumn.direction(CsvColumn.OffsetDirection, minus = "DUP-", simplex = "Simplex", plus = "DUP+"),
     CsvColumn.OperatingMode -> RadioColumn(CsvColumn.OperatingMode)(_.mode.toString),
-    CsvColumn.Name -> RadioColumn.channelName(CsvColumn.Name, maxLength = 16),
+    CsvColumn.Name -> RadioColumn(CsvColumn.Name)(_.name),
     CsvColumn.ToneMode -> RadioColumn(CsvColumn.ToneMode)(_.ctcss.mode.toString),
     CsvColumn.Ctcss -> RadioColumn(CsvColumn.Ctcss)(_.ctcss.frequency.map(_.hz.toString).getOrElse("")),
     CsvColumn.RxCtcss -> RadioColumn(CsvColumn.RxCtcss)(_.ctcss.frequency.map(_.hz.toString).getOrElse("")),

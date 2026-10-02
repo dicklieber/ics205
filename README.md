@@ -120,8 +120,7 @@ shrinks to fit the form; very long entries can become small. Characters outside
 the form's Helvetica/WinAnsi character set are replaced with `?`.
 
 **Radio** opens `/radio`, a read-only radio view of the saved ICS205 plan.
-The first channel column uses `RadioChannelNameBuilderDefault` in place of ID, zone,
-and channel number. The channel table uses two header rows: simple fields span both rows, while
+The channel table uses two header rows: simple fields span both rows, while
 `frequency` and `ctcss` group their component columns. Frequency values retain
 their stored precision and show MHz/Hz units. Operational period and preparer
 details are expanded above the table.

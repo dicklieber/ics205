@@ -139,7 +139,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
       assert(body.contains("Receive Frequency"))
       assert(body.contains("146.520"))
       assert(body.contains("0.600"))
-      assert(body.contains("TAC1 Operations"))
+      assert(body.contains("TAC1"))
       assert(body.contains("Copy to Clipboard"))
     }
 
@@ -240,7 +240,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
       yield (r, b)).unsafeRunSync()
 
       assertEquals(res.status, Status.Ok)
-      assert(body.contains("CH-01,146.520,0.600,Plus,Fm,TAC1 Operations,,,,7,Primary tactical channel") || body.contains("7,Primary tactical channel") || body.contains("7"))
+      assert(body.contains("CH-01,146.520,0.600,Plus,Fm,TAC1,,,,7,Primary tactical channel") || body.contains("7,Primary tactical channel") || body.contains("7"))
       assert(body.contains("value=\"7\""))
     }
 

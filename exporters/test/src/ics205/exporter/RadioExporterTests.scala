@@ -80,7 +80,7 @@ class RadioExporterTests extends munit.FunSuite:
     assertEquals(row1(1), "146.520")
     assertEquals(row1(2), "0.600")
     assertEquals(row1(3), "Plus") // Kenwood direction for +0.600 offset
-    assertEquals(row1(5), "TAC1 Operations") // RadioChannelName: name + assignment
+    assertEquals(row1(5), "TAC1")
     assertEquals(row1(9), "1")
     assertEquals(row1(10), "Primary tactical channel")
 
@@ -89,7 +89,7 @@ class RadioExporterTests extends munit.FunSuite:
     assertEquals(row2(0), "CH-02")
     assertEquals(row2(1), "446.000")
     assertEquals(row2(3), "Simplex") // 0.0 offset -> Simplex
-    assertEquals(row2(5), "CMD Incident Cmd")
+    assertEquals(row2(5), "CMD")
     assertEquals(row2(9), "1")
     assertEquals(row2(10), "Command net")
 
@@ -118,7 +118,7 @@ class RadioExporterTests extends munit.FunSuite:
     assertEquals(row1(3), "Plus")
     assertEquals(row1(4), "Fm")
     assertEquals(row1(5), "N")
-    assertEquals(row1(6), "TAC1 Operations")
+    assertEquals(row1(6), "TAC1")
     assertEquals(row1(10), "Primary tactical channel")
 
   test("RadioExporter exports FTM-500 CSV with header"):
@@ -127,7 +127,7 @@ class RadioExporterTests extends munit.FunSuite:
     val records = parser.getRecords.asScala.toList
     assertEquals(records.length, 3)
     assertEquals(records(0).get(0), "Channel Number")
-    assertEquals(records(1).get(6), "TAC1 Operations")
+    assertEquals(records(1).get(6), "TAC1")
 
   test("RadioExporter exports ID-52Plus CSV with header"):
     val csv = exporter.generateCsv("Icom ID-52Plus", sampleIcs205, includeHeader = true)
@@ -157,7 +157,7 @@ class RadioExporterTests extends munit.FunSuite:
     assertEquals(row1(3), "0.600")
     assertEquals(row1(4), "DUP+")
     assertEquals(row1(5), "Fm")
-    assertEquals(row1(6), "TAC1 Operations")
+    assertEquals(row1(6), "TAC1")
     assertEquals(row1(10), "Primary tactical channel")
 
   test("RadioExporter exports with custom groupOrBank parameter"):

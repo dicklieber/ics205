@@ -45,43 +45,38 @@ class RadioExportDefinitionTests extends munit.FunSuite:
   test("RadioColumn extracts channel values"):
     val col = RadioColumn(CsvColumn.ReceiveFrequency)(_.frequency.rx)
     assertEquals(col.header, "Receive Frequency")
-    assertEquals(col.extract(sampleChannel, new RadioChannelNameBuilderDefault()), "146.520")
+    assertEquals(col.extract(sampleChannel), "146.520")
 
   test("RadioColumn extracts constant values"):
     val col = RadioColumn.const(CsvColumn.Step, "5 kHz")
     assertEquals(col.header, "Step")
-    assertEquals(col.extract(sampleChannel, new RadioChannelNameBuilderDefault()), "5 kHz")
+    assertEquals(col.extract(sampleChannel), "5 kHz")
 
   test("RadioColumn extracts empty string"):
     val col = RadioColumn.empty(CsvColumn.Comment)
     assertEquals(col.header, "Comment")
-    assertEquals(col.extract(sampleChannel, new RadioChannelNameBuilderDefault()), "")
-
-  test("RadioColumn extracts RadioChannelName via RadioChannelNameBuilder"):
-    val col = RadioColumn.channelName(CsvColumn.Name, maxLength = 16)
-    assertEquals(col.header, "Name")
-    assertEquals(col.extract(sampleChannel, new RadioChannelNameBuilderDefault()), "TAC1 Operations")
+    assertEquals(col.extract(sampleChannel), "")
 
   test("RadioColumn.direction formats simplex, plus, minus"):
     val icomDir = RadioColumn.direction(CsvColumn.OffsetDirection, minus = "DUP-", simplex = "Simplex", plus = "DUP+")
-    assertEquals(icomDir.extract(sampleChannel, new RadioChannelNameBuilderDefault()), "DUP+")
-    assertEquals(icomDir.extract(simplexChannel, new RadioChannelNameBuilderDefault()), "Simplex")
-    assertEquals(icomDir.extract(minusChannel, new RadioChannelNameBuilderDefault()), "DUP-")
+    assertEquals(icomDir.extract(sampleChannel), "DUP+")
+    assertEquals(icomDir.extract(simplexChannel), "Simplex")
+    assertEquals(icomDir.extract(minusChannel), "DUP-")
 
     val yaesuDir = RadioColumn.direction(CsvColumn.OffsetDirection, minus = "Minus", simplex = "Simplex", plus = "Plus")
-    assertEquals(yaesuDir.extract(sampleChannel, new RadioChannelNameBuilderDefault()), "Plus")
-    assertEquals(yaesuDir.extract(simplexChannel, new RadioChannelNameBuilderDefault()), "Simplex")
-    assertEquals(yaesuDir.extract(minusChannel, new RadioChannelNameBuilderDefault()), "Minus")
+    assertEquals(yaesuDir.extract(sampleChannel), "Plus")
+    assertEquals(yaesuDir.extract(simplexChannel), "Simplex")
+    assertEquals(yaesuDir.extract(minusChannel), "Minus")
 
   test("Infix DSL operators create valid RadioColumns"):
     import RadioColumn.:=
     val col1 = CsvColumn.ReceiveFrequency := (_.frequency.rx)
     assertEquals(col1.header, "Receive Frequency")
-    assertEquals(col1.extract(sampleChannel, new RadioChannelNameBuilderDefault()), "146.520")
+    assertEquals(col1.extract(sampleChannel), "146.520")
 
     val col2 = CsvColumn.Step := "25 kHz"
     assertEquals(col2.header, "Step")
-    assertEquals(col2.extract(sampleChannel, new RadioChannelNameBuilderDefault()), "25 kHz")
+    assertEquals(col2.extract(sampleChannel), "25 kHz")
 
   test("RadioExportDefinition withColumn overrides existing column definition"):
     val base = RadioExportDefinition("Test", List(
@@ -89,7 +84,7 @@ class RadioExportDefinitionTests extends munit.FunSuite:
       RadioColumn.const(CsvColumn.Step, "5 kHz")
     ))
     val overridden = base.withColumn(RadioColumn.const(CsvColumn.Step, "12.5 kHz"))
-    assertEquals(overridden.orderedColumns.map(_.extract(sampleChannel, new RadioChannelNameBuilderDefault())), List("CH-01", "12.5 kHz"))
+    assertEquals(overridden.orderedColumns.map(_.extract(sampleChannel)), List("CH-01", "12.5 kHz"))
 
   test("RadioExportDefinition automatically orders columns by CsvColumn ordinal and withoutColumns removes them"):
     val base = RadioExportDefinition("Test", List(
@@ -134,10 +129,10 @@ class RadioExportDefinitionTests extends munit.FunSuite:
 
   test("RadioExportDefinition withGroupOrBank dynamically overrides group/bank value"):
     val kenwood = KenwoodTHD75.definition.withGroupOrBank("5")
-    assertEquals(kenwood.columns(CsvColumn.Group).extract(sampleChannel, new RadioChannelNameBuilderDefault()), "5")
+    assertEquals(kenwood.columns(CsvColumn.Group).extract(sampleChannel), "5")
 
     val icom = IcomID52Plus.definition.withGroupOrBank("B")
-    assertEquals(icom.columns(CsvColumn.Bank).extract(sampleChannel, new RadioChannelNameBuilderDefault()), "B")
+    assertEquals(icom.columns(CsvColumn.Bank).extract(sampleChannel), "B")
 
     val yaesu = YaesuFTM500.definition.withGroupOrBank("99")
     assertEquals(yaesu.columns.contains(CsvColumn.Group), false)
