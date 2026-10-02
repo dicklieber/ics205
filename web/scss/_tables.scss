@@ -3,11 +3,11 @@
 
 table.users-table {
   @include mix.table-base;
-  font-size: 14px;
+  font-size: 13px;
 
   th,
   td {
-    padding: 10px 12px;
+    padding: 8px 10px;
     text-align: left;
     border-bottom: 1px solid vars.$color-border;
   }
@@ -16,7 +16,7 @@ table.users-table {
     background-color: vars.$color-bg-subtle;
     font-weight: 600;
     color: vars.$color-text-header;
-    font-size: 12px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }

@@ -18,7 +18,8 @@ body {
 
 .actions-cell {
   display: flex;
-  gap: vars.$spacing-sm;
+  gap: vars.$spacing-xs;
+  flex-wrap: wrap;
 
   form {
     display: inline;

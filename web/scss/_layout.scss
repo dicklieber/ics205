@@ -4,21 +4,32 @@
 .admin-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: vars.$spacing-xl;
+  padding: vars.$spacing-md vars.$spacing-lg;
 }
 
 .admin-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: vars.$spacing-xl;
-  padding-bottom: vars.$spacing-md;
+  margin-bottom: vars.$spacing-md;
+  padding-bottom: vars.$spacing-sm;
   border-bottom: 2px solid vars.$color-border;
 
   h1 {
     margin: 0;
     color: vars.$color-text-main;
-    font-size: 24px;
+    font-size: 22px;
+  }
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: vars.$spacing-md;
+
+  @media (min-width: 900px) {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    align-items: start;
   }
 }
 
@@ -42,8 +53,8 @@
 
   h2 {
     margin-top: 0;
-    margin-bottom: vars.$spacing-md;
+    margin-bottom: vars.$spacing-sm;
     color: vars.$color-text-main;
-    font-size: 18px;
+    font-size: 16px;
   }
 }

@@ -21,6 +21,7 @@ package ics205.web.admin
 import ics205.auth.{AuthenticatedUser, RolePermissions, User}
 import ics205.web.NavigationBar
 import scalatags.Text.all.*
+import scalatags.Text.tags2.{details, summary}
 
 object UserAdminPage:
 
@@ -73,145 +74,144 @@ object UserAdminPage:
               div(cls := "alert alert-error", attr("role") := "alert")(err)
             ),
 
-            div(cls := "card")(
-              h2("Users"),
-              table(cls := "users-table")(
-                thead(
-                  tr(
-                    th("Username"),
-                    th("User ID"),
-                    th("Role"),
-                    th("Status"),
-                    th("Actions")
-                  )
-                ),
-                tbody(
-                  if users.isEmpty then
-                    tr(td(colspan := 5, style := "text-align: center; color: #6b778c; padding: 20px;")("No users found."))
-                  else
-                    users.map { user =>
-                      tr(
-                        td(strong(user.username)),
-                        td(span(style := "font-family: monospace; font-size: 9pt; color: #5e6c84;")(user.id)),
-                        td(span(cls := "badge badge-role")(user.role.toString)),
-                        td(
-                          if user.enabled then
-                            span(cls := "badge badge-active")("Active")
-                          else
-                            span(cls := "badge badge-disabled")("Disabled")
-                        ),
-                        td(cls := "actions-cell")(
-                          a(href := s"/admin/users?edit=${user.id}#user-form", cls := "btn btn-secondary btn-sm")("Edit"),
-                          form(
-                            method := "post",
-                            action := "/admin/users/delete",
-                            attr("data-confirm") := s"Are you sure you want to delete user '${user.username}'?"
-                          )(
-                            input(tpe := "hidden", name := "id", value := user.id),
-                            button(tpe := "submit", cls := "btn btn-danger btn-sm")("Delete")
+            div(cls := "admin-grid")(
+              div(cls := "card")(
+                h2("Users"),
+                table(cls := "users-table")(
+                  thead(
+                    tr(
+                      th("Username"),
+                      th("Role"),
+                      th("Status"),
+                      th("Actions")
+                    )
+                  ),
+                  tbody(
+                    if users.isEmpty then
+                      tr(td(colspan := 4, style := "text-align: center; color: #6b778c; padding: 16px;")("No users found."))
+                    else
+                      users.map { user =>
+                        tr(
+                          td(strong(user.username)),
+                          td(span(cls := "badge badge-role")(user.role.toString)),
+                          td(
+                            if user.enabled then
+                              span(cls := "badge badge-active")("Active")
+                            else
+                              span(cls := "badge badge-disabled")("Disabled")
+                          ),
+                          td(cls := "actions-cell")(
+                            a(href := s"/admin/users?edit=${user.id}#user-form", cls := "btn btn-secondary btn-sm")("Edit"),
+                            form(
+                              method := "post",
+                              action := "/admin/users/delete",
+                              attr("data-confirm") := s"Are you sure you want to delete user '${user.username}'?"
+                            )(
+                              input(tpe := "hidden", name := "id", value := user.id),
+                              button(tpe := "submit", cls := "btn btn-danger btn-sm")("Delete")
+                            )
                           )
                         )
-                      )
-                    }
-                )
-              )
-            ),
-
-            div(cls := "card", id := "user-form")(
-              h2(if isEdit then s"Edit User: ${editingUser.get.username}" else "Add New User"),
-              form(
-                method := "post",
-                action := (if isEdit then "/admin/users/edit" else "/admin/users/create")
-              )(
-                editingUser.map(u => input(tpe := "hidden", name := "id", value := u.id)),
-
-                div(cls := "form-group")(
-                  label(attr("for") := "username")("Username"),
-                  input(
-                    tpe := "text",
-                    id := "username",
-                    name := "username",
-                    required,
-                    value := editingUser.map(_.username).getOrElse("")
-                  )
-                ),
-
-                div(cls := "form-group")(
-                  label(attr("for") := "password")(if isEdit then "New Password" else "Password"),
-                  input(
-                    tpe := "password",
-                    id := "password",
-                    name := "password",
-                    if !isEdit then required else cls := ""
-                  ),
-                  p(cls := "form-help")(
-                    if isEdit then "Leave blank to keep current password."
-                    else "Enter a secure password for the new account."
-                  )
-                ),
-
-                div(cls := "form-group")(
-                  label(attr("for") := "confirmPassword")(if isEdit then "Confirm New Password" else "Confirm Password"),
-                  input(
-                    tpe := "password",
-                    id := "confirmPassword",
-                    name := "confirmPassword",
-                    if !isEdit then required else cls := ""
-                  ),
-                  p(cls := "form-help")(
-                    if isEdit then "Leave blank to keep current password."
-                    else "Re-enter the password to confirm."
-                  )
-                ),
-
-                div(cls := "form-group")(
-                  label(attr("for") := "role")("Role"),
-                  select(
-                    id := "role",
-                    name := "role"
-                  )(
-                    RolePermissions.values.map { r =>
-                      option(
-                        value := r.toString.toLowerCase,
-                        if editingUser.exists(_.role == r) || (editingUser.isEmpty && r == (if users.isEmpty then RolePermissions.Admin else RolePermissions.User)) then selected else cls := ""
-                      )(r.toString)
-                    }
-                  ),
-                  p(cls := "form-help")("Select a single role for this user."),
-                  div(cls := "role-permissions-info", style := "margin-top: 8px; padding: 10px; background: #f4f5f7; border: 1px solid #ebecf0; border-radius: 4px; font-size: 9pt;")(
-                    strong("Role Permissions Reference:"),
-                    ul(style := "margin: 6px 0 0 0; padding-left: 20px;")(
-                      RolePermissions.values.map { r =>
-                        li(
-                          strong(r.toString),
-                          ": ",
-                          span(style := "color: #42526e;")(r.permissions.map(_.toString).toSeq.sorted.mkString(", "))
-                        )
                       }
-                    )
                   )
-                ),
+                )
+              ),
 
-                div(cls := "form-group")(
-                  label(cls := "checkbox-group")(
+              div(cls := "card", id := "user-form")(
+                h2(if isEdit then s"Edit User: ${editingUser.get.username}" else "Add New User"),
+                form(
+                  method := "post",
+                  action := (if isEdit then "/admin/users/edit" else "/admin/users/create")
+                )(
+                  editingUser.map(u => input(tpe := "hidden", name := "id", value := u.id)),
+
+                  div(cls := "form-group")(
+                    label(attr("for") := "username")("Username"),
                     input(
-                      tpe := "checkbox",
-                      name := "enabled",
-                      value := "true",
-                      if editingUser.forall(_.enabled) then checked else cls := ""
-                    ),
-                    span(" Account is enabled (can log in)")
-                  )
-                ),
-
-                div(style := "margin-top: 24px;")(
-                  button(tpe := "submit", cls := "btn btn-primary")(
-                    if isEdit then "Update User" else "Create User"
+                      tpe := "text",
+                      id := "username",
+                      name := "username",
+                      required,
+                      value := editingUser.map(_.username).getOrElse("")
+                    )
                   ),
-                  if isEdit then
-                    a(href := "/admin/users", cls := "btn btn-secondary", style := "margin-left: 10px;")("Cancel")
-                  else
-                    span()
+
+                  div(cls := "form-group")(
+                    label(attr("for") := "password")(if isEdit then "New Password" else "Password"),
+                    input(
+                      tpe := "password",
+                      id := "password",
+                      name := "password",
+                      if !isEdit then required else cls := ""
+                    ),
+                    p(cls := "form-help")(
+                      if isEdit then "Leave blank to keep current password."
+                      else "Enter a secure password for the new account."
+                    )
+                  ),
+
+                  div(cls := "form-group")(
+                    label(attr("for") := "confirmPassword")(if isEdit then "Confirm New Password" else "Confirm Password"),
+                    input(
+                      tpe := "password",
+                      id := "confirmPassword",
+                      name := "confirmPassword",
+                      if !isEdit then required else cls := ""
+                    ),
+                    p(cls := "form-help")(
+                      if isEdit then "Leave blank to keep current password."
+                      else "Re-enter the password to confirm."
+                    )
+                  ),
+
+                  div(cls := "form-group")(
+                    label(attr("for") := "role")("Role"),
+                    select(
+                      id := "role",
+                      name := "role"
+                    )(
+                      RolePermissions.values.map { r =>
+                        option(
+                          value := r.toString.toLowerCase,
+                          if editingUser.exists(_.role == r) || (editingUser.isEmpty && r == (if users.isEmpty then RolePermissions.Admin else RolePermissions.User)) then selected else cls := ""
+                        )(r.toString)
+                      }
+                    ),
+                    details(cls := "role-permissions-info", style := "margin-top: 6px; padding: 6px 10px; background: #f4f5f7; border: 1px solid #ebecf0; border-radius: 4px; font-size: 8.5pt;")(
+                      summary(style := "cursor: pointer; color: #0052cc; font-weight: 600;")("Role Permissions Reference:"),
+                      ul(style := "margin: 4px 0 0 0; padding-left: 18px;")(
+                        RolePermissions.values.map { r =>
+                          li(
+                            strong(r.toString),
+                            ": ",
+                            span(style := "color: #42526e;")(r.permissions.map(_.toString).toSeq.sorted.mkString(", "))
+                          )
+                        }
+                      )
+                    )
+                  ),
+
+                  div(cls := "form-group")(
+                    label(cls := "checkbox-group")(
+                      input(
+                        tpe := "checkbox",
+                        name := "enabled",
+                        value := "true",
+                        if editingUser.forall(_.enabled) then checked else cls := ""
+                      ),
+                      span(" Account is enabled (can log in)")
+                    )
+                  ),
+
+                  div(style := "margin-top: 16px; display: flex; gap: 8px; align-items: center;")(
+                    button(tpe := "submit", cls := "btn btn-primary")(
+                      if isEdit then "Update User" else "Create User"
+                    ),
+                    if isEdit then
+                      a(href := "/admin/users", cls := "btn btn-secondary")("Cancel")
+                    else
+                      span()
+                  )
                 )
               )
             )

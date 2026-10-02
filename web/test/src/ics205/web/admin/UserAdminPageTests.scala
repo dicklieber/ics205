@@ -57,3 +57,21 @@ class UserAdminPageTests extends munit.FunSuite:
     assert(html.contains("name=\"password\""), "Should contain password input")
     assert(html.contains("name=\"confirmPassword\""), "Should contain confirmPassword input")
     assert(html.contains("Confirm New Password"), "Should contain label for Confirm New Password")
+
+  test("UserAdminPage does not show User ID in table header or body cells"):
+    val user = User(
+      username = "johndoe",
+      passwordHash = "hash",
+      role = RolePermissions.User,
+      enabled = true,
+      id = "user-uuid-12345"
+    )
+    val html = UserAdminPage.render(
+      currentUser = Some(adminUser),
+      users = Seq(user)
+    )
+
+    assert(!html.contains("User ID"), "Should not contain 'User ID' table header")
+    assert(!html.contains("user-uuid-12345</span>"), "Should not display user ID value in table cell")
+    assert(html.contains("value=\"user-uuid-12345\""), "Should still preserve user ID in hidden form inputs for action targets")
+    assert(html.contains("admin-grid"), "Should render responsive admin grid layout")
