@@ -20,21 +20,55 @@ package ics205.web
 
 import ics205.BuildInfo
 import ics205.auth.{AuthenticatedUser, Permission}
-import ics205.util.FileHelper
+import ics205.util.{DurationFormat, FileHelper}
 import scalatags.Text.all.*
 import scalatags.Text.tags2.nav
+
+import java.time.Instant
 
 object NavigationBar:
 
   enum ActivePage:
     case Plan, Radio, ExportRadio, Events, UserAdmin, ChangePassword, Login, None
 
+  private val aboutDialogClick: String =
+    "const d = document.getElementById('about-dialog');" +
+    "if (d) {" +
+    "  const dd = document.getElementById('about-running-for');" +
+    "  if (dd) {" +
+    "    const fmt = ms => {" +
+    "      if (ms < 0) ms = 0;" +
+    "      const S = 1000, M = 60000, H = 3600000, D = 86400000;" +
+    "      if (ms < S) return ms + ' ms';" +
+    "      if (ms === S) return '1 sec';" +
+    "      if (ms < M) return Math.floor(ms / S) + ' sec ' + (ms % S) + ' ms';" +
+    "      if (ms === M) return '1 min';" +
+    "      if (ms < H) { const min = Math.floor(ms / M); return min + ' min ' + Math.floor((ms - min * M) / S) + ' sec'; }" +
+    "      if (ms < D) { const hr = Math.floor(ms / H); return hr + ' hours ' + Math.floor((ms - hr * H) / M) + ' min'; }" +
+    "      const days = Math.floor(ms / D), hr = Math.floor((ms - days * D) / H), min = Math.floor((ms - (hr * H + days * D)) / M);" +
+    "      return min === 0 ? days + ' day ' + hr + ' hour' : days + ' day ' + hr + ' hour ' + min + ' min';" +
+    "    };" +
+    "    const upd = () => {" +
+    "      const init = parseInt(dd.getAttribute('data-initial-uptime') || '0', 10);" +
+    "      const el = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;" +
+    "      dd.textContent = fmt(Math.floor(init + el));" +
+    "    };" +
+    "    upd();" +
+    "    if (d._timer) clearInterval(d._timer);" +
+    "    d._timer = setInterval(upd, 1000);" +
+    "    d.onclose = () => { if (d._timer) { clearInterval(d._timer); d._timer = null; } };" +
+    "  }" +
+    "  if (d.showModal) d.showModal();" +
+    "}" +
+    "return false;"
+
   def render(
     activePage: ActivePage = ActivePage.None,
     currentUser: Option[AuthenticatedUser] = None,
     currentEventName: Option[String] = None,
     availableEvents: Seq[String] = Seq.empty,
-    fileHelper: FileHelper = new FileHelper()
+    fileHelper: FileHelper = new FileHelper(),
+    startTime: Instant = Instant.ofEpochMilli(java.lang.management.ManagementFactory.getRuntimeMXBean.getStartTime)
   ): Frag =
     val showUserAdmin = currentUser.exists(_.hasPermission(Permission.EditUsers))
     val showDebug = currentUser.exists(_.hasPermission(Permission.Debug))
@@ -181,7 +215,7 @@ object NavigationBar:
                 id := "navbarAbout",
                 attr("role") := "button",
                 attr("aria-haspopup") := "dialog",
-                onclick := "const d = document.getElementById('about-dialog'); if (d && d.showModal) d.showModal(); return false;"
+                onclick := aboutDialogClick
               )("About")
             )
           ),
@@ -222,17 +256,22 @@ object NavigationBar:
           )
         )
       ),
-      aboutDialog(fileHelper)
+      aboutDialog(fileHelper, startTime)
     )
 
-  def aboutDialog(fileHelper: FileHelper = new FileHelper()): Frag =
+  def aboutDialog(
+    fileHelper: FileHelper = new FileHelper(),
+    startTime: Instant = Instant.ofEpochMilli(java.lang.management.ManagementFactory.getRuntimeMXBean.getStartTime)
+  ): Frag =
+    val initialUptime = java.time.Duration.between(startTime, Instant.now()).toMillis
     val buildInfoFields = Seq(
       "name" -> BuildInfo.name,
       "appName" -> BuildInfo.appName,
       "productName" -> BuildInfo.productName,
       "version" -> BuildInfo.version,
       "scalaVersion" -> BuildInfo.scalaVersion,
-      "millVersion" -> BuildInfo.millVersion
+      "millVersion" -> BuildInfo.millVersion,
+      "running for" -> DurationFormat(startTime)
     )
 
     val javaProperties = Seq(
@@ -267,7 +306,14 @@ object NavigationBar:
               buildInfoFields.map { case (key, value) =>
                 div(cls := "about-field")(
                   dt(key),
-                  dd(value)
+                  if key == "running for" then
+                    dd(
+                      id := "about-running-for",
+                      data("initial-uptime") := initialUptime.toString,
+                      value
+                    )
+                  else
+                    dd(value)
                 )
               }
             )

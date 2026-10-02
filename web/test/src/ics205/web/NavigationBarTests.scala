@@ -22,6 +22,8 @@ import ics205.BuildInfo
 import ics205.auth.{AuthenticatedUser, RolePermissions}
 import ics205.util.FileHelper
 
+import java.time.Instant
+
 class NavigationBarTests extends munit.FunSuite:
 
   val adminUser = AuthenticatedUser(
@@ -157,6 +159,7 @@ class NavigationBarTests extends munit.FunSuite:
       assert(html.contains(s"<dt>version</dt><dd>${BuildInfo.version}</dd>"))
       assert(html.contains(s"<dt>scalaVersion</dt><dd>${BuildInfo.scalaVersion}</dd>"))
       assert(html.contains(s"<dt>millVersion</dt><dd>${BuildInfo.millVersion}</dd>"))
+      assert(html.contains("<dt>running for</dt>"))
 
       // ics205.util.FileHelper.directory
       assert(html.contains("<dt>ics205.util.FileHelper.directory</dt>"))
@@ -173,3 +176,10 @@ class NavigationBarTests extends munit.FunSuite:
       assert(html.contains(s"<dd>${System.getProperty("java.home")}</dd>"))
     finally
       os.remove.all(tempDir)
+
+  test("aboutDialog formats running for using DurationFormat and provided startTime"):
+    val startTime = Instant.now().minusSeconds(125)
+    val html = NavigationBar.aboutDialog(startTime = startTime).render
+    assert(html.contains("<dt>running for</dt>"))
+    assert(html.contains("id=\"about-running-for\""))
+    assert(html.contains("2 min 5 sec</dd>"))
