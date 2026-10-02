@@ -52,6 +52,7 @@ object core extends ScalaModule with BuildInfo with ScoverageModule:
     mvn"io.circe::circe-generic:0.14.10",
     mvn"io.circe::circe-parser:0.14.10",
     mvn"com.outr::scalapass:1.2.8",
+    mvn"net.java.dev.jna:jna:5.16.0",
     mvn"com.lihaoyi::os-lib:0.11.6",
     mvn"com.typesafe.scala-logging::scala-logging:3.9.5",
     mvn"org.apache.logging.log4j:log4j-slf4j2-impl:2.25.3",
