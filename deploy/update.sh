@@ -243,9 +243,17 @@ ssh -t "${SSH_OPTS[@]}" "${TARGET_HOST}" bash "${REMOTE_TMP}/update.sh" \
   "${HAS_SERVICE_UNIT}" \
   "${RESTART_SERVICE}"
 
+SSH_EXTRA_FLAGS=""
+if [[ -n "${SSH_PORT}" ]]; then
+  SSH_EXTRA_FLAGS="${SSH_EXTRA_FLAGS}-p ${SSH_PORT} "
+fi
+if [[ -n "${SSH_KEY}" ]]; then
+  SSH_EXTRA_FLAGS="${SSH_EXTRA_FLAGS}-i ${SSH_KEY} "
+fi
+
 echo "=================================================="
 echo "Update complete on ${TARGET_HOST}!"
 echo ""
 echo "View live logs with:"
-echo "   ssh ${TARGET_HOST} \"sudo journalctl -u ${SERVICE_NAME} -f\""
+echo "   ssh -t ${SSH_EXTRA_FLAGS}${TARGET_HOST} \"sudo journalctl -u ${SERVICE_NAME} -f\""
 echo "=================================================="

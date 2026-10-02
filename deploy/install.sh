@@ -267,6 +267,14 @@ ssh -t "${SSH_OPTS[@]}" "${TARGET_HOST}" bash "${REMOTE_TMP}/provision.sh" \
   "${REMOTE_GROUP}" \
   "${START_SERVICE}"
 
+SSH_EXTRA_FLAGS=""
+if [[ -n "${SSH_PORT}" ]]; then
+  SSH_EXTRA_FLAGS="${SSH_EXTRA_FLAGS}-p ${SSH_PORT} "
+fi
+if [[ -n "${SSH_KEY}" ]]; then
+  SSH_EXTRA_FLAGS="${SSH_EXTRA_FLAGS}-i ${SSH_KEY} "
+fi
+
 echo "=================================================="
 echo "Installation complete on ${TARGET_HOST}!"
 echo ""
@@ -274,6 +282,6 @@ echo "Next steps:"
 echo "1. Access the web interface at http://${TARGET_HOST}:8080/ to create the initial admin user."
 echo ""
 echo "2. Check service status and live logs:"
-echo "   ssh ${TARGET_HOST} \"sudo systemctl status ${SERVICE_NAME}\""
-echo "   ssh ${TARGET_HOST} \"sudo journalctl -u ${SERVICE_NAME} -f\""
+echo "   ssh -t ${SSH_EXTRA_FLAGS}${TARGET_HOST} \"sudo systemctl status ${SERVICE_NAME}\""
+echo "   ssh -t ${SSH_EXTRA_FLAGS}${TARGET_HOST} \"sudo journalctl -u ${SERVICE_NAME} -f\""
 echo "=================================================="
