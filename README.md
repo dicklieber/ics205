@@ -280,7 +280,8 @@ The application deploys into the dedicated `ics205` system account's home direct
 │   └── ics205.jar          # Application JAR (owned by root:ics205, mode 640)
 ├── config/
 │   ├── ics205.conf         # Optional Typesafe Config file (owned by root:ics205, mode 640)
-│   └── ics205.env          # Optional environment variables file (owned by root:ics205, mode 640)
+│   ├── ics205.env          # Optional environment variables file (owned by ics205:ics205, mode 640)
+│   └── log4j2.yaml         # Logging configuration (owned by root:ics205, mode 640)
 ├── data/
 │   ├── ics205.json         # Persistent application data (owned by ics205:ics205, mode 750)
 │   ├── users.json
@@ -290,7 +291,7 @@ The application deploys into the dedicated `ics205` system account's home direct
 ```
 
 #### Initial Installation on Remote Server (`deploy/install.sh`)
-Installs the fat JAR, creates the dedicated `ics205` system user/group with home directory `/home/ics205`, creates the directory layout with strict permissions, migrates legacy data/config from `/var/lib/ics205` or `/etc/ics205` if present, configures the systemd service at `/etc/systemd/system/ics205.service`, and starts it:
+Installs the fat JAR, creates the dedicated `ics205` system user/group with home directory `/home/ics205`, creates the directory layout with strict permissions, configures the systemd service at `/etc/systemd/system/ics205.service`, and starts it:
 
 ```bash
 # Build (if not already built) and install to remote Linux host
@@ -337,15 +338,20 @@ Create a dedicated system user and group without login shell privileges, along w
 ```bash
 sudo groupadd --system ics205
 sudo useradd --system --home-dir /home/ics205 --create-home --gid ics205 --shell /usr/sbin/nologin ics205
+sudo passwd ics205
 sudo mkdir -p /home/ics205/app /home/ics205/config /home/ics205/data /home/ics205/install
-sudo chown root:ics205 /home/ics205 /home/ics205/app /home/ics205/config /home/ics205/install
-sudo chmod 750 /home/ics205 /home/ics205/app /home/ics205/config /home/ics205/install
-sudo chown ics205:ics205 /home/ics205/data
-sudo chmod 750 /home/ics205/data
+sudo chown ics205:ics205 /home/ics205 /home/ics205/data
+sudo chmod 750 /home/ics205 /home/ics205/data
+sudo chown root:ics205 /home/ics205/app /home/ics205/config /home/ics205/install
+sudo chmod 750 /home/ics205/app /home/ics205/config /home/ics205/install
 
 sudo cp out/web/assembly.dest/out.jar /home/ics205/app/ics205.jar
 sudo chown root:ics205 /home/ics205/app/ics205.jar
 sudo chmod 640 /home/ics205/app/ics205.jar
+
+sudo cp web/resources/log4j2.yaml /home/ics205/config/log4j2.yaml
+sudo chown root:ics205 /home/ics205/config/log4j2.yaml
+sudo chmod 640 /home/ics205/config/log4j2.yaml
 ```
 
 ### 4. Systemd Service Configuration
@@ -366,10 +372,12 @@ A production-ready systemd service unit file is provided at `deploy/ics205.servi
 2. (Optional) Customize environment variables by creating `/home/ics205/config/ics205.env`:
    ```bash
    sudo tee /home/ics205/config/ics205.env > /dev/null << 'EOF'
-   JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=true
+   JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=false
    JAR_PATH=/home/ics205/app/ics205.jar
+   # Remote Java Debugger (listening on port 5005 across all network interfaces):
+   # JAVA_OPTS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=false
    EOF
-   sudo chown root:ics205 /home/ics205/config/ics205.env
+   sudo chown ics205:ics205 /home/ics205/config/ics205.env
    sudo chmod 640 /home/ics205/config/ics205.env
    ```
 

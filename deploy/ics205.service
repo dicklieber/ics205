@@ -16,7 +16,7 @@ WorkingDirectory=/home/ics205
 
 # Environment configuration
 Environment="JAVA_HOME=/usr/lib/jvm/default-java"
-Environment="JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=true"
+Environment="JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=false"
 Environment="JAR_PATH=/home/ics205/app/ics205.jar"
 EnvironmentFile=-/home/ics205/config/ics205.env
 

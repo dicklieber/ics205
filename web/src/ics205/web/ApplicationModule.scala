@@ -43,7 +43,7 @@ class ApplicationModule(
   override def configure(): Unit =
     val fileHelper = customFileHelper.getOrElse(new FileHelper())
     bind[FileHelper].toInstance(fileHelper)
-    LoggingConfig.init(fileHelper.directory)
+    LoggingConfig.init(fileHelper.configDirectory)
 
     val authConfig = AuthConfig.fromConfig(fullConfig)
     bind[AuthConfig].toInstance(authConfig)
@@ -143,6 +143,8 @@ object ApplicationModule:
       .orElse(Option(os.pwd / "config" / "application.conf").filter(os.exists))
       .orElse(Option(os.Path(s"/home/${BuildInfo.productName}/config/ics205.conf")).filter(os.exists))
       .orElse(Option(os.Path(s"/home/${BuildInfo.productName}/config/application.conf")).filter(os.exists))
+      .orElse(Option(FileHelper.configDirectory / "ics205.conf").filter(os.exists))
+      .orElse(Option(FileHelper.configDirectory / "application.conf").filter(os.exists))
       .getOrElse(os.pwd / "config" / "ics205.conf")
 
     ConfigFactory.parseFile(configFile.toIO)

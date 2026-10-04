@@ -38,6 +38,16 @@ object FileHelper:
     else
       os.Path(s"/home/$productName/data")
 
+  def configHome(appName: String = BuildInfo.appName, productName: String = BuildInfo.productName): os.Path =
+    val osName = System.getProperty("os.name", "").toLowerCase
+
+    if osName.contains("win") then
+      os.home / "AppData" / "Local" / appName / "config"
+    else if osName.contains("mac") then
+      os.home / "Library" / "Application Support" / appName / "config"
+    else
+      os.Path(s"/home/$productName/config")
+
   def isTestExecution: Boolean =
     sys.props.get("ics205.test").contains("true") ||
     sys.props.contains("munit.suite") ||
@@ -57,13 +67,26 @@ object FileHelper:
     else
       appHome(appName, productName)
 
+  def defaultConfigDirectory(appName: String = BuildInfo.appName, productName: String = BuildInfo.productName): os.Path =
+    if isTestExecution then
+      os.temp.dir(prefix = "ics205-test-config-")
+    else
+      configHome(appName, productName)
+
   private var activeDir: Option[os.Path] = None
+  private var activeConfigDir: Option[os.Path] = None
 
   def setDirectory(dir: os.Path): Unit =
     activeDir = Some(dir)
 
   def directory: os.Path =
     activeDir.getOrElse(defaultDirectory())
+
+  def setConfigDirectory(dir: os.Path): Unit =
+    activeConfigDir = Some(dir)
+
+  def configDirectory: os.Path =
+    activeConfigDir.getOrElse(defaultConfigDirectory())
 
   def logDirectory: os.Path =
     val dir = directory / "log"
@@ -73,11 +96,13 @@ object FileHelper:
 /** A utility class for handling file-related operations, such as reading and writing JSON-encoded
   * data to files, and managing application-specific directory paths.
   */
-class FileHelper(customDir: Option[os.Path] = None) extends LazyLogging:
+class FileHelper(customDir: Option[os.Path] = None, customConfigDir: Option[os.Path] = None) extends LazyLogging:
 
-  @Inject() def this() = this(None)
+  @Inject() def this() = this(None, None)
 
-  def this(customPath: os.Path) = this(Some(customPath))
+  def this(customPath: os.Path) = this(Some(customPath), None)
+
+  def this(customPath: os.Path, customConfigPath: os.Path) = this(Some(customPath), Some(customConfigPath))
 
   /** One application-owned directory tree for all ICS-205 files.
     *
@@ -91,11 +116,13 @@ class FileHelper(customDir: Option[os.Path] = None) extends LazyLogging:
     */
   val directory: os.Path = customDir.getOrElse(FileHelper.defaultDirectory())
   FileHelper.activeDir = Some(directory)
+  val configDirectory: os.Path = customConfigDir.orElse(customDir.map(_ / "config")).getOrElse(FileHelper.defaultConfigDirectory())
+  FileHelper.activeConfigDir = Some(configDirectory)
   val logDirectory: os.Path =
     val dir = directory / "log"
     os.makeDir.all(dir)
     dir
-  logger.info(s"Data directory: $directory")
+  logger.info(s"Data directory: $directory, Config directory: $configDirectory")
 
   def loadOrDefault[T: Decoder](fileName: String)(default: => T): T =
 

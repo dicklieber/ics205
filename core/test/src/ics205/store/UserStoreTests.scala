@@ -37,19 +37,22 @@ class UserStoreTests extends munit.FunSuite:
     id = "user-1"
   )
 
-  test("missing file loads empty user list without error"):
+  test("missing file loads empty user list without creating users.json on initialization"):
     withDirectory { dir =>
       val store = new UserStore(helper(dir))
       assertEquals(store.all(), Seq.empty)
       assertEquals(store.findById("user-1"), None)
       assertEquals(store.findByUsername("admin"), None)
+      assert(!os.exists(dir / "users.json"))
     }
 
   test("add user persists to JSON and is findable case-insensitively"):
     withDirectory { dir =>
       val store = new UserStore(helper(dir))
+      assert(!os.exists(dir / "users.json"))
       val added = store.add(testUser)
       assertEquals(added, Right(testUser))
+      assert(os.exists(dir / "users.json"))
       assertEquals(store.findById("user-1"), Some(testUser))
       assertEquals(store.findByUsername("admin"), Some(testUser))
       assertEquals(store.findByUsername("ADMIN"), Some(testUser))

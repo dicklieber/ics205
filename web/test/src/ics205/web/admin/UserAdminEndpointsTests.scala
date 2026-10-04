@@ -74,7 +74,8 @@ class UserAdminEndpointsTests extends munit.FunSuite:
     }
 
   test("POST /admin/users/create when no users exist creates initial admin user and redirects to /login"):
-    withContext { (_, userStore, _, passwordService, _, _, _, app) =>
+    withContext { (tempDir, userStore, _, passwordService, _, _, _, app) =>
+      assert(!os.exists(tempDir / "users.json"))
       val form = UrlForm(
         "username" -> "initialadmin",
         "password" -> "adminpass123",
@@ -88,6 +89,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       val location = res.headers.get(CIString("Location")).map(_.head.value)
       assertEquals(location, Some("/login?msg=User+%27initialadmin%27+created+successfully.+Please+log+in."))
 
+      assert(os.exists(tempDir / "users.json"))
       val created = userStore.findByUsername("initialadmin").get
       assertEquals(created.role, RolePermissions.Admin)
       assertEquals(created.enabled, true)

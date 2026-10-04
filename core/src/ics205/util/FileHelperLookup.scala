@@ -32,8 +32,10 @@ class FileHelperLookup extends StrLookup:
       FileHelper.directory.toString
     else
       key.toLowerCase match
-        case "dir" | "directory" =>
+        case "dir" | "directory" | "datadir" | "datadirectory" =>
           FileHelper.directory.toString
+        case "config" | "configdir" | "configdirectory" =>
+          FileHelper.configDirectory.toString
         case "logdir" | "logdirectory" | "log" =>
           FileHelper.logDirectory.toString
         case _ =>

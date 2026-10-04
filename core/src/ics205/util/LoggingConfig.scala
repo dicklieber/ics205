@@ -31,7 +31,7 @@ object LoggingConfig extends LazyLogging:
    * Copies the bundled default log4j2.yaml resource to the destination directory
    * if it does not already exist. If the file already exists, it is NOT overwritten.
    *
-   * @param dir the directory where log4j2.yaml should reside (typically FileHelper.directory)
+   * @param dir the directory where log4j2.yaml should reside (typically FileHelper.configDirectory)
    * @return Some(path) if the file exists or was successfully created, None otherwise
    */
   def ensureConfigFile(dir: os.Path): Option[os.Path] =
@@ -63,7 +63,7 @@ object LoggingConfig extends LazyLogging:
     val configFile = dir / configFileName
     if os.exists(configFile) then Some(configFile) else None
 
-  def init(dir: os.Path = FileHelper.directory): Option[os.Path] =
+  def init(dir: os.Path = FileHelper.configDirectory): Option[os.Path] =
     ensureConfigFile(dir)
     val explicitProp = sys.props.get("log4j.configurationFile").orElse(sys.env.get("LOG4J_CONFIGURATION_FILE"))
     if explicitProp.isEmpty then

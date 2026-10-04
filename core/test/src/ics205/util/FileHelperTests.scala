@@ -45,15 +45,19 @@ class FileHelperTests extends munit.FunSuite:
     finally
       if os.exists(helper.directory) then os.remove.all(helper.directory)
 
-  test("appHome provides OS-specific base directory for web and cli applications"):
-    val home = FileHelper.appHome("ICS-205", "ics205")
+  test("appHome and configHome provide OS-specific base directories"):
+    val dataHome = FileHelper.appHome("ICS-205", "ics205")
+    val cfgHome = FileHelper.configHome("ICS-205", "ics205")
     val osName = System.getProperty("os.name", "").toLowerCase
     if osName.contains("mac") then
-      assertEquals(home, os.home / "Library" / "Application Support" / "ICS-205")
+      assertEquals(dataHome, os.home / "Library" / "Application Support" / "ICS-205")
+      assertEquals(cfgHome, os.home / "Library" / "Application Support" / "ICS-205" / "config")
     else if osName.contains("win") then
-      assertEquals(home, os.home / "AppData" / "Local" / "ICS-205")
+      assertEquals(dataHome, os.home / "AppData" / "Local" / "ICS-205")
+      assertEquals(cfgHome, os.home / "AppData" / "Local" / "ICS-205" / "config")
     else
-      assertEquals(home, os.Path("/home/ics205/data"))
+      assertEquals(dataHome, os.Path("/home/ics205/data"))
+      assertEquals(cfgHome, os.Path("/home/ics205/config"))
 
   test("logDirectory is within FileHelper directory and creates directory"):
     val tempDir = os.temp.dir()
@@ -64,15 +68,20 @@ class FileHelperTests extends munit.FunSuite:
     finally
       os.remove.all(tempDir)
 
-  test("FileHelperLookup resolves directory and log directory"):
+  test("FileHelperLookup resolves directory, config, and log directory"):
     val tempDir = os.temp.dir()
+    val tempConfigDir = os.temp.dir()
     try
-      val helper = new FileHelper(tempDir)
+      val helper = new FileHelper(tempDir, tempConfigDir)
       val lookup = new FileHelperLookup()
       assertEquals(lookup.lookup("directory"), tempDir.toString)
       assertEquals(lookup.lookup("dir"), tempDir.toString)
+      assertEquals(lookup.lookup("datadir"), tempDir.toString)
+      assertEquals(lookup.lookup("config"), tempConfigDir.toString)
+      assertEquals(lookup.lookup("configDir"), tempConfigDir.toString)
       assertEquals(lookup.lookup("log"), (tempDir / "log").toString)
       assertEquals(lookup.lookup("logDir"), (tempDir / "log").toString)
       assertEquals(lookup.lookup("logDirectory"), (tempDir / "log").toString)
     finally
       os.remove.all(tempDir)
+      os.remove.all(tempConfigDir)

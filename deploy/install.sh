@@ -21,6 +21,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Default settings
 DEFAULT_JAR_PATH="${REPO_ROOT}/out/web/assembly.dest/out.jar"
 DEFAULT_SERVICE_PATH="${SCRIPT_DIR}/ics205.service"
+DEFAULT_LOG4J_PATH="${REPO_ROOT}/web/resources/log4j2.yaml"
 REMOTE_USER="ics205"
 REMOTE_GROUP="ics205"
 REMOTE_BASE_DIR="/home/${REMOTE_USER}"
@@ -36,6 +37,7 @@ SSH_PORT=""
 SSH_KEY=""
 JAR_PATH="${DEFAULT_JAR_PATH}"
 SERVICE_PATH="${DEFAULT_SERVICE_PATH}"
+LOG4J_PATH="${DEFAULT_LOG4J_PATH}"
 DO_BUILD=false
 START_SERVICE=true
 
@@ -52,6 +54,7 @@ Options:
   -b, --build             Build the fat JAR (./mill web.assembly) before deploying
   -j, --jar <path>        Custom local JAR path (default: out/web/assembly.dest/out.jar)
   -s, --service <path>    Custom service unit path (default: deploy/ics205.service)
+  -l, --log-config <path> Custom log4j2.yaml path (default: web/resources/log4j2.yaml)
   -p, --port <port>       SSH port on the remote host (default: 22)
   -i, --identity <file>   SSH private key identity file
   --no-start              Do not start or enable the systemd service immediately
@@ -77,6 +80,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     -s|--service)
       SERVICE_PATH="$2"
+      shift 2
+      ;;
+    -l|--log-config)
+      LOG4J_PATH="$2"
       shift 2
       ;;
     -p|--port)
@@ -152,10 +159,12 @@ echo "ICS-205 Remote Installation"
 echo "Target Host:       ${TARGET_HOST}"
 echo "Local JAR:         ${JAR_PATH}"
 echo "Local Service:     ${SERVICE_PATH}"
+echo "Local Log Config:  ${LOG4J_PATH}"
 echo "Remote User:       ${REMOTE_USER}"
 echo "Remote Layout:     ${REMOTE_BASE_DIR}"
 echo "  JAR:             ${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
 echo "  Config:          ${REMOTE_CONFIG_DIR}"
+echo "  Log Config:      ${REMOTE_CONFIG_DIR}/log4j2.yaml"
 echo "  Data:            ${REMOTE_DATA_DIR}"
 echo "  Install Unit:    ${REMOTE_INSTALL_DIR}/${SERVICE_NAME}"
 echo "  Active Unit:     /etc/systemd/system/${SERVICE_NAME}"
@@ -196,43 +205,51 @@ if ! getent group "${REMOTE_GROUP}" >/dev/null 2>&1; then
   sudo groupadd --system "${REMOTE_GROUP}"
 fi
 
+NEW_USER=false
 if ! id -u "${REMOTE_USER}" >/dev/null 2>&1; then
   echo "Creating system user '${REMOTE_USER}'..."
   sudo useradd --system --home-dir "${REMOTE_BASE_DIR}" --create-home --gid "${REMOTE_GROUP}" --shell /usr/sbin/nologin "${REMOTE_USER}"
+  NEW_USER=true
 else
   echo "System user '${REMOTE_USER}' already exists."
+fi
+
+# Prompt for password if new user was created
+if [ "${NEW_USER}" = "true" ]; then
+  echo "Please set a password for system user '${REMOTE_USER}':"
+  while true; do
+    if sudo passwd "${REMOTE_USER}"; then
+      echo "Password for '${REMOTE_USER}' set successfully."
+      break
+    else
+      echo "Password setting failed. Try again? (y/n) "
+      read -r retry || retry="n"
+      if [[ ! "$retry" =~ ^[Yy]$ ]]; then
+        echo "Warning: No password set for '${REMOTE_USER}'." >&2
+        break
+      fi
+    fi
+  done
 fi
 
 # 2. Create destination layout directories
 echo "Creating application directory layout..."
 sudo mkdir -p "${REMOTE_BASE_DIR}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_DATA_DIR}" "${REMOTE_INSTALL_DIR}"
-sudo chown "root:${REMOTE_GROUP}" "${REMOTE_BASE_DIR}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_INSTALL_DIR}"
-sudo chmod 750 "${REMOTE_BASE_DIR}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_INSTALL_DIR}"
-sudo chown "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_DATA_DIR}"
+sudo chown "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_BASE_DIR}"
+sudo chmod 750 "${REMOTE_BASE_DIR}"
+sudo find "${REMOTE_BASE_DIR}" -maxdepth 1 -name ".*" -exec chown "${REMOTE_USER}:${REMOTE_GROUP}" {} + 2>/dev/null || true
+
+sudo chown "root:${REMOTE_GROUP}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_INSTALL_DIR}"
+sudo chmod 750 "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_INSTALL_DIR}"
+sudo chown -R "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_DATA_DIR}"
 sudo chmod 750 "${REMOTE_DATA_DIR}"
 
-# 3. Migrate legacy data and configuration if present (safe migration without overwriting)
-if [ -d "/var/lib/${REMOTE_USER}" ]; then
-  echo "Migrating legacy data from /var/lib/${REMOTE_USER} to ${REMOTE_DATA_DIR}..."
-  sudo cp -rn /var/lib/"${REMOTE_USER}"/* "${REMOTE_DATA_DIR}/" 2>/dev/null || true
-  sudo cp -rn /var/lib/"${REMOTE_USER}"/.[!.]* "${REMOTE_DATA_DIR}/" 2>/dev/null || true
-  sudo chown -R "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_DATA_DIR}"
-  sudo find "${REMOTE_DATA_DIR}" -type d -exec chmod 750 {} +
-fi
-
-if [ -d "/etc/${REMOTE_USER}" ]; then
-  echo "Migrating legacy configuration from /etc/${REMOTE_USER} to ${REMOTE_CONFIG_DIR}..."
-  sudo cp -rn /etc/"${REMOTE_USER}"/* "${REMOTE_CONFIG_DIR}/" 2>/dev/null || true
-  sudo chown -R "root:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}"
-  sudo chmod 750 "${REMOTE_CONFIG_DIR}"
-  sudo find "${REMOTE_CONFIG_DIR}" -type f -exec chmod 640 {} +
-fi
-
-if [ -f "/etc/default/${REMOTE_USER}" ] && [ ! -f "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env" ]; then
-  echo "Migrating /etc/default/${REMOTE_USER} to ${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env..."
-  sudo cp "/etc/default/${REMOTE_USER}" "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
-  sudo chown "root:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
-  sudo chmod 640 "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
+# 3. Install default log4j2.yaml if not present in config directory
+if [ -f "${REMOTE_TMP}/log4j2.yaml" ] && [ ! -f "${REMOTE_CONFIG_DIR}/log4j2.yaml" ]; then
+  echo "Installing default log4j2.yaml to ${REMOTE_CONFIG_DIR}/log4j2.yaml..."
+  sudo cp "${REMOTE_TMP}/log4j2.yaml" "${REMOTE_CONFIG_DIR}/log4j2.yaml"
+  sudo chown "root:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}/log4j2.yaml"
+  sudo chmod 640 "${REMOTE_CONFIG_DIR}/log4j2.yaml"
 fi
 
 # 4. Install JAR file (owned by root:group, mode 640 - readable by app, unmodifiable)
@@ -256,10 +273,12 @@ sudo chmod 644 "/etc/systemd/system/${SERVICE_NAME}"
 if [ ! -f "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env" ] && [ ! -f "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.conf" ] && [ ! -f "${REMOTE_CONFIG_DIR}/application.conf" ]; then
   echo "Creating default environment file at ${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env..."
   sudo tee "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env" > /dev/null << 'EOF'
-JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=true
+JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=false
 JAR_PATH=/home/ics205/app/ics205.jar
+# Remote Java Debugger (listening on port 5005 across all network interfaces):
+# JAVA_OPTS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=false
 EOF
-  sudo chown "root:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
+  sudo chown "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
   sudo chmod 640 "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
 fi
 
@@ -293,10 +312,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# 3. Transfer JAR and service unit
+# 3. Transfer JAR, service unit, and log configuration
 echo "--> Uploading artifacts to ${TARGET_HOST}:${REMOTE_TMP}..."
 scp "${SCP_OPTS[@]}" "${JAR_PATH}" "${TARGET_HOST}:${REMOTE_TMP}/out.jar"
 scp "${SCP_OPTS[@]}" "${SERVICE_PATH}" "${TARGET_HOST}:${REMOTE_TMP}/${SERVICE_NAME}"
+if [[ -f "${LOG4J_PATH}" ]]; then
+  scp "${SCP_OPTS[@]}" "${LOG4J_PATH}" "${TARGET_HOST}:${REMOTE_TMP}/log4j2.yaml"
+fi
 scp "${SCP_OPTS[@]}" "${LOCAL_REMOTE_SCRIPT}" "${TARGET_HOST}:${REMOTE_TMP}/provision.sh"
 
 # 4. Execute remote installation steps

@@ -21,6 +21,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Default settings
 DEFAULT_JAR_PATH="${REPO_ROOT}/out/web/assembly.dest/out.jar"
 DEFAULT_SERVICE_PATH="${SCRIPT_DIR}/ics205.service"
+DEFAULT_LOG4J_PATH="${REPO_ROOT}/web/resources/log4j2.yaml"
 REMOTE_USER="ics205"
 REMOTE_GROUP="ics205"
 REMOTE_BASE_DIR="/home/${REMOTE_USER}"
@@ -36,6 +37,7 @@ SSH_PORT=""
 SSH_KEY=""
 JAR_PATH="${DEFAULT_JAR_PATH}"
 SERVICE_PATH="${DEFAULT_SERVICE_PATH}"
+LOG4J_PATH="${DEFAULT_LOG4J_PATH}"
 UPDATE_SERVICE=false
 DO_BUILD=false
 RESTART_SERVICE=true
@@ -53,6 +55,7 @@ Options:
   -b, --build             Build the fat JAR (./mill web.assembly) before deploying
   -j, --jar <path>        Custom local JAR path (default: out/web/assembly.dest/out.jar)
   -s, --sync-service      Also update /etc/systemd/system/ics205.service and daemon-reload
+  -l, --log-config <path> Custom log4j2.yaml path (default: web/resources/log4j2.yaml)
   -p, --port <port>       SSH port on the remote host (default: 22)
   -i, --identity <file>   SSH private key identity file
   --no-restart            Do not restart the systemd service after updating
@@ -79,6 +82,10 @@ while [[ $# -gt 0 ]]; do
     -s|--sync-service)
       UPDATE_SERVICE=true
       shift
+      ;;
+    -l|--log-config)
+      LOG4J_PATH="$2"
+      shift 2
       ;;
     -p|--port)
       SSH_PORT="$2"
@@ -183,27 +190,30 @@ RESTART_SERVICE="${11}"
 
 # Ensure layout directories exist
 sudo mkdir -p "${REMOTE_BASE_DIR}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_DATA_DIR}" "${REMOTE_INSTALL_DIR}"
-sudo chown "root:${REMOTE_GROUP}" "${REMOTE_BASE_DIR}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_INSTALL_DIR}"
-sudo chmod 750 "${REMOTE_BASE_DIR}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_INSTALL_DIR}"
-sudo chown "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_DATA_DIR}"
+sudo chown "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_BASE_DIR}"
+sudo chmod 750 "${REMOTE_BASE_DIR}"
+sudo find "${REMOTE_BASE_DIR}" -maxdepth 1 -name ".*" -exec chown "${REMOTE_USER}:${REMOTE_GROUP}" {} + 2>/dev/null || true
+
+sudo chown "root:${REMOTE_GROUP}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_INSTALL_DIR}"
+sudo chmod 750 "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_INSTALL_DIR}"
+sudo chown -R "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_DATA_DIR}"
 sudo chmod 750 "${REMOTE_DATA_DIR}"
 
-# Migrate legacy data from /var/lib/ics205 if present
-if [ -d "/var/lib/${REMOTE_USER}" ]; then
-  echo "Migrating legacy data from /var/lib/${REMOTE_USER} to ${REMOTE_DATA_DIR}..."
-  sudo cp -rn /var/lib/"${REMOTE_USER}"/* "${REMOTE_DATA_DIR}/" 2>/dev/null || true
-  sudo cp -rn /var/lib/"${REMOTE_USER}"/.[!.]* "${REMOTE_DATA_DIR}/" 2>/dev/null || true
-  sudo chown -R "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_DATA_DIR}"
-  sudo find "${REMOTE_DATA_DIR}" -type d -exec chmod 750 {} +
+# Ensure .env file is owned by application user if present
+if [ -f "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env" ]; then
+  sudo chown "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
+  sudo chmod 640 "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
 fi
 
-# Migrate legacy config from /etc/ics205 or /etc/default/ics205 if present
-if [ -d "/etc/${REMOTE_USER}" ]; then
-  echo "Migrating legacy configuration from /etc/${REMOTE_USER} to ${REMOTE_CONFIG_DIR}..."
-  sudo cp -rn /etc/"${REMOTE_USER}"/* "${REMOTE_CONFIG_DIR}/" 2>/dev/null || true
-  sudo chown -R "root:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}"
-  sudo chmod 750 "${REMOTE_CONFIG_DIR}"
-  sudo find "${REMOTE_CONFIG_DIR}" -type f -exec chmod 640 {} +
+# Ensure default log4j2.yaml exists in config directory
+if [ -f "${REMOTE_TMP}/log4j2.yaml" ] && [ ! -f "${REMOTE_CONFIG_DIR}/log4j2.yaml" ]; then
+  echo "Installing default log4j2.yaml to ${REMOTE_CONFIG_DIR}/log4j2.yaml..."
+  sudo cp "${REMOTE_TMP}/log4j2.yaml" "${REMOTE_CONFIG_DIR}/log4j2.yaml"
+  sudo chown "root:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}/log4j2.yaml"
+  sudo chmod 640 "${REMOTE_CONFIG_DIR}/log4j2.yaml"
+elif [ -f "${REMOTE_CONFIG_DIR}/log4j2.yaml" ]; then
+  sudo chown "root:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}/log4j2.yaml"
+  sudo chmod 640 "${REMOTE_CONFIG_DIR}/log4j2.yaml"
 fi
 
 # Replace JAR atomically (mode 640, root:group)
@@ -256,9 +266,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# 3. Transfer new JAR (and optional service unit)
+# 3. Transfer new JAR (and optional service unit, log config)
 echo "--> Uploading new JAR to ${TARGET_HOST}:${REMOTE_TMP}..."
 scp "${SCP_OPTS[@]}" "${JAR_PATH}" "${TARGET_HOST}:${REMOTE_TMP}/out.jar"
+
+if [[ -f "${LOG4J_PATH}" ]]; then
+  echo "--> Uploading logging configuration template..."
+  scp "${SCP_OPTS[@]}" "${LOG4J_PATH}" "${TARGET_HOST}:${REMOTE_TMP}/log4j2.yaml"
+fi
 
 HAS_SERVICE_UNIT=false
 if [[ "${UPDATE_SERVICE}" == true ]] && [[ -f "${SERVICE_PATH}" ]]; then
