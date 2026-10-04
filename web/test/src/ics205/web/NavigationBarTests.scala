@@ -73,6 +73,8 @@ class NavigationBarTests extends munit.FunSuite:
     assert(html.contains("Debug"))
     assert(html.contains("Reload Files"))
     assert(html.contains("href=\"/debug/reload-files\""))
+    assert(html.contains("Download Data Directory"))
+    assert(html.contains("href=\"/debug/download-directory\""))
     assert(html.contains("href=\"/docs\""))
     assert(html.contains("API Documentation"))
 
@@ -81,6 +83,8 @@ class NavigationBarTests extends munit.FunSuite:
     assert(!html.contains("navbarDropdownDebug"))
     assert(!html.contains("Reload Files"))
     assert(!html.contains("href=\"/debug/reload-files\""))
+    assert(!html.contains("Download Data Directory"))
+    assert(!html.contains("href=\"/debug/download-directory\""))
     assert(!html.contains("href=\"/docs\""))
 
   test("NavigationBar hides User Management when user lacks EditUsers permission"):
@@ -163,7 +167,18 @@ class NavigationBarTests extends munit.FunSuite:
 
       // ics205.util.FileHelper.directory
       assert(html.contains("<dt>ics205.util.FileHelper.directory</dt>"))
-      assert(html.contains(s"<dd>${tempDir.toString}</dd>"))
+      assert(html.contains(tempDir.toString))
+      assert(html.contains("Download ZIP"))
+      assert(html.contains("href=\"/debug/download-directory\""))
+
+      // Viewer user does not see Download ZIP in About dialog
+      val viewerHtml = NavigationBar.render(
+        activePage = NavigationBar.ActivePage.Plan,
+        currentUser = Some(viewerUser),
+        fileHelper = helper
+      ).render
+      assert(viewerHtml.contains(tempDir.toString))
+      assert(!viewerHtml.contains("Download ZIP"))
 
       // Java version info
       assert(html.contains("<dt>java.version</dt>"))

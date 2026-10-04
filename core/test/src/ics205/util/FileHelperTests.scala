@@ -85,3 +85,33 @@ class FileHelperTests extends munit.FunSuite:
     finally
       os.remove.all(tempDir)
       os.remove.all(tempConfigDir)
+
+  test("zipDirectory archives all files and subdirectories correctly"):
+    val tempDir = os.temp.dir(prefix = "zip-test-")
+    try
+      val helper = new FileHelper(tempDir)
+      os.write(tempDir / "root.txt", "root content")
+      os.makeDir.all(tempDir / "events")
+      os.write(tempDir / "events" / "event1.json", "{\"name\": \"event1\"}")
+      os.makeDir.all(tempDir / "emptyFolder")
+
+      val zipBytes = helper.zipDirectory()
+      assert(zipBytes.nonEmpty)
+
+      val entries = collection.mutable.Map[String, String]()
+      val bais = new java.io.ByteArrayInputStream(zipBytes)
+      val zis = new java.util.zip.ZipInputStream(bais)
+      var entry = zis.getNextEntry
+      while entry != null do
+        val name = entry.getName
+        val content = if entry.isDirectory then "" else new String(zis.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+        entries(name) = content
+        zis.closeEntry()
+        entry = zis.getNextEntry
+      zis.close()
+
+      assertEquals(entries.get("root.txt"), Some("root content"))
+      assertEquals(entries.get("events/event1.json"), Some("{\"name\": \"event1\"}"))
+      assert(entries.contains("emptyFolder/"))
+    finally
+      os.remove.all(tempDir)

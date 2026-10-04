@@ -93,6 +93,40 @@ object FileHelper:
     os.makeDir.all(dir)
     dir
 
+  /**
+   * Creates a ZIP archive of all files and directories inside the given directory (defaulting to [[FileHelper.directory]]).
+   *
+   * @param dir the directory to zip (defaults to [[FileHelper.directory]])
+   * @return byte array containing the ZIP archive
+   */
+  def zipDirectory(dir: os.Path = directory): Array[Byte] =
+    val baos = new java.io.ByteArrayOutputStream()
+    val zos = new java.util.zip.ZipOutputStream(baos)
+    try
+      if os.exists(dir) then
+        val allPaths = os.walk(dir)
+        for path <- allPaths do
+          val relPath = path.relativeTo(dir).segments.mkString("/")
+          if os.isDir(path) then
+            if relPath.nonEmpty then
+              val entry = new java.util.zip.ZipEntry(s"$relPath/")
+              entry.setTime(java.nio.file.Files.getLastModifiedTime(path.toNIO).toMillis)
+              zos.putNextEntry(entry)
+              zos.closeEntry()
+          else
+            val entry = new java.util.zip.ZipEntry(relPath)
+            entry.setTime(java.nio.file.Files.getLastModifiedTime(path.toNIO).toMillis)
+            zos.putNextEntry(entry)
+            val is = java.nio.file.Files.newInputStream(path.toNIO)
+            try is.transferTo(zos)
+            finally is.close()
+            zos.closeEntry()
+      zos.finish()
+      zos.flush()
+      baos.toByteArray
+    finally
+      zos.close()
+
 /** A utility class for handling file-related operations, such as reading and writing JSON-encoded
   * data to files, and managing application-specific directory paths.
   */
@@ -153,3 +187,12 @@ class FileHelper(customDir: Option[os.Path] = None, customConfigDir: Option[os.P
   def remove(fileName: String): Unit =
     val path = directory / fileName
     os.remove(path)
+
+  /**
+   * Creates a ZIP archive of all files and directories inside the given directory (defaulting to this instance's [[directory]]).
+   *
+   * @param dir the directory to zip (defaults to this instance's [[directory]])
+   * @return byte array containing the ZIP archive
+   */
+  def zipDirectory(dir: os.Path = directory): Array[Byte] =
+    FileHelper.zipDirectory(dir)

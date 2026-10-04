@@ -201,6 +201,12 @@ object NavigationBar:
                   li(
                     a(
                       cls := "dropdown-item",
+                      href := "/debug/download-directory"
+                    )("Download Data Directory")
+                  ),
+                  li(
+                    a(
+                      cls := "dropdown-item",
                       href := "/docs"
                     )("API Documentation")
                   )
@@ -256,12 +262,13 @@ object NavigationBar:
           )
         )
       ),
-      aboutDialog(fileHelper, startTime)
+      aboutDialog(fileHelper, startTime, currentUser)
     )
 
   def aboutDialog(
     fileHelper: FileHelper = new FileHelper(),
-    startTime: Instant = Instant.ofEpochMilli(java.lang.management.ManagementFactory.getRuntimeMXBean.getStartTime)
+    startTime: Instant = Instant.ofEpochMilli(java.lang.management.ManagementFactory.getRuntimeMXBean.getStartTime),
+    currentUser: Option[AuthenticatedUser] = None
   ): Frag =
     val initialUptime = java.time.Duration.between(startTime, Instant.now()).toMillis
     val buildInfoFields = Seq(
@@ -323,7 +330,20 @@ object NavigationBar:
             dl(cls := "about-dl")(
               div(cls := "about-field")(
                 dt("ics205.util.FileHelper.directory"),
-                dd(fileHelper.directory.toString)
+                dd(
+                  span(fileHelper.directory.toString),
+                  if currentUser.exists(_.hasPermission(Permission.Debug)) then
+                    frag(
+                      " ",
+                      a(
+                        href := "/debug/download-directory",
+                        cls := "btn btn-outline-secondary btn-sm ms-2",
+                        style := "margin-left: 8px; font-size: 0.8rem; padding: 2px 6px;"
+                      )("Download ZIP")
+                    )
+                  else
+                    span()
+                )
               )
             )
           ),

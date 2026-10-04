@@ -22,6 +22,7 @@ import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.Permission
 import ics205.store.{Ics205Store, SessionStore, UserStore}
+import ics205.util.{FileHelper, UtcFormatter}
 import ics205.web.auth.AuthSecurity
 import jakarta.inject.{Inject, Singleton}
 import sttp.model.StatusCode
@@ -33,8 +34,16 @@ class DebugEndpoints @Inject()(
   store: Ics205Store,
   userStore: UserStore,
   sessionStore: SessionStore,
-  security: AuthSecurity
+  security: AuthSecurity,
+  fileHelper: FileHelper
 ) extends ApiEndpoints with LazyLogging:
+
+  def this(
+    store: Ics205Store,
+    userStore: UserStore,
+    sessionStore: SessionStore,
+    security: AuthSecurity
+  ) = this(store, userStore, sessionStore, security, new FileHelper())
 
   private val reloadFilesGetEndpoint: ServerEndpoint[Any, IO] =
     security.authorizedEndpoint(Permission.Debug)
@@ -72,8 +81,58 @@ class DebugEndpoints @Inject()(
         }
       }
 
+  private val downloadDirectoryZipEndpoint: ServerEndpoint[Any, IO] =
+    security.authorizedEndpoint(Permission.Debug)
+      .get
+      .in("debug" / "download-directory")
+      .out(statusCode
+        .and(header[String]("Content-Type"))
+        .and(header[Option[String]]("Content-Disposition"))
+        .and(header[String]("Cache-Control"))
+        .and(byteArrayBody))
+      .serverLogicSuccess { currentUser => _ =>
+        IO.blocking {
+          logger.info(s"User '${currentUser.username}' requested downloading zip of FileHelper.directory (${fileHelper.directory}).")
+          val zipBytes = fileHelper.zipDirectory()
+          val zipFileName = s"ics205-${UtcFormatter.format()}.zip"
+          (
+            StatusCode.Ok,
+            "application/zip",
+            Some(s"""attachment; filename="$zipFileName""""),
+            "no-store",
+            zipBytes
+          )
+        }
+      }
+
+  private val downloadDataZipEndpoint: ServerEndpoint[Any, IO] =
+    security.authorizedEndpoint(Permission.Debug)
+      .get
+      .in("debug" / "download-data")
+      .out(statusCode
+        .and(header[String]("Content-Type"))
+        .and(header[Option[String]]("Content-Disposition"))
+        .and(header[String]("Cache-Control"))
+        .and(byteArrayBody))
+      .serverLogicSuccess { currentUser => _ =>
+        IO.blocking {
+          logger.info(s"User '${currentUser.username}' requested downloading zip of FileHelper.directory (${fileHelper.directory}).")
+          val zipBytes = fileHelper.zipDirectory()
+          val zipFileName = s"ics205-${UtcFormatter.format()}.zip"
+          (
+            StatusCode.Ok,
+            "application/zip",
+            Some(s"""attachment; filename="$zipFileName""""),
+            "no-store",
+            zipBytes
+          )
+        }
+      }
+
   override val endpoints: List[ServerEndpoint[Any, IO]] =
     List(
       reloadFilesGetEndpoint,
-      reloadFilesPostEndpoint
+      reloadFilesPostEndpoint,
+      downloadDirectoryZipEndpoint,
+      downloadDataZipEndpoint
     )

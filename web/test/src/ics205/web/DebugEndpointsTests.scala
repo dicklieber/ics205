@@ -47,7 +47,7 @@ class DebugEndpointsTests extends munit.FunSuite:
       val passwordService = new ScalaPassPasswordService()
       val authService = new AuthenticationService(userStore, passwordService, sessionStore)
       val security = new AuthSecurity(authService, config)
-      val debugEndpoints = new DebugEndpoints(ics205Store, userStore, sessionStore, security)
+      val debugEndpoints = new DebugEndpoints(ics205Store, userStore, sessionStore, security, helper)
 
       val allServerEndpoints: List[ServerEndpoint[Any, IO]] = debugEndpoints.endpoints
       val httpApp = Http4sServerInterpreter[IO]().toRoutes(allServerEndpoints).orNotFound
@@ -156,4 +156,84 @@ class DebugEndpointsTests extends munit.FunSuite:
 
       assertEquals(res.status, Status.SeeOther)
       assertEquals(store.getEvent("PostEvent").get.ics205.incidentName, "POST Reload Incident")
+    }
+
+  test("GET /debug/download-directory without session returns 401 Unauthorized"):
+    withContext { (_, _, _, _, _, _, _, _, app) =>
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/debug/download-directory"))
+      val res = app.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.Unauthorized)
+    }
+
+  test("GET /debug/download-directory with user lacking Debug permission returns 403 Forbidden"):
+    withContext { (_, _, userStore, _, passwordService, authService, _, _, app) =>
+      val hash = passwordService.hash("password")
+      userStore.add(User("viewer1", hash, RolePermissions.Viewer, enabled = true, id = "u1"))
+      val session = authService.authenticate("viewer1", "password").get
+
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/debug/download-directory"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val res = app.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.Forbidden)
+    }
+
+  test("GET /debug/download-directory by admin downloads zip archive of entire FileHelper.directory"):
+    withContext { (tempDir, store, userStore, sessionStore, passwordService, authService, _, _, app) =>
+      val hash = passwordService.hash("password")
+      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
+      val session = authService.authenticate("admin", "password").get
+
+      // Add files in data directory
+      val event = ics205.model.Ics205Event(
+        eventName = "SummerDrill",
+        ics205 = ics205.model.Ics205(incidentName = "Summer Incident", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty),
+        metadata = ics205.model.Ics205Metadata()
+      )
+      store.saveEvent(event)
+      os.write(tempDir / "extra.txt", "some extra text")
+
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/debug/download-directory"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val res = app.run(req).unsafeRunSync()
+
+      assertEquals(res.status, Status.Ok)
+      assertEquals(res.headers.get(CIString("Content-Type")).map(_.head.value), Some("application/zip"))
+      val disposition = res.headers.get(CIString("Content-Disposition")).map(_.head.value).getOrElse("")
+      assert(disposition.matches("""attachment;\s*filename="ics205-\d{8}T\d{6}Z\.zip""""))
+      assertEquals(res.headers.get(CIString("Cache-Control")).map(_.head.value), Some("no-store"))
+
+      val bodyBytes = res.body.compile.toVector.unsafeRunSync().toArray
+      assert(bodyBytes.nonEmpty)
+
+      val entries = collection.mutable.Map[String, String]()
+      val bais = new java.io.ByteArrayInputStream(bodyBytes)
+      val zis = new java.util.zip.ZipInputStream(bais)
+      var entry = zis.getNextEntry
+      while entry != null do
+        val name = entry.getName
+        val content = if entry.isDirectory then "" else new String(zis.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+        entries(name) = content
+        zis.closeEntry()
+        entry = zis.getNextEntry
+      zis.close()
+
+      assertEquals(entries.get("extra.txt"), Some("some extra text"))
+      assert(entries.contains("events/SummerDrill.json"))
+      assert(entries("events/SummerDrill.json").contains("Summer Incident"))
+    }
+
+  test("GET /debug/download-data alias endpoint also returns directory zip"):
+    withContext { (tempDir, store, userStore, sessionStore, passwordService, authService, _, _, app) =>
+      val hash = passwordService.hash("password")
+      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
+      val session = authService.authenticate("admin", "password").get
+
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/debug/download-data"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val res = app.run(req).unsafeRunSync()
+
+      assertEquals(res.status, Status.Ok)
+      assertEquals(res.headers.get(CIString("Content-Type")).map(_.head.value), Some("application/zip"))
+      val disposition = res.headers.get(CIString("Content-Disposition")).map(_.head.value).getOrElse("")
+      assert(disposition.matches("""attachment;\s*filename="ics205-\d{8}T\d{6}Z\.zip""""))
     }

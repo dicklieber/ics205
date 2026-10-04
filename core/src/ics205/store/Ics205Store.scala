@@ -21,7 +21,7 @@ package ics205.store
 import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.{Permission, UserId}
 import ics205.model.{Ics205, Ics205Event, Ics205Metadata, OperationalPeriod}
-import ics205.util.FileHelper
+import ics205.util.{FileHelper, UtcFormatter}
 import ics205.util.Ids.generateId
 import io.circe.{Codec, Printer}
 import io.circe.parser.*
@@ -405,13 +405,10 @@ class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
   }
 
 object Ics205Store:
-  private val UtcFormatter: DateTimeFormatter =
-    DateTimeFormatter
-      .ofPattern("yyyyMMdd'T'HHmmss'Z'")
-      .withZone(ZoneOffset.UTC)
+  val UtcFormatter: DateTimeFormatter = ics205.util.UtcFormatter.formatter
 
   def insertTimestamp(fileName: String, timestamp: TemporalAccessor = Instant.now()): String =
-    val ts = UtcFormatter.format(timestamp)
+    val ts = ics205.util.UtcFormatter.format(timestamp)
     if fileName.toLowerCase.endsWith(".json") then
       val base = fileName.substring(0, fileName.length - 5)
       val ext = fileName.substring(fileName.length - 5)
