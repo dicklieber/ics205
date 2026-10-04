@@ -21,16 +21,21 @@ package ics205.web
 import cats.effect.IO
 import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, Permission, RolePermissions}
 import ics205.log.Ics205ActivityLogger
-import ics205.model.{Ics205, Ics205Event, Ics205Metadata, OperationalPeriod}
+import ics205.model.{Ics205, Ics205Event, Ics205Json, Ics205Metadata, OperationalPeriod}
 import ics205.store.{Ics205Store, UserStore}
 import jakarta.inject.{Inject, Singleton}
-import sttp.model.StatusCode
+import sttp.model.{Part, StatusCode}
 import sttp.tapir.*
+import sttp.tapir.generic.auto.*
 import sttp.tapir.server.ServerEndpoint
 
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Instant
+
+case class EventImportData(
+  file: Part[Array[Byte]]
+)
 
 @Singleton
 class IndexEndpoints @Inject() (
@@ -466,6 +471,82 @@ class IndexEndpoints @Inject() (
       }
     }
 
+  private val exportEventEndpoint: ServerEndpoint[Any, IO] = endpoint.get
+    .in("events" / "export")
+    .in(cookie[Option[String]](config.cookieName))
+    .in(query[Option[String]]("name"))
+    .out(statusCode
+      .and(header[Option[String]]("Location"))
+      .and(header[String]("Content-Type"))
+      .and(header[Option[String]]("Content-Disposition"))
+      .and(header[String]("Cache-Control"))
+      .and(stringBody))
+    .serverLogicSuccess[IO] { (sessionIdOpt, nameOpt) =>
+      IO.blocking {
+        sessionIdOpt.flatMap(id => authService.authenticateSession(id).toOption) match
+          case None =>
+            (StatusCode.SeeOther, Some("/login"), "text/plain", None, "no-store", "")
+          case Some(user) =>
+            val targetName = nameOpt.filter(_.nonEmpty).orElse(store.currentEventName).getOrElse("")
+            store.getEvent(targetName) match
+              case None =>
+                (StatusCode.SeeOther, Some("/events?err=Event+not+found"), "text/plain", None, "no-store", "")
+              case Some(ev) =>
+                if user.role != RolePermissions.Admin && !ev.canView(user) then
+                  (StatusCode.Forbidden, None, "text/plain", None, "no-store", "You do not have permission to export this event.")
+                else
+                  Ics205ActivityLogger.logExport(
+                    username = user.username,
+                    eventName = ev.eventName,
+                    format = "json",
+                    incidentName = Option(ev.ics205.incidentName).filter(_.nonEmpty),
+                    channelCount = Some(ev.ics205.channels.size)
+                  )
+                  val sanitizedName = if ev.eventName.trim.nonEmpty then
+                    ev.eventName.trim.replaceAll("""[\\/:*?"<>|]""", "_")
+                  else "ics205"
+                  (StatusCode.Ok, None, "application/json; charset=utf-8",
+                    Some(s"""attachment; filename="$sanitizedName.json""""),
+                    "no-store", Ics205Json.toJson(ev))
+      }
+    }
+
+  private val importEventEndpoint: ServerEndpoint[Any, IO] = endpoint.post
+    .in("events" / "import")
+    .in(cookie[Option[String]](config.cookieName))
+    .in(multipartBody[EventImportData])
+    .out(statusCode.and(header[Option[String]]("Set-Cookie")).and(header[String]("Location")).and(htmlBodyUtf8))
+    .serverLogicSuccess[IO] { (sessionIdOpt, importData) =>
+      IO.blocking {
+        sessionIdOpt.flatMap(id => authService.authenticateSession(id).toOption) match
+          case None =>
+            (StatusCode.SeeOther, None, "/login", "")
+          case Some(user) =>
+            if user.role != RolePermissions.Admin && !user.hasPermission(Permission.EditPlans) then
+              (StatusCode.Forbidden, None, "/events?err=You+do+not+have+permission+to+import+events.", "You do not have permission to import events.")
+            else
+              val fileBytes = importData.file.body
+              val content = new String(fileBytes, StandardCharsets.UTF_8).trim
+              if content.isEmpty then
+                (StatusCode.SeeOther, None, "/events?err=Uploaded+file+is+empty", "")
+              else
+                Ics205Json.eventFromJson(content) match
+                  case Left(err) =>
+                    (StatusCode.SeeOther, None, s"/events?err=${encode(s"Failed to parse event JSON: $err")}", "")
+                  case Right(parsedEvent) =>
+                    val imported = store.importEvent(parsedEvent, Some(user.id))
+                    Ics205ActivityLogger.logImport(
+                      username = user.username,
+                      eventName = imported.eventName,
+                      incidentName = Option(imported.ics205.incidentName).filter(_.nonEmpty),
+                      channelCount = Some(imported.ics205.channels.size),
+                      fileName = importData.file.fileName
+                    )
+                    val cookieHeader = s"ics205_event=${encode(imported.eventName)}; Path=/; SameSite=Lax"
+                    (StatusCode.SeeOther, Some(cookieHeader), s"/events?msg=Event+'${encode(imported.eventName)}'+imported+successfully", "")
+      }
+    }
+
   private val deleteEventEndpoint: ServerEndpoint[Any, IO] = endpoint.post
     .in("events" / "delete")
     .in(cookie[Option[String]](config.cookieName))
@@ -506,5 +587,7 @@ class IndexEndpoints @Inject() (
     createEventEndpoint,
     getMetadataEndpoint,
     postMetadataEndpoint,
-    deleteEventEndpoint
+    deleteEventEndpoint,
+    exportEventEndpoint,
+    importEventEndpoint
   )

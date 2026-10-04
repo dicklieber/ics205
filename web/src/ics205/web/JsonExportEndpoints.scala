@@ -76,7 +76,7 @@ class JsonExportEndpoints @Inject()(
                     else "ics205"
                     (StatusCode.Ok, None, "application/json; charset=utf-8",
                       Some(s"""attachment; filename="$sanitizedName.json""""),
-                      "no-store", Ics205Json.toJson(currentEvent.ics205))
+                      "no-store", Ics205Json.toJson(currentEvent))
         }
       }
   )

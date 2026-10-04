@@ -159,6 +159,46 @@ class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
         false
   }
 
+  def uniqueEventName(desiredName: String): String = synchronized {
+    val trimmed = desiredName.trim
+    val baseName = if trimmed.isEmpty then "Event" else trimmed
+    def exists(name: String): Boolean =
+      eventsState.exists(_.eventName.equalsIgnoreCase(name))
+
+    if !exists(baseName) then baseName
+    else
+      val pattern = """^(.*?)\s*\((\d+)\)$""".r
+      val (base, startIdx) = baseName match
+        case pattern(b, n) if b.trim.nonEmpty => (b.trim, n.toIntOption.getOrElse(0) + 1)
+        case _ => (baseName, 1)
+
+      var idx = startIdx
+      var candidate = s"$base ($idx)"
+      while exists(candidate) do
+        idx += 1
+        candidate = s"$base ($idx)"
+      candidate
+  }
+
+  def importEvent(event: Ics205Event, userId: Option[UserId] = None): Ics205Event = synchronized {
+    val rawName = if event.eventName.trim.nonEmpty then event.eventName.trim
+    else if event.ics205.incidentName.trim.nonEmpty then event.ics205.incidentName.trim
+    else "Imported Event"
+    val uniqueName = uniqueEventName(rawName)
+    val updatedIncidentName = if event.ics205.incidentName.trim.isEmpty then uniqueName else event.ics205.incidentName
+    val updatedMetadata = event.metadata.copy(
+      lastEditedBy = userId.orElse(event.metadata.lastEditedBy),
+      savedAt = Instant.now()
+    )
+    val updatedEvent = event.copy(
+      eventName = uniqueName,
+      ics205 = event.ics205.copy(incidentName = updatedIncidentName),
+      metadata = updatedMetadata
+    )
+    saveEvent(updatedEvent, userId, refreshPrepared = false)
+    updatedEvent
+  }
+
   def addEvent(event: Ics205Event): Either[String, Ics205Event] = synchronized {
     val name = if event.eventName.nonEmpty then event.eventName.trim else event.ics205.incidentName.trim
     if name.isEmpty then

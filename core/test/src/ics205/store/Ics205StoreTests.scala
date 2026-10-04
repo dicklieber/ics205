@@ -382,3 +382,41 @@ class Ics205StoreTests extends munit.FunSuite:
       assert(!os.exists(eventFile))
       assert(!os.exists(bakDir))
     }
+
+  test("uniqueEventName differentiates names by adding suffix"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      store.saveEvent(Ics205Event("Field Day", plan.copy(incidentName = "Field Day")))
+      assertEquals(store.uniqueEventName("Field Day"), "Field Day (1)")
+
+      store.saveEvent(Ics205Event("Field Day (1)", plan.copy(incidentName = "Field Day (1)")))
+      assertEquals(store.uniqueEventName("Field Day"), "Field Day (2)")
+      assertEquals(store.uniqueEventName("Field Day (1)"), "Field Day (2)")
+
+      store.saveEvent(Ics205Event("Field Day (2)", plan.copy(incidentName = "Field Day (2)")))
+      assertEquals(store.uniqueEventName("Field Day"), "Field Day (3)")
+
+      // Non-existing name remains unchanged
+      assertEquals(store.uniqueEventName("Marathon"), "Marathon")
+    }
+
+  test("importEvent saves new event or adds suffix if duplicate"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      val event1 = Ics205Event("Skywarn", plan.copy(incidentName = "Skywarn Drill"))
+      val imported1 = store.importEvent(event1, userId = Some("admin-1"))
+      assertEquals(imported1.eventName, "Skywarn")
+      assertEquals(store.getEvent("Skywarn").isDefined, true)
+
+      // Import same event again -> should be suffixed
+      val imported2 = store.importEvent(event1, userId = Some("admin-1"))
+      assertEquals(imported2.eventName, "Skywarn (1)")
+      assertEquals(store.getEvent("Skywarn (1)").isDefined, true)
+      assertEquals(store.events().size, 2)
+
+      // Import with empty eventName derives from incidentName
+      val unnamedEvent = Ics205Event("", plan.copy(incidentName = "Skywarn Drill"))
+      val imported3 = store.importEvent(unnamedEvent, userId = Some("admin-1"))
+      assertEquals(imported3.eventName, "Skywarn Drill")
+      assertEquals(store.getEvent("Skywarn Drill").isDefined, true)
+    }

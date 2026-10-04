@@ -6,7 +6,9 @@ import ics205.auth.*
 import ics205.model.*
 import ics205.store.{Ics205Store, InMemJsonSessionStore, UserStore}
 import ics205.util.FileHelper
+import org.http4s.multipart.{Multipart, Part}
 import org.http4s.{Method, Request, Status, Uri, UrlForm}
+import org.typelevel.ci.CIString
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 
 class EventsEndpointsTests extends munit.FunSuite:
@@ -240,4 +242,108 @@ class EventsEndpointsTests extends munit.FunSuite:
       val body = resEvents.as[String].unsafeRunSync()
       assert(body.contains("No events found. Create an event below to get started."))
       assert(!body.contains("(Default)"))
+    }
+
+  test("GET /events/export exports Ics205Event as JSON attachment"):
+    withTestContext { (_, store, userStore, sessionStore, _, routes) =>
+      val passwordService = new ScalaPassPasswordService
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
+      val session = sessionStore.create(admin.id)
+
+      val plan = Ics205(incidentName = "Wildfire Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
+      val event = Ics205Event("Wildfire 2026", plan)
+      store.saveEvent(event)
+
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/events/export?name=Wildfire+2026"))
+        .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+
+      val res = routes.orNotFound.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.Ok)
+      val disposition = res.headers.get(CIString("Content-Disposition")).map(_.head.value).getOrElse("")
+      assert(disposition.contains("attachment; filename=\"Wildfire 2026.json\""))
+      val body = res.as[String].unsafeRunSync()
+      val decoded = Ics205Json.eventFromJson(body)
+      assert(decoded.isRight)
+      assertEquals(decoded.toOption.get.eventName, "Wildfire 2026")
+      assertEquals(decoded.toOption.get.ics205.incidentName, "Wildfire Incident")
+    }
+
+  test("POST /events/import imports Ics205Event JSON and adds suffix if event exists"):
+    withTestContext { (_, store, userStore, sessionStore, _, routes) =>
+      val passwordService = new ScalaPassPasswordService
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
+      val session = sessionStore.create(admin.id)
+
+      // Seed an existing event named "Winter Drill"
+      store.saveEvent(Ics205Event("Winter Drill", Ics205(incidentName = "Winter Drill Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+
+      // Prepare an imported event JSON with the same name "Winter Drill"
+      val importPayload = Ics205Event("Winter Drill", Ics205(incidentName = "Winter Drill Imported", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+      val jsonBytes = Ics205Json.toJson(importPayload).getBytes(java.nio.charset.StandardCharsets.UTF_8)
+
+      val multipart = Multipart[IO](Vector(
+        Part.formData[IO]("file", new String(jsonBytes, java.nio.charset.StandardCharsets.UTF_8), org.http4s.headers.`Content-Disposition`("form-data", Map(CIString("name") -> "file", CIString("filename") -> "drill.json")))
+      ))
+
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/events/import"))
+        .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        .withEntity(multipart)
+        .putHeaders(multipart.headers.headers.map(h => org.http4s.Header.Raw(h.name, h.value)))
+
+      val res = routes.orNotFound.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+      val setCookie = res.headers.get(CIString("Set-Cookie")).map(_.head.value).getOrElse("")
+      assert(setCookie.contains("ics205_event=Winter+Drill+%281%29") || setCookie.contains("ics205_event=Winter+Drill+(1)"))
+
+      // Verify that both original and suffixed events exist in store
+      assert(store.getEvent("Winter Drill").isDefined)
+      val imported = store.getEvent("Winter Drill (1)")
+      assert(imported.isDefined)
+      assertEquals(imported.get.ics205.incidentName, "Winter Drill Imported")
+    }
+
+  test("POST /events/import imports unwrapped Ics205 plan JSON"):
+    withTestContext { (_, store, userStore, sessionStore, _, routes) =>
+      val passwordService = new ScalaPassPasswordService
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
+      val session = sessionStore.create(admin.id)
+
+      val plan = Ics205(incidentName = "Marathon Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
+      val jsonBytes = Ics205Json.toJson(plan).getBytes(java.nio.charset.StandardCharsets.UTF_8)
+
+      val multipart = Multipart[IO](Vector(
+        Part.formData[IO]("file", new String(jsonBytes, java.nio.charset.StandardCharsets.UTF_8), org.http4s.headers.`Content-Disposition`("form-data", Map(CIString("name") -> "file", CIString("filename") -> "marathon.json")))
+      ))
+
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/events/import"))
+        .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        .withEntity(multipart)
+        .putHeaders(multipart.headers.headers.map(h => org.http4s.Header.Raw(h.name, h.value)))
+
+      val res = routes.orNotFound.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+
+      val imported = store.getEvent("Marathon Incident")
+      assert(imported.isDefined)
+      assertEquals(imported.get.ics205.incidentName, "Marathon Incident")
+    }
+
+  test("POST /events/import rejects viewer without EditPlans permission"):
+    withTestContext { (_, store, userStore, sessionStore, _, routes) =>
+      val passwordService = new ScalaPassPasswordService
+      val viewer = userStore.add(User("viewer", passwordService.hash("pass"), RolePermissions.Viewer, enabled = true, id = "u-view")).toOption.get
+      val session = sessionStore.create(viewer.id)
+
+      val plan = Ics205(incidentName = "Forbidden Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
+      val multipart = Multipart[IO](Vector(
+        Part.formData[IO]("file", Ics205Json.toJson(plan), org.http4s.headers.`Content-Disposition`("form-data", Map(CIString("name") -> "file", CIString("filename") -> "forbid.json")))
+      ))
+
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/events/import"))
+        .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        .withEntity(multipart)
+        .putHeaders(multipart.headers.headers.map(h => org.http4s.Header.Raw(h.name, h.value)))
+
+      val res = routes.orNotFound.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.Forbidden)
     }

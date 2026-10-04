@@ -108,3 +108,36 @@ class Ics205JsonTests extends munit.FunSuite:
     val result = Ics205Json.fromJson("""{"unknownField": 123}""")
     assert(result.isLeft)
     assert(result.left.toOption.get.contains("Failed to decode ICS 205"))
+
+  test("toJson(event) produces pretty JSON and eventFromJson round-trips Ics205Event"):
+    val event = Ics205Event("Field Day 2026", plan)
+    val jsonString = Ics205Json.toJson(event)
+    assert(jsonString.contains("  \"eventName\": \"Field Day 2026\""))
+    assert(jsonString.contains("  \"ics205\": {"))
+    val decoded = Ics205Json.eventFromJson(jsonString)
+    assert(decoded.isRight)
+    assertEquals(decoded.toOption.get.eventName, "Field Day 2026")
+    assertEquals(decoded.toOption.get.ics205, plan)
+
+  test("eventFromJson parses unwrapped Ics205 plan and sets eventName"):
+    val jsonString = Ics205Json.toJson(plan)
+    val decoded = Ics205Json.eventFromJson(jsonString)
+    assert(decoded.isRight)
+    assertEquals(decoded.toOption.get.eventName, "Wildfire Exercise")
+    assertEquals(decoded.toOption.get.ics205, plan)
+
+  test("eventFromJson handles empty event name fallback to incidentName or default"):
+    val sparse = Ics205(
+      incidentName = "",
+      operationalPeriod = OperationalPeriod(),
+      channels = Seq.empty,
+      prepared = prepared
+    )
+    val jsonString = Ics205Json.toJson(sparse)
+    val decoded = Ics205Json.eventFromJson(jsonString)
+    assert(decoded.isRight)
+    assertEquals(decoded.toOption.get.eventName, "Imported Event")
+
+  test("eventFromJson returns error for invalid JSON syntax or non-object"):
+    assert(Ics205Json.eventFromJson("not json").isLeft)
+    assert(Ics205Json.eventFromJson("[1, 2]").isLeft)

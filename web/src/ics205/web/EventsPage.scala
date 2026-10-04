@@ -126,6 +126,10 @@ object EventsPage:
                             href := s"/?event=${encode(ev.eventName)}",
                             cls := "btn btn-primary btn-sm"
                           )("Plan"),
+                          a(
+                            href := s"/events/export?name=${encode(ev.eventName)}",
+                            cls := "btn btn-primary btn-sm"
+                          )("Export"),
                           if canEdit || isAdmin then
                             a(
                               href := s"/events/metadata?name=${encode(ev.eventName)}",
@@ -152,32 +156,53 @@ object EventsPage:
             ),
 
             if isAdmin || currentUser.hasPermission(ics205.auth.Permission.EditPlans) then
-              div(cls := "card", id := "new-event-form")(
-                h2("Create New Event"),
-                form(method := "post", action := "/events/create")(
-                  div(cls := "form-group")(
-                    label(attr("for") := "eventName")("Event Name"),
-                    input(
-                      tpe := "text",
-                      id := "eventName",
-                      name := "eventName",
-                      required,
-                      placeholder := "e.g. 2026 Winter Field Day"
+              div(
+                div(cls := "card", id := "new-event-form")(
+                  h2("Create New Event"),
+                  form(method := "post", action := "/events/create")(
+                    div(cls := "form-group")(
+                      label(attr("for") := "eventName")("Event Name"),
+                      input(
+                        tpe := "text",
+                        id := "eventName",
+                        name := "eventName",
+                        required,
+                        placeholder := "e.g. 2026 Winter Field Day"
+                      ),
+                      p(cls := "form-help")("Unique name to identify this event.")
                     ),
-                    p(cls := "form-help")("Unique name to identify this event.")
-                  ),
-                  div(cls := "form-group")(
-                    label(attr("for") := "incidentName")("Incident Name (Optional)"),
-                    input(
-                      tpe := "text",
-                      id := "incidentName",
-                      name := "incidentName",
-                      placeholder := "Leave blank to use Event Name"
+                    div(cls := "form-group")(
+                      label(attr("for") := "incidentName")("Incident Name (Optional)"),
+                      input(
+                        tpe := "text",
+                        id := "incidentName",
+                        name := "incidentName",
+                        placeholder := "Leave blank to use Event Name"
+                      ),
+                      p(cls := "form-help")("Incident name displayed on the ICS 205 form.")
                     ),
-                    p(cls := "form-help")("Incident name displayed on the ICS 205 form.")
-                  ),
-                  div(style := "margin-top: 20px;")(
-                    button(tpe := "submit", cls := "btn btn-primary")("Create Event")
+                    div(style := "margin-top: 20px;")(
+                      button(tpe := "submit", cls := "btn btn-primary")("Create Event")
+                    )
+                  )
+                ),
+                div(cls := "card", id := "import-event-form")(
+                  h2("Import Event"),
+                  form(method := "post", action := "/events/import", enctype := "multipart/form-data")(
+                    div(cls := "form-group")(
+                      label(attr("for") := "file")("Event JSON File"),
+                      input(
+                        tpe := "file",
+                        id := "file",
+                        name := "file",
+                        accept := ".json,application/json",
+                        required
+                      ),
+                      p(cls := "form-help")("Upload an ICS 205 event JSON file. If an event with the same name already exists, a suffix will be added automatically to differentiate it.")
+                    ),
+                    div(style := "margin-top: 20px;")(
+                      button(tpe := "submit", cls := "btn btn-primary")("Import Event")
+                    )
                   )
                 )
               )

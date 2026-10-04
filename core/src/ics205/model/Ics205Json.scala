@@ -29,6 +29,10 @@ object Ics205Json:
   def toJson(plan: Ics205): String =
     plan.asJson.printWith(printer)
 
+  /** Serializes an [[Ics205Event]] to a pretty-printed 2-space indented JSON string. */
+  def toJson(event: Ics205Event): String =
+    event.asJson.printWith(printer)
+
   /**
    * Deserializes an [[Ics205]] plan from a JSON string.
    * Supports JSON representing either an [[Ics205]] directly or wrapped within an [[Ics205Event]].
@@ -43,3 +47,29 @@ object Ics205Json:
         else
           val planJson = json.asObject.flatMap(_("ics205")).getOrElse(json)
           planJson.as[Ics205].left.map(df => s"Failed to decode ICS 205: ${df.message}")
+
+  /**
+   * Deserializes an [[Ics205Event]] from a JSON string.
+   * Supports JSON representing either an [[Ics205Event]] or an unwrapped [[Ics205]].
+   */
+  def eventFromJson(jsonStr: String): Either[String, Ics205Event] =
+    parse(jsonStr) match
+      case Left(failure) =>
+        Left(s"Failed to parse JSON: ${failure.message}")
+      case Right(json) =>
+        if !json.isObject then
+          Left("Invalid JSON format: expected a JSON object representing an ICS 205 event or plan.")
+        else
+          json.as[Ics205Event] match
+            case Right(event) =>
+              val finalName = if event.eventName.trim.nonEmpty then event.eventName.trim
+              else if event.ics205.incidentName.trim.nonEmpty then event.ics205.incidentName.trim
+              else "Imported Event"
+              Right(event.copy(eventName = finalName))
+            case Left(_) =>
+              json.as[Ics205] match
+                case Right(plan) =>
+                  val eventName = if plan.incidentName.trim.nonEmpty then plan.incidentName.trim else "Imported Event"
+                  Right(Ics205Event(eventName = eventName, ics205 = plan, metadata = Ics205Metadata()))
+                case Left(df) =>
+                  Left(s"Failed to decode ICS 205 event or plan: ${df.message}")

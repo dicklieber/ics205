@@ -28,3 +28,22 @@ class EventsPageTests extends munit.FunSuite:
     assert(html.contains("data-confirm="), "Should use data-confirm attribute")
     assert(html.contains("document.addEventListener('submit'"), "Should include unobtrusive submit listener")
     assert(!html.contains(s"confirm('Are you sure you want to delete event \\'$maliciousEventName\\'?'"), "Should not interpolate into confirm string literal")
+
+  test("EventsPage renders export buttons for events and import event form"):
+    val event = Ics205Event(
+      eventName = "Field Day",
+      ics205 = Ics205(incidentName = "Field Day 2026", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
+    )
+
+    val html = EventsPage.render(
+      currentUser = adminUser,
+      events = Seq(event),
+      currentEventName = Some("Field Day")
+    )
+
+    assert(html.contains("/events/export?name=Field+Day"), "Should contain export link for Field Day")
+    assert(html.contains("Export"), "Should contain Export button text")
+    assert(html.contains("Import Event"), "Should contain Import Event section")
+    assert(html.contains("action=\"/events/import\""), "Should contain import form action")
+    assert(html.contains("enctype=\"multipart/form-data\""), "Should have multipart enctype")
+    assert(html.contains("type=\"file\""), "Should contain file input")
