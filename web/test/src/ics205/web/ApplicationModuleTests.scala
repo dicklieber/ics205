@@ -153,6 +153,28 @@ class ApplicationModuleTests extends munit.FunSuite:
       override def baseUri: Uri = Uri.unsafeFromString("http://192.168.1.50:8080/")
     assertEquals(app.displayUri(mockExplicitServer), "http://192.168.1.50:8080/")
 
+  test("WebApplication uses default port 8080 from reference.conf"):
+    val injector = Guice.createInjector(new ApplicationModule)
+    val app = injector.getInstance(classOf[WebApplication])
+    assertEquals(app.port, 8080)
+
+  test("WebApplication uses overridden port from config"):
+    val config = ConfigFactory.parseString("port = 9090").withFallback(ConfigFactory.load()).resolve()
+    val injector = Guice.createInjector(new ApplicationModule(config))
+    val app = injector.getInstance(classOf[WebApplication])
+    assertEquals(app.port, 9090)
+
+  test("WebApplication uses overridden PORT environment variable or system property"):
+    System.setProperty("PORT", "9191")
+    try
+      ConfigFactory.invalidateCaches()
+      val injector = Guice.createInjector(new ApplicationModule)
+      val app = injector.getInstance(classOf[WebApplication])
+      assertEquals(app.port, 9191)
+    finally
+      System.clearProperty("PORT")
+      ConfigFactory.invalidateCaches()
+
 // This test-only group has no explicit Guice binding or server registration.
 class DiscoveryTestEndpoints @Inject() (store: Ics205Store) extends ApiEndpoints:
   override val endpoints: List[ServerEndpoint[Any, IO]] = List(

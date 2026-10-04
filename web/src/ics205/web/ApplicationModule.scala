@@ -81,6 +81,26 @@ class ApplicationModule(
           bind[String]
             .annotatedWith(Names.named(key))
             .toInstance(s)
+          s.toIntOption.foreach(i =>
+            bind[Int]
+              .annotatedWith(Names.named(key))
+              .toInstance(i)
+          )
+          s.toLongOption.filterNot(_ => s.toIntOption.isDefined).foreach(l =>
+            bind[Long]
+              .annotatedWith(Names.named(key))
+              .toInstance(l)
+          )
+          s.toDoubleOption.filterNot(_ => s.toLongOption.isDefined).foreach(d =>
+            bind[Double]
+              .annotatedWith(Names.named(key))
+              .toInstance(d)
+          )
+          s.toBooleanOption.foreach(b =>
+            bind[Boolean]
+              .annotatedWith(Names.named(key))
+              .toInstance(b)
+          )
 
         case i: Integer =>
           bind[Int]
@@ -105,6 +125,10 @@ class ApplicationModule(
         case _ =>
         // Optionally log or ignore unsupported types
       }
+    }
+
+    if (!fullConfig.hasPath("port")) {
+      bind[Int].annotatedWith(Names.named("port")).toInstance(8080)
     }
 
     bind[Config].toInstance(fullConfig)

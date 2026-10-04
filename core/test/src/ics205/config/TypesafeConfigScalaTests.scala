@@ -41,3 +41,26 @@ class TypesafeConfigScalaTests extends munit.FunSuite:
     assertEquals(port, 8080)
     assertEquals(opt, None)
     assertEquals(tags, List("a", "b"))
+
+  test("reference.conf defines default port as 8080"):
+    val config = ConfigFactory.load()
+    assertEquals(config.getInt("port"), 8080)
+
+  test("PORT overrides default port from reference.conf"):
+    val conf = ConfigFactory.parseString(
+      """
+        |port = 8080
+        |port = ${?PORT}
+        |""".stripMargin
+    ).withFallback(ConfigFactory.parseString("PORT = 9999")).resolve()
+    assertEquals(conf.getInt("port"), 9999)
+
+  test("PORT environment variable or system property overrides port in ConfigFactory.load"):
+    System.setProperty("PORT", "7777")
+    try
+      ConfigFactory.invalidateCaches()
+      val config = ConfigFactory.load()
+      assertEquals(config.getInt("port"), 7777)
+    finally
+      System.clearProperty("PORT")
+      ConfigFactory.invalidateCaches()

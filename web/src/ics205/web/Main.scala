@@ -25,7 +25,7 @@ import com.typesafe.scalalogging.LazyLogging
 import ics205.BuildInfo
 import ics205.metrics.ApplicationMetrics
 import ics205.util.LoggingConfig
-import jakarta.inject.Inject
+import jakarta.inject.{Inject, Named}
 import org.http4s.ember.server.EmberServerBuilder
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 import sttp.tapir.swagger.bundle.SwaggerInterpreter
@@ -40,7 +40,10 @@ object Main extends IOApp:
         .flatMap(_.run)
         .as(ExitCode.Success)
 
-class WebApplication @Inject() (endpointsSet: java.util.Set[ApiEndpoints]) extends LazyLogging:
+class WebApplication @Inject() (
+  endpointsSet: java.util.Set[ApiEndpoints],
+  @Named("port") val port: Int
+) extends LazyLogging:
 
   val httpApp: org.http4s.HttpApp[IO] =
     val configuredEndpoints = endpointsSet.asScala.toList
@@ -67,9 +70,12 @@ class WebApplication @Inject() (endpointsSet: java.util.Set[ApiEndpoints]) exten
       server.baseUri.renderString
 
   def run: IO[Unit] =
+    val serverPort = Port.fromInt(port).getOrElse(
+      throw new IllegalArgumentException(s"Invalid port number: $port")
+    )
     EmberServerBuilder.default[IO]
       .withHost(ipv4"0.0.0.0")
-      .withPort(port"8080")
+      .withPort(serverPort)
       .withHttpApp(httpApp)
       .build
       .use(server =>
