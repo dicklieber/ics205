@@ -36,7 +36,7 @@ object FileHelper:
     else if osName.contains("mac") then
       os.home / "Library" / "Application Support" / appName
     else
-      os.Path(s"/var/lib/$productName")
+      os.Path(s"/home/$productName/data")
 
   def isTestExecution: Boolean =
     sys.props.get("ics205.test").contains("true") ||
@@ -84,7 +84,7 @@ class FileHelper(customDir: Option[os.Path] = None) extends LazyLogging:
     * Platform conventions used here:
     *   - Windows: %LOCALAPPDATA%\ICS-205
     *   - macOS:   ~/Library/Application Support/ICS-205
-    *   - Linux:   /var/lib/ics205
+    *   - Linux:   /home/ics205/data
     *
     * In test execution, an isolated directory is used so unit tests never touch
     * the production directory.

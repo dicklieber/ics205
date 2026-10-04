@@ -1,7 +1,7 @@
 [Unit]
 Description=ICS-205 Incident Radio Communications Plan Service
 Documentation=https://github.com/dlieber/ics205
-After=network.target network-online.target
+After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=60s
 StartLimitBurst=3
@@ -12,24 +12,20 @@ User=ics205
 Group=ics205
 
 # Directory layout and state management
-WorkingDirectory=/var/lib/ics205
-StateDirectory=ics205
-LogsDirectory=ics205
-ConfigurationDirectory=ics205
+WorkingDirectory=/home/ics205
 
 # Environment configuration
 Environment="JAVA_HOME=/usr/lib/jvm/default-java"
 Environment="JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=true"
-Environment="JAR_PATH=/opt/ics205/ics205.jar"
-EnvironmentFile=-/etc/default/ics205
-EnvironmentFile=-/etc/ics205/ics205.env
+Environment="JAR_PATH=/home/ics205/app/ics205.jar"
+EnvironmentFile=-/home/ics205/config/ics205.env
 
 # Execution
-ExecStart=/usr/bin/env java $JAVA_OPTS -jar $JAR_PATH
+ExecStart=/usr/bin/java $JAVA_OPTS -jar /home/ics205/app/ics205.jar
 
 # Process management and restart policy
 Restart=on-failure
-RestartSec=5s
+RestartSec=5
 TimeoutStopSec=30s
 KillMode=mixed
 
@@ -39,7 +35,6 @@ LimitNOFILE=65536
 # Security hardening and sandboxing
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
 PrivateTmp=true
 PrivateDevices=true
 ProtectKernelTunables=true
@@ -51,8 +46,10 @@ RestrictRealtime=true
 RestrictSUIDSGID=true
 MemoryDenyWriteExecute=false
 LockPersonality=true
-CapabilityBoundingSet=
-AmbientCapabilities=
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+ReadWritePaths=/home/ics205/data
+ReadOnlyPaths=/home/ics205/app /home/ics205/config
 
 # Logging
 StandardOutput=journal

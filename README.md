@@ -269,10 +269,28 @@ out/web/assembly.dest/out.jar
 
 ### 2. Automated Remote Deployment via SSH
 
-Automated deployment scripts are provided in `deploy/` for deploying from a macOS development host to a remote Linux server via SSH.
+Automated deployment scripts are provided in `deploy/` for deploying from a development host to a remote Linux server via SSH.
+
+#### Directory Layout
+
+The application deploys into the dedicated `ics205` system account's home directory (`/home/ics205/`):
+```text
+/home/ics205/
+├── app/
+│   └── ics205.jar          # Application JAR (owned by root:ics205, mode 640)
+├── config/
+│   ├── ics205.conf         # Optional Typesafe Config file (owned by root:ics205, mode 640)
+│   └── ics205.env          # Optional environment variables file (owned by root:ics205, mode 640)
+├── data/
+│   ├── ics205.json         # Persistent application data (owned by ics205:ics205, mode 750)
+│   ├── users.json
+│   └── sessions.json
+└── install/
+    └── ics205.service      # Source copy of systemd unit (owned by root:ics205, mode 640)
+```
 
 #### Initial Installation on Remote Server (`deploy/install.sh`)
-Installs the fat JAR, creates the `ics205` system user/group, sets up directory permissions (`/opt/ics205`, `/var/lib/ics205`, `/etc/ics205`), configures the systemd service, and starts it:
+Installs the fat JAR, creates the dedicated `ics205` system user/group with home directory `/home/ics205`, creates the directory layout with strict permissions, migrates legacy data/config from `/var/lib/ics205` or `/etc/ics205` if present, configures the systemd service at `/etc/systemd/system/ics205.service`, and starts it:
 
 ```bash
 # Build (if not already built) and install to remote Linux host
@@ -283,7 +301,7 @@ Installs the fat JAR, creates the `ics205` system user/group, sets up directory 
 ```
 
 #### Updating JAR and Restarting Service (`deploy/update.sh`)
-Transfers the newly compiled fat JAR from `out/web/assembly.dest/out.jar` to `/opt/ics205/ics205.jar`, updates file permissions, and restarts the `ics205.service` systemd unit:
+Transfers the newly compiled fat JAR from `out/web/assembly.dest/out.jar` to `/home/ics205/app/ics205.jar`, preserves existing data in `/home/ics205/data`, sets correct permissions, and restarts the `ics205.service` systemd unit:
 
 ```bash
 # Rebuild fat JAR and deploy update to remote Linux host
@@ -291,6 +309,17 @@ Transfers the newly compiled fat JAR from `out/web/assembly.dest/out.jar` to `/o
 
 # Deploy an existing build and also sync systemd service unit changes
 ./deploy/update.sh --sync-service user@remote-server
+```
+
+#### Uninstalling Application (`deploy/uninstall.sh`)
+Stops and disables `ics205.service`, removes the active systemd unit from `/etc/systemd/system/ics205.service`, and deletes the application binaries. Persistent data in `/home/ics205/data` and configuration in `/home/ics205/config` are safely preserved:
+
+```bash
+# Standard uninstall (preserves /home/ics205/data and configuration)
+./deploy/uninstall.sh user@remote-server
+
+# Complete purge (removes all data, configuration, and the system account)
+./deploy/uninstall.sh --purge user@remote-server
 ```
 
 ### 3. Manual Linux Server Setup
@@ -303,34 +332,45 @@ Transfers the newly compiled fat JAR from `out/web/assembly.dest/out.jar` to `/o
   ```
 
 #### Create Dedicated System User and Directories
-Create a dedicated system user and group without login shell privileges, along with installation and working directories:
+Create a dedicated system user and group without login shell privileges, along with the home directory layout:
 
 ```bash
-sudo useradd --system --no-create-home --user-group --shell /usr/sbin/nologin ics205
-sudo mkdir -p /opt/ics205 /var/lib/ics205
-sudo cp out/web/assembly.dest/out.jar /opt/ics205/ics205.jar
-sudo chown -R ics205:ics205 /opt/ics205 /var/lib/ics205
-sudo chmod 750 /var/lib/ics205
+sudo groupadd --system ics205
+sudo useradd --system --home-dir /home/ics205 --create-home --gid ics205 --shell /usr/sbin/nologin ics205
+sudo mkdir -p /home/ics205/app /home/ics205/config /home/ics205/data /home/ics205/install
+sudo chown root:ics205 /home/ics205 /home/ics205/app /home/ics205/config /home/ics205/install
+sudo chmod 750 /home/ics205 /home/ics205/app /home/ics205/config /home/ics205/install
+sudo chown ics205:ics205 /home/ics205/data
+sudo chmod 750 /home/ics205/data
+
+sudo cp out/web/assembly.dest/out.jar /home/ics205/app/ics205.jar
+sudo chown root:ics205 /home/ics205/app/ics205.jar
+sudo chmod 640 /home/ics205/app/ics205.jar
 ```
 
 ### 4. Systemd Service Configuration
 
 A production-ready systemd service unit file is provided at `deploy/ics205.service`.
 
-1. Copy the service unit to `/etc/systemd/system/`:
+1. Copy the service unit to `/home/ics205/install/ics205.service` and `/etc/systemd/system/`:
    ```bash
+   sudo cp deploy/ics205.service /home/ics205/install/ics205.service
+   sudo chown root:ics205 /home/ics205/install/ics205.service
+   sudo chmod 640 /home/ics205/install/ics205.service
+
    sudo cp deploy/ics205.service /etc/systemd/system/ics205.service
+   sudo chown root:root /etc/systemd/system/ics205.service
    sudo chmod 644 /etc/systemd/system/ics205.service
    ```
 
-2. (Optional) Customize environment variables by creating `/etc/default/ics205` or `/etc/ics205/ics205.env`:
+2. (Optional) Customize environment variables by creating `/home/ics205/config/ics205.env`:
    ```bash
-   sudo mkdir -p /etc/ics205
-   sudo tee /etc/ics205/ics205.env > /dev/null << 'EOF'
+   sudo tee /home/ics205/config/ics205.env > /dev/null << 'EOF'
    JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=true
-   JAR_PATH=/opt/ics205/ics205.jar
+   JAR_PATH=/home/ics205/app/ics205.jar
    EOF
-   sudo chmod 600 /etc/ics205/ics205.env
+   sudo chown root:ics205 /home/ics205/config/ics205.env
+   sudo chmod 640 /home/ics205/config/ics205.env
    ```
 
 3. Reload systemd, enable, and start the service:
@@ -339,7 +379,7 @@ A production-ready systemd service unit file is provided at `deploy/ics205.servi
    sudo systemctl enable --now ics205.service
    ```
 
-4. Create the initial admin user by opening `http://<server-ip>:8080/` in your web browser.
+4. Create the initial admin user by opening `http://<server-ip>:8080/` (or port 80 if configured) in your web browser.
 
 ### 5. Service Management and Monitoring
 
@@ -356,9 +396,10 @@ A production-ready systemd service unit file is provided at `deploy/ics205.servi
   sudo systemctl restart ics205.service
   ```
 
-### 6. Reverse Proxy and HTTPS Setup
+### 6. Reverse Proxy, Port 80, and HTTPS Setup
 
-In production, place the application behind a reverse proxy (such as Nginx, Caddy, or Apache) with TLS/HTTPS enabled:
-- Configure proxy forwarding to `http://127.0.0.1:8080`.
-- Ensure `X-Forwarded-For` and `X-Forwarded-Proto` headers are preserved.
-- When serving over HTTPS, ensure `-Dauth.secureCookie=true` is set in `JAVA_OPTS` to enforce `Secure` attributes on session cookies.
+- **Port 80 Direct Binding**: The systemd service is granted `CAP_NET_BIND_SERVICE` capability via `AmbientCapabilities` and `CapabilityBoundingSet`, allowing the unprivileged `ics205` user to bind directly to privileged low ports such as port 80 (set via `PORT=80` in `/home/ics205/config/ics205.env` or `port = 80` in `/home/ics205/config/ics205.conf`).
+- **Reverse Proxy and HTTPS**: In production, the application can also be placed behind a reverse proxy (such as Nginx, Caddy, or Apache) with TLS/HTTPS enabled:
+  - Configure proxy forwarding to `http://127.0.0.1:8080`.
+  - Ensure `X-Forwarded-For` and `X-Forwarded-Proto` headers are preserved.
+  - When serving over HTTPS, ensure `-Dauth.secureCookie=true` is set in `JAVA_OPTS` to enforce `Secure` attributes on session cookies.

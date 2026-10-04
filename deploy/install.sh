@@ -21,12 +21,14 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Default settings
 DEFAULT_JAR_PATH="${REPO_ROOT}/out/web/assembly.dest/out.jar"
 DEFAULT_SERVICE_PATH="${SCRIPT_DIR}/ics205.service"
-REMOTE_INSTALL_DIR="/opt/ics205"
-REMOTE_DATA_DIR="/var/lib/ics205"
-REMOTE_CONFIG_DIR="/etc/ics205"
-SERVICE_NAME="ics205.service"
 REMOTE_USER="ics205"
 REMOTE_GROUP="ics205"
+REMOTE_BASE_DIR="/home/${REMOTE_USER}"
+REMOTE_APP_DIR="${REMOTE_BASE_DIR}/app"
+REMOTE_CONFIG_DIR="${REMOTE_BASE_DIR}/config"
+REMOTE_DATA_DIR="${REMOTE_BASE_DIR}/data"
+REMOTE_INSTALL_DIR="${REMOTE_BASE_DIR}/install"
+SERVICE_NAME="ics205.service"
 
 # CLI Arguments
 TARGET_HOST=""
@@ -150,8 +152,13 @@ echo "ICS-205 Remote Installation"
 echo "Target Host:       ${TARGET_HOST}"
 echo "Local JAR:         ${JAR_PATH}"
 echo "Local Service:     ${SERVICE_PATH}"
-echo "Remote Binary:     ${REMOTE_INSTALL_DIR}/ics205.jar"
-echo "Remote Data Dir:   ${REMOTE_DATA_DIR}"
+echo "Remote User:       ${REMOTE_USER}"
+echo "Remote Layout:     ${REMOTE_BASE_DIR}"
+echo "  JAR:             ${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
+echo "  Config:          ${REMOTE_CONFIG_DIR}"
+echo "  Data:            ${REMOTE_DATA_DIR}"
+echo "  Install Unit:    ${REMOTE_INSTALL_DIR}/${SERVICE_NAME}"
+echo "  Active Unit:     /etc/systemd/system/${SERVICE_NAME}"
 echo "=================================================="
 
 # 1. Test SSH connectivity and remote OS
@@ -167,13 +174,15 @@ cat << 'REMOTESCRIPT' > "${LOCAL_REMOTE_SCRIPT}"
 set -euo pipefail
 
 REMOTE_TMP="$1"
-REMOTE_INSTALL_DIR="$2"
-REMOTE_DATA_DIR="$3"
+REMOTE_BASE_DIR="$2"
+REMOTE_APP_DIR="$3"
 REMOTE_CONFIG_DIR="$4"
-SERVICE_NAME="$5"
-REMOTE_USER="$6"
-REMOTE_GROUP="$7"
-START_SERVICE="$8"
+REMOTE_DATA_DIR="$5"
+REMOTE_INSTALL_DIR="$6"
+SERVICE_NAME="$7"
+REMOTE_USER="$8"
+REMOTE_GROUP="$9"
+START_SERVICE="${10}"
 
 # Verify JRE is installed
 if ! command -v java >/dev/null 2>&1; then
@@ -182,42 +191,77 @@ if ! command -v java >/dev/null 2>&1; then
 fi
 
 # 1. Create dedicated system user/group if not present
+if ! getent group "${REMOTE_GROUP}" >/dev/null 2>&1; then
+  echo "Creating system group '${REMOTE_GROUP}'..."
+  sudo groupadd --system "${REMOTE_GROUP}"
+fi
+
 if ! id -u "${REMOTE_USER}" >/dev/null 2>&1; then
   echo "Creating system user '${REMOTE_USER}'..."
-  sudo useradd --system --no-create-home --user-group --shell /usr/sbin/nologin "${REMOTE_USER}"
+  sudo useradd --system --home-dir "${REMOTE_BASE_DIR}" --create-home --gid "${REMOTE_GROUP}" --shell /usr/sbin/nologin "${REMOTE_USER}"
 else
   echo "System user '${REMOTE_USER}' already exists."
 fi
 
-# 2. Create destination directories
-echo "Creating application directories..."
-sudo mkdir -p "${REMOTE_INSTALL_DIR}" "${REMOTE_DATA_DIR}" "${REMOTE_CONFIG_DIR}"
-
-# 3. Install JAR file
-echo "Installing JAR to ${REMOTE_INSTALL_DIR}/ics205.jar..."
-sudo cp "${REMOTE_TMP}/out.jar" "${REMOTE_INSTALL_DIR}/ics205.jar"
-sudo chown "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_INSTALL_DIR}/ics205.jar"
-sudo chmod 644 "${REMOTE_INSTALL_DIR}/ics205.jar"
-
-# 4. Set permissions on working and state directories
-sudo chown -R "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_INSTALL_DIR}" "${REMOTE_DATA_DIR}"
+# 2. Create destination layout directories
+echo "Creating application directory layout..."
+sudo mkdir -p "${REMOTE_BASE_DIR}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_DATA_DIR}" "${REMOTE_INSTALL_DIR}"
+sudo chown "root:${REMOTE_GROUP}" "${REMOTE_BASE_DIR}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_INSTALL_DIR}"
+sudo chmod 750 "${REMOTE_BASE_DIR}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_INSTALL_DIR}"
+sudo chown "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_DATA_DIR}"
 sudo chmod 750 "${REMOTE_DATA_DIR}"
 
-# 5. Create default environment config if none exists
-if [ ! -f "${REMOTE_CONFIG_DIR}/ics205.env" ] && [ ! -f /etc/default/ics205 ]; then
-  echo "Creating default environment file at ${REMOTE_CONFIG_DIR}/ics205.env..."
-  sudo tee "${REMOTE_CONFIG_DIR}/ics205.env" > /dev/null << 'EOF'
-JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=true
-JAR_PATH=/opt/ics205/ics205.jar
-EOF
-  sudo chown root:root "${REMOTE_CONFIG_DIR}/ics205.env"
-  sudo chmod 600 "${REMOTE_CONFIG_DIR}/ics205.env"
+# 3. Migrate legacy data and configuration if present (safe migration without overwriting)
+if [ -d "/var/lib/${REMOTE_USER}" ]; then
+  echo "Migrating legacy data from /var/lib/${REMOTE_USER} to ${REMOTE_DATA_DIR}..."
+  sudo cp -rn /var/lib/"${REMOTE_USER}"/* "${REMOTE_DATA_DIR}/" 2>/dev/null || true
+  sudo cp -rn /var/lib/"${REMOTE_USER}"/.[!.]* "${REMOTE_DATA_DIR}/" 2>/dev/null || true
+  sudo chown -R "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_DATA_DIR}"
+  sudo find "${REMOTE_DATA_DIR}" -type d -exec chmod 750 {} +
 fi
 
-# 6. Install systemd service unit
-echo "Installing systemd unit to /etc/systemd/system/${SERVICE_NAME}..."
+if [ -d "/etc/${REMOTE_USER}" ]; then
+  echo "Migrating legacy configuration from /etc/${REMOTE_USER} to ${REMOTE_CONFIG_DIR}..."
+  sudo cp -rn /etc/"${REMOTE_USER}"/* "${REMOTE_CONFIG_DIR}/" 2>/dev/null || true
+  sudo chown -R "root:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}"
+  sudo chmod 750 "${REMOTE_CONFIG_DIR}"
+  sudo find "${REMOTE_CONFIG_DIR}" -type f -exec chmod 640 {} +
+fi
+
+if [ -f "/etc/default/${REMOTE_USER}" ] && [ ! -f "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env" ]; then
+  echo "Migrating /etc/default/${REMOTE_USER} to ${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env..."
+  sudo cp "/etc/default/${REMOTE_USER}" "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
+  sudo chown "root:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
+  sudo chmod 640 "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
+fi
+
+# 4. Install JAR file (owned by root:group, mode 640 - readable by app, unmodifiable)
+echo "Installing JAR to ${REMOTE_APP_DIR}/${REMOTE_USER}.jar..."
+sudo cp "${REMOTE_TMP}/out.jar" "${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
+sudo chown "root:${REMOTE_GROUP}" "${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
+sudo chmod 640 "${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
+
+# 5. Install systemd service unit copies
+echo "Installing distribution service unit to ${REMOTE_INSTALL_DIR}/${SERVICE_NAME}..."
+sudo cp "${REMOTE_TMP}/${SERVICE_NAME}" "${REMOTE_INSTALL_DIR}/${SERVICE_NAME}"
+sudo chown "root:${REMOTE_GROUP}" "${REMOTE_INSTALL_DIR}/${SERVICE_NAME}"
+sudo chmod 640 "${REMOTE_INSTALL_DIR}/${SERVICE_NAME}"
+
+echo "Installing active systemd unit to /etc/systemd/system/${SERVICE_NAME}..."
 sudo cp "${REMOTE_TMP}/${SERVICE_NAME}" "/etc/systemd/system/${SERVICE_NAME}"
+sudo chown root:root "/etc/systemd/system/${SERVICE_NAME}"
 sudo chmod 644 "/etc/systemd/system/${SERVICE_NAME}"
+
+# 6. Create default environment config if none exists
+if [ ! -f "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env" ] && [ ! -f "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.conf" ] && [ ! -f "${REMOTE_CONFIG_DIR}/application.conf" ]; then
+  echo "Creating default environment file at ${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env..."
+  sudo tee "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env" > /dev/null << 'EOF'
+JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=true
+JAR_PATH=/home/ics205/app/ics205.jar
+EOF
+  sudo chown "root:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
+  sudo chmod 640 "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
+fi
 
 # 7. Reload systemd daemon
 echo "Reloading systemd daemon..."
@@ -259,9 +303,11 @@ scp "${SCP_OPTS[@]}" "${LOCAL_REMOTE_SCRIPT}" "${TARGET_HOST}:${REMOTE_TMP}/prov
 echo "--> Provisioning remote server and configuring systemd..."
 ssh -t "${SSH_OPTS[@]}" "${TARGET_HOST}" bash "${REMOTE_TMP}/provision.sh" \
   "${REMOTE_TMP}" \
-  "${REMOTE_INSTALL_DIR}" \
-  "${REMOTE_DATA_DIR}" \
+  "${REMOTE_BASE_DIR}" \
+  "${REMOTE_APP_DIR}" \
   "${REMOTE_CONFIG_DIR}" \
+  "${REMOTE_DATA_DIR}" \
+  "${REMOTE_INSTALL_DIR}" \
   "${SERVICE_NAME}" \
   "${REMOTE_USER}" \
   "${REMOTE_GROUP}" \

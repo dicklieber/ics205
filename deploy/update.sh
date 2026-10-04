@@ -21,10 +21,14 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Default settings
 DEFAULT_JAR_PATH="${REPO_ROOT}/out/web/assembly.dest/out.jar"
 DEFAULT_SERVICE_PATH="${SCRIPT_DIR}/ics205.service"
-REMOTE_INSTALL_DIR="/opt/ics205"
-SERVICE_NAME="ics205.service"
 REMOTE_USER="ics205"
 REMOTE_GROUP="ics205"
+REMOTE_BASE_DIR="/home/${REMOTE_USER}"
+REMOTE_APP_DIR="${REMOTE_BASE_DIR}/app"
+REMOTE_CONFIG_DIR="${REMOTE_BASE_DIR}/config"
+REMOTE_DATA_DIR="${REMOTE_BASE_DIR}/data"
+REMOTE_INSTALL_DIR="${REMOTE_BASE_DIR}/install"
+SERVICE_NAME="ics205.service"
 
 # CLI Arguments
 TARGET_HOST=""
@@ -148,7 +152,7 @@ echo "=================================================="
 echo "ICS-205 Remote Update"
 echo "Target Host:       ${TARGET_HOST}"
 echo "Local JAR:         ${JAR_PATH}"
-echo "Remote Target:     ${REMOTE_INSTALL_DIR}/ics205.jar"
+echo "Remote Target:     ${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
 echo "Sync Service Unit: ${UPDATE_SERVICE}"
 echo "Restart Service:   ${RESTART_SERVICE}"
 echo "=================================================="
@@ -166,31 +170,63 @@ cat << 'REMOTESCRIPT' > "${LOCAL_REMOTE_SCRIPT}"
 set -euo pipefail
 
 REMOTE_TMP="$1"
-REMOTE_INSTALL_DIR="$2"
-SERVICE_NAME="$3"
-REMOTE_USER="$4"
-REMOTE_GROUP="$5"
-HAS_SERVICE_UNIT="$6"
-RESTART_SERVICE="$7"
+REMOTE_BASE_DIR="$2"
+REMOTE_APP_DIR="$3"
+REMOTE_CONFIG_DIR="$4"
+REMOTE_DATA_DIR="$5"
+REMOTE_INSTALL_DIR="$6"
+SERVICE_NAME="$7"
+REMOTE_USER="$8"
+REMOTE_GROUP="$9"
+HAS_SERVICE_UNIT="${10}"
+RESTART_SERVICE="${11}"
 
-# Ensure remote install directory exists
-sudo mkdir -p "${REMOTE_INSTALL_DIR}"
+# Ensure layout directories exist
+sudo mkdir -p "${REMOTE_BASE_DIR}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_DATA_DIR}" "${REMOTE_INSTALL_DIR}"
+sudo chown "root:${REMOTE_GROUP}" "${REMOTE_BASE_DIR}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_INSTALL_DIR}"
+sudo chmod 750 "${REMOTE_BASE_DIR}" "${REMOTE_APP_DIR}" "${REMOTE_CONFIG_DIR}" "${REMOTE_INSTALL_DIR}"
+sudo chown "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_DATA_DIR}"
+sudo chmod 750 "${REMOTE_DATA_DIR}"
 
-# Replace JAR atomically
-echo "Updating ${REMOTE_INSTALL_DIR}/ics205.jar..."
-if command -v install >/dev/null 2>&1; then
-  sudo install -m 644 -o "${REMOTE_USER}" -g "${REMOTE_GROUP}" "${REMOTE_TMP}/out.jar" "${REMOTE_INSTALL_DIR}/ics205.jar"
-else
-  sudo cp "${REMOTE_TMP}/out.jar" "${REMOTE_INSTALL_DIR}/ics205.jar"
-  sudo chown "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_INSTALL_DIR}/ics205.jar"
-  sudo chmod 644 "${REMOTE_INSTALL_DIR}/ics205.jar"
+# Migrate legacy data from /var/lib/ics205 if present
+if [ -d "/var/lib/${REMOTE_USER}" ]; then
+  echo "Migrating legacy data from /var/lib/${REMOTE_USER} to ${REMOTE_DATA_DIR}..."
+  sudo cp -rn /var/lib/"${REMOTE_USER}"/* "${REMOTE_DATA_DIR}/" 2>/dev/null || true
+  sudo cp -rn /var/lib/"${REMOTE_USER}"/.[!.]* "${REMOTE_DATA_DIR}/" 2>/dev/null || true
+  sudo chown -R "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_DATA_DIR}"
+  sudo find "${REMOTE_DATA_DIR}" -type d -exec chmod 750 {} +
 fi
 
-# Update service unit if transferred
+# Migrate legacy config from /etc/ics205 or /etc/default/ics205 if present
+if [ -d "/etc/${REMOTE_USER}" ]; then
+  echo "Migrating legacy configuration from /etc/${REMOTE_USER} to ${REMOTE_CONFIG_DIR}..."
+  sudo cp -rn /etc/"${REMOTE_USER}"/* "${REMOTE_CONFIG_DIR}/" 2>/dev/null || true
+  sudo chown -R "root:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}"
+  sudo chmod 750 "${REMOTE_CONFIG_DIR}"
+  sudo find "${REMOTE_CONFIG_DIR}" -type f -exec chmod 640 {} +
+fi
+
+# Replace JAR atomically (mode 640, root:group)
+echo "Updating ${REMOTE_APP_DIR}/${REMOTE_USER}.jar..."
+if command -v install >/dev/null 2>&1; then
+  sudo install -m 640 -o root -g "${REMOTE_GROUP}" "${REMOTE_TMP}/out.jar" "${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
+else
+  sudo cp "${REMOTE_TMP}/out.jar" "${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
+  sudo chown "root:${REMOTE_GROUP}" "${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
+  sudo chmod 640 "${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
+fi
+
+# Update service units if transferred
 if [ "${HAS_SERVICE_UNIT}" = "true" ]; then
-  echo "Updating /etc/systemd/system/${SERVICE_NAME}..."
+  echo "Updating ${REMOTE_INSTALL_DIR}/${SERVICE_NAME} and /etc/systemd/system/${SERVICE_NAME}..."
+  sudo cp "${REMOTE_TMP}/${SERVICE_NAME}" "${REMOTE_INSTALL_DIR}/${SERVICE_NAME}"
+  sudo chown "root:${REMOTE_GROUP}" "${REMOTE_INSTALL_DIR}/${SERVICE_NAME}"
+  sudo chmod 640 "${REMOTE_INSTALL_DIR}/${SERVICE_NAME}"
+
   sudo cp "${REMOTE_TMP}/${SERVICE_NAME}" "/etc/systemd/system/${SERVICE_NAME}"
+  sudo chown root:root "/etc/systemd/system/${SERVICE_NAME}"
   sudo chmod 644 "/etc/systemd/system/${SERVICE_NAME}"
+
   echo "Reloading systemd daemon..."
   sudo systemctl daemon-reload
 fi
@@ -236,6 +272,10 @@ scp "${SCP_OPTS[@]}" "${LOCAL_REMOTE_SCRIPT}" "${TARGET_HOST}:${REMOTE_TMP}/upda
 echo "--> Applying update on remote server..."
 ssh -t "${SSH_OPTS[@]}" "${TARGET_HOST}" bash "${REMOTE_TMP}/update.sh" \
   "${REMOTE_TMP}" \
+  "${REMOTE_BASE_DIR}" \
+  "${REMOTE_APP_DIR}" \
+  "${REMOTE_CONFIG_DIR}" \
+  "${REMOTE_DATA_DIR}" \
   "${REMOTE_INSTALL_DIR}" \
   "${SERVICE_NAME}" \
   "${REMOTE_USER}" \

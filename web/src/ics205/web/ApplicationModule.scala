@@ -22,6 +22,7 @@ import com.google.inject.AbstractModule
 import com.google.inject.name.Names
 import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.LazyLogging
+import ics205.BuildInfo
 import ics205.auth.{AuthConfig, AuthenticationService, PasswordService, ScalaPassPasswordService}
 import ics205.exporter.{RadioExportDefinitions, RadioExporter}
 import ics205.store.{Ics205Store, InMemJsonSessionStore, SessionStore, UserStore}
@@ -135,7 +136,17 @@ class ApplicationModule(
 
 object ApplicationModule:
   def loadConfig(): Config =
-    ConfigFactory.parseFile((os.pwd / "config" / "ics205.conf").toIO)
-      .withFallback(ConfigFactory.load()).resolve()
+    val configFile = sys.props.get("config.file").map(os.Path(_))
+      .orElse(sys.env.get("ICS205_CONFIG").map(os.Path(_)))
+      .orElse(sys.env.get("CONFIG_FILE").map(os.Path(_)))
+      .orElse(Option(os.pwd / "config" / "ics205.conf").filter(os.exists))
+      .orElse(Option(os.pwd / "config" / "application.conf").filter(os.exists))
+      .orElse(Option(os.Path(s"/home/${BuildInfo.productName}/config/ics205.conf")).filter(os.exists))
+      .orElse(Option(os.Path(s"/home/${BuildInfo.productName}/config/application.conf")).filter(os.exists))
+      .getOrElse(os.pwd / "config" / "ics205.conf")
+
+    ConfigFactory.parseFile(configFile.toIO)
+      .withFallback(ConfigFactory.load())
+      .resolve()
 
   given Conversion[String, os.Path] = (in: String) => os.Path(in)

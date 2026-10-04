@@ -53,7 +53,7 @@ class FileHelperTests extends munit.FunSuite:
     else if osName.contains("win") then
       assertEquals(home, os.home / "AppData" / "Local" / "ICS-205")
     else
-      assertEquals(home, os.Path("/var/lib/ics205"))
+      assertEquals(home, os.Path("/home/ics205/data"))
 
   test("logDirectory is within FileHelper directory and creates directory"):
     val tempDir = os.temp.dir()
