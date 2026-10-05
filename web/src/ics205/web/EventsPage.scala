@@ -24,11 +24,8 @@ import scalatags.Text.all.*
 
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
-import java.time.format.DateTimeFormatter
 
 object EventsPage:
-  private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-
   private def encode(s: String): String = URLEncoder.encode(s, StandardCharsets.UTF_8.toString)
 
   def render(
@@ -38,7 +35,8 @@ object EventsPage:
     message: Option[String] = None,
     error: Option[String] = None
   ): String =
-    val availableNames = events.map(_.eventName)
+    val sortedEvents = events.sortBy(ev => (ev.eventName.toLowerCase(java.util.Locale.ROOT), ev.eventName))
+    val availableNames = sortedEvents.map(_.eventName)
     val isAdmin = currentUser.role == RolePermissions.Admin
 
     doctype("html")(
@@ -74,12 +72,11 @@ object EventsPage:
 
             div(cls := "card")(
               h2("All Events"),
-              table(cls := "users-table")(
+              table(cls := "users-table events-table")(
                 thead(
                   tr(
                     th("Event Name"),
                     th("Incident Name"),
-                    th("Operational Period"),
                     th("Channels"),
                     th("Your Access"),
                     th("Actions")
@@ -87,9 +84,9 @@ object EventsPage:
                 ),
                 tbody(
                   if events.isEmpty then
-                    tr(td(colspan := 6, style := "text-align: center; color: #6b778c; padding: 20px;")("No events found. Create an event below to get started."))
+                    tr(td(colspan := 5, style := "text-align: center; color: #6b778c; padding: 20px;")("No events found. Create an event below to get started."))
                   else
-                    events.map { ev =>
+                    sortedEvents.map { ev =>
                       val isSelected = currentEventName.contains(ev.eventName) || (currentEventName.isEmpty && events.headOption.contains(ev))
                       val canEdit = ev.canEdit(currentUser)
                       val accessLabel = ev.accessFor(currentUser) match
@@ -98,22 +95,19 @@ object EventsPage:
                         case None if isAdmin => "Admin (Edit)"
                         case None => "None"
 
-                      val periodText = (ev.ics205.operationalPeriod.from, ev.ics205.operationalPeriod.to) match
-                        case (Some(f), Some(t)) => s"${f.format(dateFormatter)} to ${t.format(dateFormatter)}"
-                        case (Some(f), None) => s"From ${f.format(dateFormatter)}"
-                        case (None, Some(t)) => s"To ${t.format(dateFormatter)}"
-                        case (None, None) => "—"
+                      val baseName = ev.eventName.replaceFirst("\\s*\\(\\d+\\)$", "")
+                      val duplicateName = Iterator.from(1).map(n => s"$baseName ($n)")
+                        .find(candidate => !availableNames.exists(_.equalsIgnoreCase(candidate))).get
 
                       tr(
                         td(
-                          strong(ev.eventName),
+                          a(href := s"/?event=${encode(ev.eventName)}")(strong(ev.eventName)),
                           if isSelected then
                             span(cls := "badge badge-active", style := "margin-left: 8px;")("Current")
                           else
                             span()
                         ),
                         td(if ev.ics205.incidentName.nonEmpty then ev.ics205.incidentName else "—"),
-                        td(periodText),
                         td(ev.ics205.channels.size.toString),
                         td(
                           if canEdit || isAdmin then
@@ -121,33 +115,31 @@ object EventsPage:
                           else
                             span(cls := "badge")(accessLabel)
                         ),
-                        td(cls := "actions-cell")(
-                          a(
-                            href := s"/?event=${encode(ev.eventName)}",
-                            cls := "btn btn-primary btn-sm"
-                          )("Plan"),
-                          a(
-                            href := s"/events/export?name=${encode(ev.eventName)}",
-                            cls := "btn btn-primary btn-sm"
-                          )("Export"),
+                        td(cls := "event-actions")(
+                          select(cls := "event-action-select", attr("aria-label") := s"Actions for ${ev.eventName}")(
+                            option(value := "")("Actions…"),
+                            option(value := s"/events/export?name=${encode(ev.eventName)}")("Export"),
+                            if canEdit || isAdmin then
+                              Seq[Modifier](
+                                option(value := s"/events/metadata?name=${encode(ev.eventName)}")("Metadata"),
+                                option(value := "duplicate")("Duplicate")
+                              )
+                            else Seq.empty[Modifier],
+                            if isAdmin then Seq[Modifier](option(value := "delete")("Delete")) else Seq.empty[Modifier]
+                          ),
                           if canEdit || isAdmin then
-                            a(
-                              href := s"/events/metadata?name=${encode(ev.eventName)}",
-                              cls := "btn btn-primary btn-sm"
-                            )("Metadata")
-                          else
-                            span(),
-                          if isAdmin then
-                            form(
-                              method := "post",
-                              action := "/events/delete",
-                              attr("data-confirm") := s"Are you sure you want to delete event '${ev.eventName}'?"
-                            )(
+                            form(method := "post", action := "/events/duplicate", hidden,
+                              attr("data-duplicate-name") := duplicateName)(
                               input(tpe := "hidden", name := "eventName", value := ev.eventName),
-                              button(tpe := "submit", cls := "btn btn-danger btn-sm")("Delete")
+                              input(tpe := "hidden", name := "newEventName")
                             )
-                          else
-                            span()
+                          else span(),
+                          if isAdmin then
+                            form(method := "post", action := "/events/delete", hidden,
+                              attr("data-confirm") := s"Are you sure you want to delete event '${ev.eventName}'?")(
+                              input(tpe := "hidden", name := "eventName", value := ev.eventName)
+                            )
+                          else span()
                         )
                       )
                     }
@@ -216,6 +208,24 @@ object EventsPage:
               |    if (!confirm(form.getAttribute('data-confirm'))) {
               |      e.preventDefault();
               |    }
+              |  }
+              |});
+              |document.addEventListener('change', function(e) {
+              |  var menu = e.target;
+              |  if (!menu.classList.contains('event-action-select')) return;
+              |  var action = menu.value;
+              |  menu.value = '';
+              |  if (action === 'duplicate') {
+              |    var form = menu.parentElement.querySelector('form[data-duplicate-name]');
+              |    var name = prompt('Name of the duplicate event:', form.getAttribute('data-duplicate-name'));
+              |    if (name === null) return;
+              |    if (!name.trim()) { alert('Event name cannot be empty.'); return; }
+              |    form.elements.newEventName.value = name.trim();
+              |    form.requestSubmit();
+              |  } else if (action === 'delete') {
+              |    menu.parentElement.querySelector('form[data-confirm]').requestSubmit();
+              |  } else if (action) {
+              |    window.location.assign(action);
               |  }
               |});""".stripMargin
           ))

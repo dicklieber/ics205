@@ -547,6 +547,42 @@ class IndexEndpoints @Inject() (
       }
     }
 
+  private val duplicateEventEndpoint: ServerEndpoint[Any, IO] = endpoint.post
+    .in("events" / "duplicate")
+    .in(cookie[Option[String]](config.cookieName))
+    .in(formBody[Map[String, String]])
+    .out(statusCode.and(header[Option[String]]("Set-Cookie")).and(header[String]("Location")).and(htmlBodyUtf8))
+    .serverLogicSuccess[IO] { (sessionIdOpt, formData) =>
+      IO.blocking {
+        sessionIdOpt.flatMap(id => authService.authenticateSession(id).toOption) match
+          case None => (StatusCode.SeeOther, None, "/login", "")
+          case Some(user) =>
+            store.getEvent(formData.getOrElse("eventName", "").trim) match
+              case None => (StatusCode.SeeOther, None, "/events?err=Event+not+found", "")
+              case Some(ev) if user.role != RolePermissions.Admin && !ev.canEdit(user) =>
+                (StatusCode.Forbidden, None, "/events", "You do not have permission to duplicate this event.")
+              case Some(ev) =>
+                val duplicate = ev.copy(
+                  eventName = formData.getOrElse("newEventName", "").trim,
+                  metadata = ev.metadata.copy(lastEditedBy = Some(user.id), savedAt = Instant.now())
+                )
+                if duplicate.eventName.isEmpty then
+                  (StatusCode.SeeOther, None, "/events?err=Event+name+cannot+be+empty", "")
+                else store.addEvent(duplicate) match
+                  case Left(err) => (StatusCode.SeeOther, None, s"/events?err=${encode(err)}", "")
+                  case Right(created) =>
+                    Ics205ActivityLogger.logUpdate(
+                      username = user.username,
+                      eventName = created.eventName,
+                      incidentName = Option(created.ics205.incidentName).filter(_.nonEmpty),
+                      channelCount = Some(created.ics205.channels.size),
+                      action = Some("duplicate")
+                    )
+                    val cookieHeader = s"ics205_event=${encode(created.eventName)}; Path=/; SameSite=Lax"
+                    (StatusCode.SeeOther, Some(cookieHeader), s"/?event=${encode(created.eventName)}", "")
+      }
+    }
+
   private val deleteEventEndpoint: ServerEndpoint[Any, IO] = endpoint.post
     .in("events" / "delete")
     .in(cookie[Option[String]](config.cookieName))
@@ -588,6 +624,7 @@ class IndexEndpoints @Inject() (
     getMetadataEndpoint,
     postMetadataEndpoint,
     deleteEventEndpoint,
+    duplicateEventEndpoint,
     exportEventEndpoint,
     importEventEndpoint
   )

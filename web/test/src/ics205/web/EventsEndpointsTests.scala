@@ -347,3 +347,33 @@ class EventsEndpointsTests extends munit.FunSuite:
       val res = routes.orNotFound.run(req).unsafeRunSync()
       assertEquals(res.status, Status.Forbidden)
     }
+
+  test("Duplicate copies the plan and permissions, validates names, and requires edit access"):
+    withTestContext { (_, store, userStore, sessionStore, _, routes) =>
+      val passwordService = new ScalaPassPasswordService
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
+      val viewer = userStore.add(User("viewer", passwordService.hash("pass"), RolePermissions.Viewer, enabled = true, id = "u-view")).toOption.get
+      val adminSession = sessionStore.create(admin.id)
+      val viewerSession = sessionStore.create(viewer.id)
+      store.saveEvent(Ics205Event("Original", Ics205(incidentName = "Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty),
+        Ics205Metadata(permissions = Map(viewer.id -> Permission.ViewPlans))))
+      val original = store.getEvent("Original").get
+      def duplicate(name: String, sessionId: String) =
+        routes.orNotFound.run(Request[IO](Method.POST, Uri.unsafeFromString("/events/duplicate"))
+          .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=$sessionId"))
+          .withEntity(UrlForm("eventName" -> "Original", "newEventName" -> name))).unsafeRunSync()
+
+      assertEquals(duplicate("Original (1)", viewerSession.id).status, Status.Forbidden)
+      assertEquals(store.getEvent("Original (1)"), None)
+      assertEquals(duplicate("Original (1)", adminSession.id).status, Status.SeeOther)
+      val copied = store.getEvent("Original (1)").get
+      assertEquals(copied.ics205, original.ics205)
+      assertEquals(copied.metadata.permissions, original.metadata.permissions)
+      assertEquals(copied.metadata.lastEditedBy, Some(admin.id))
+      assertEquals(store.getEvent("Original").get, original)
+      val collision = duplicate("original", adminSession.id)
+      assert(collision.headers.get(CIString("Location")).get.head.value.contains("err="))
+      val blank = duplicate("   ", adminSession.id)
+      assert(blank.headers.get(CIString("Location")).get.head.value.contains("err="))
+      assertEquals(store.events().size, 2)
+    }

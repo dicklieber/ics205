@@ -47,3 +47,12 @@ class EventsPageTests extends munit.FunSuite:
     assert(html.contains("action=\"/events/import\""), "Should contain import form action")
     assert(html.contains("enctype=\"multipart/form-data\""), "Should have multipart enctype")
     assert(html.contains("type=\"file\""), "Should contain file input")
+
+  test("Event table links names, removes operational period, and suggests the next duplicate name"):
+    val event = Ics205Event("Field Day", Ics205(incidentName = "Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+    val html = EventsPage.render(adminUser, Seq(event, event.copy(eventName = "Field Day (1)")))
+    assert(!html.contains("<th>Operational Period</th>"))
+    assert(html.contains("href=\"/?event=Field+Day\"><strong>Field Day</strong></a>"))
+    assert(html.contains("class=\"event-action-select\""))
+    assert(html.contains("data-duplicate-name=\"Field Day (2)\""))
+    assert(html.contains("action=\"/events/duplicate\""))
