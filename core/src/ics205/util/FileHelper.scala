@@ -165,7 +165,7 @@ class FileHelper(customDir: Option[os.Path] = None, customConfigDir: Option[os.P
       val sJson: String = os.read(path)
       val r: T = parse(sJson).flatMap(_.as[T]).fold(
         err =>
-          logger.error("Failed to parse/decode JSON", err, "File" -> fileName)
+          logger.error(s"Failed to parse/decode JSON: $fileName", err)
           default
         ,
         identity
@@ -173,10 +173,10 @@ class FileHelper(customDir: Option[os.Path] = None, customConfigDir: Option[os.P
       r
     catch
       case _: NoSuchFileException =>
-        logger.debug("File not found, using default", "File" -> fileName)
+        logger.debug(s"File not found, using default: $fileName")
         default
       case e: Exception =>
-        logger.error("Failed to read file", e, "File" -> fileName)
+        logger.error(s"Failed to read file: $fileName", e)
         default
 
   def save[T: Encoder](fileName: String, value: T): Unit =

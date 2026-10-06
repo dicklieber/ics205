@@ -63,6 +63,19 @@ class Ics205StoreTests extends munit.FunSuite:
       assert(!os.exists(directory / "events") && !os.exists(directory / "ics205.json"))
     }
 
+  test("file modified time comes from the event file and handles missing files"):
+    withDirectory { directory =>
+      val store = new Ics205Store(helper(directory))
+      store.save(plan)
+      val path = directory / "events" / "Test incident.json"
+      val modified = Instant.parse("2026-10-06T15:30:45Z")
+      java.nio.file.Files.setLastModifiedTime(path.toNIO, java.nio.file.attribute.FileTime.from(modified))
+      assertEquals(store.fileModifiedAt("Test incident"), Some(modified))
+      assertEquals(store.fileModifiedAt("Unknown"), None)
+      os.remove(path)
+      assertEquals(store.fileModifiedAt("Test incident"), None)
+    }
+
   test("save updates memory and a new store loads all model fields"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))

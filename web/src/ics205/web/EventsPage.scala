@@ -24,16 +24,20 @@ import scalatags.Text.all.*
 
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.time.{Instant, ZoneOffset}
+import java.time.format.DateTimeFormatter
 
 object EventsPage:
   private def encode(s: String): String = URLEncoder.encode(s, StandardCharsets.UTF_8.toString)
+  private val fileDateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss 'UTC'").withZone(ZoneOffset.UTC)
 
   def render(
     currentUser: AuthenticatedUser,
     events: Seq[Ics205Event],
     currentEventName: Option[String] = None,
     message: Option[String] = None,
-    error: Option[String] = None
+    error: Option[String] = None,
+    fileModifiedAt: Map[String, Instant] = Map.empty
   ): String =
     val sortedEvents = events.sortBy(ev => (ev.eventName.toLowerCase(java.util.Locale.ROOT), ev.eventName))
     val availableNames = sortedEvents.map(_.eventName)
@@ -78,13 +82,14 @@ object EventsPage:
                     th("Event Name"),
                     th("Incident Name"),
                     th("Channels"),
+                    th("File Modified"),
                     th("Your Access"),
                     th("Actions")
                   )
                 ),
                 tbody(
                   if events.isEmpty then
-                    tr(td(colspan := 5, style := "text-align: center; color: #6b778c; padding: 20px;")("No events found. Create an event below to get started."))
+                    tr(td(colspan := 6, style := "text-align: center; color: #6b778c; padding: 20px;")("No events found. Create an event below to get started."))
                   else
                     sortedEvents.map { ev =>
                       val isSelected = currentEventName.contains(ev.eventName) || (currentEventName.isEmpty && events.headOption.contains(ev))
@@ -109,6 +114,11 @@ object EventsPage:
                         ),
                         td(if ev.ics205.incidentName.nonEmpty then ev.ics205.incidentName else "—"),
                         td(ev.ics205.channels.size.toString),
+                        td(
+                          fileModifiedAt.get(ev.eventName).map { modified =>
+                            scalatags.Text.tags2.time(attr("datetime") := modified.toString)(fileDateFormatter.format(modified))
+                          }.getOrElse[Modifier](span("—"))
+                        ),
                         td(
                           if canEdit || isAdmin then
                             span(cls := "badge badge-role")(accessLabel)

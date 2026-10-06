@@ -4,7 +4,8 @@
  * This program is free software: you can redistribute it and/or modify 
  * it under the terms of the GNU General Public License as published by 
  * the Free Software Foundation, either version 3 of the License, or    
- * (at your option) any later version.                                  
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *                                                                      
  * This program is distributed in the hope that it will be useful,      
  * but WITHOUT ANY WARRANTY; without even the implied warranty of       
@@ -24,6 +25,7 @@ import ics205.model.{Ics205, Ics205Event, Ics205Metadata, OperationalPeriod}
 import ics205.util.{FileHelper, UtcFormatter}
 import ics205.util.Ids.generateId
 import io.circe.{Codec, Printer}
+import io.circe
 import io.circe.parser.*
 import io.circe.syntax.*
 import jakarta.inject.{Inject, Singleton}
@@ -37,7 +39,7 @@ import java.time.{Instant, LocalDateTime, ZoneOffset}
 class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
   val eventsDirectory: os.Path = fileHelper.directory / "events"
 
-  private var eventsState: Seq[Ics205Event] = loadFromDisk()
+  private var eventsState: Seq[Ics205Event] = loadFromDisk().sortBy(_.eventName)
   private var activeEventName: Option[String] = eventsState.headOption.map(_.eventName).filter(_.nonEmpty)
 
   private def fileNameFor(name: String): String =
@@ -46,42 +48,25 @@ class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
     s"$sanitized.json"
 
   private def parseEventFile(path: os.Path): Option[Ics205Event] =
-    try
-      if !os.exists(path) || os.isDir(path) then None
-      else
-        val content = os.read(path)
-        parse(content) match
-          case Left(err) =>
-            logger.error("Failed to parse JSON file", err, "File" -> path.last)
-            None
-          case Right(json) =>
-            json.as[Ics205Event] match
-              case Left(err) =>
-                logger.error("Failed to decode Ics205Event from file", err, "File" -> path.last)
-                None
-              case Right(ev) =>
-                val finalEvent = if ev.eventName.isEmpty then
-                  val derivedName = path.last.stripSuffix(".json")
-                  if ev.ics205.incidentName.isEmpty then
-                    ev.copy(eventName = derivedName, ics205 = ev.ics205.copy(incidentName = derivedName))
-                  else
-                    ev.copy(eventName = derivedName)
-                else ev
-                if finalEvent.eventName.trim.nonEmpty then Some(finalEvent) else None
-    catch
-      case _: NoSuchFileException => None
-      case e: Exception =>
-        logger.error("Failed to read file", e, "File" -> path.last)
+    decode[Ics205Event](os.read(path)) match
+      case Left(err) =>
+        logger.error(s"Failed to parse JSON file: ${path.last}", err)
         None
+      case Right(json) =>
+        logger.debug("Parsed JSON file {}: to {}", path, json)
+        Some(json)
 
+    
   private def loadFromDisk(): Seq[Ics205Event] = synchronized {
-    if os.exists(eventsDirectory) && os.isDir(eventsDirectory) then
-      val files = os.list(eventsDirectory)
-        .filter(p => os.isFile(p) && p.last.endsWith(".json") && !p.last.startsWith("."))
-        .sortBy(_.last.toLowerCase)
-      files.flatMap(parseEventFile)
-    else
-      Seq.empty
+    if !os.isDir(eventsDirectory) then
+      os.makeDir.all(eventsDirectory)
+    for
+      file <- os.list(eventsDirectory)
+      if os.isFile(file)
+      if file.last.endsWith(".json")
+      parsed <- parseEventFile(file)
+    yield
+      parsed
   }
 
   private val UtcFormatter: DateTimeFormatter = Ics205Store.UtcFormatter
@@ -124,6 +109,16 @@ class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
   }
 
   def events(): Seq[Ics205Event] = synchronized { eventsState }
+
+  def fileModifiedAt(eventName: String): Option[Instant] = synchronized {
+    getEvent(eventName).flatMap { event =>
+      val path = eventsDirectory / fileNameFor(event.eventName)
+      try
+        Some(java.nio.file.Files.getLastModifiedTime(path.toNIO).toInstant)
+      catch
+        case _: NoSuchFileException => None
+    }
+  }
 
   def listEvents(): Seq[Ics205Event] = synchronized { eventsState }
 

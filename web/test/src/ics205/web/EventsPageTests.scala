@@ -11,6 +11,14 @@ class EventsPageTests extends munit.FunSuite:
     id = "u-admin"
   )
 
+  test("EventsPage displays file modification date and time in UTC"):
+    val event = Ics205Event("Field Day", Ics205(incidentName = "Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+    val modified = java.time.Instant.parse("2026-10-06T15:30:45Z")
+    val html = EventsPage.render(adminUser, Seq(event), fileModifiedAt = Map(event.eventName -> modified))
+    assert(html.contains("<th>File Modified</th>"))
+    assert(html.contains("<time datetime=\"2026-10-06T15:30:45Z\">2026-10-06 15:30:45 UTC</time>"))
+    assert(EventsPage.render(adminUser, Seq.empty).contains("colspan=\"6\""))
+
   test("EventsPage does not use inline onsubmit for delete confirmation and uses data-confirm"):
     val maliciousEventName = "Test', (alert(document.domain), true) || '"
     val event = Ics205Event(
