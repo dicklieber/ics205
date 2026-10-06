@@ -38,7 +38,7 @@ private[web] object Ics205Form:
       Map(
         "id" -> channel.id, "zoneGroup" -> channel.zoneGroup.getOrElse(""),
         "channelNumber" -> channel.channelNumber.getOrElse(""), "function" -> channel.function,
-        "name" -> channel.name, "assignment" -> channel.assignment,
+        "name" -> channel.name, "extra" -> channel.extra, "assignment" -> channel.assignment,
         "rx" -> channel.frequency.rx.mhz.bigDecimal.toPlainString,
         "offset" -> channel.frequency.offset.mhz.bigDecimal.toPlainString,
         "bandwidth" -> channel.bandwidth.toString,
@@ -93,7 +93,8 @@ private[web] object Ics205Form:
           mode = mode,
           bandwidth = opt("bandwidth").map(value => rowValue(s"$label bandwidth", Bandwidth.Wide)(Bandwidth.valueOf(value))).getOrElse(Bandwidth.Wide),
           ctcss = Ctcss(ctcssFrequency, ctcssMode),
-          remarks = get("remarks")
+          remarks = get("remarks"),
+          extra = get("extra")
         )
       }
       if channels.map(_.id).distinct.size != channels.size then fail("Channel IDs must be unique.")

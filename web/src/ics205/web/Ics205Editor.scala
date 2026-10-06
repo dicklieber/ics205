@@ -81,7 +81,7 @@ private[web] object Ics205Editor:
               div(cls := "table-scroll")(
                 table(cls := "channels", attr("aria-label") := "Editable radio channels",
                   style := s"--row-number-width: ${count.toString.length}ch;")(
-                  thead(tr(Seq("#", "Zone / Grp.", "Ch #", "Function", "Channel Name / Talkgroup", "Assignment",
+                  thead(tr(Seq("#", "Zone / Grp.", "Ch #", "Function", "Channel Name", "Assignment",
                     "RX Freq (MHz)", "Offset (MHz)", "Bandwidth", "CTCSS", "Mode",
                     "Remarks", "Row controls").map(text => th(attr("scope") := "col")(text)))),
                   tbody(id := "channel-rows")((0 until count).map(index => row(values, index.toString, canEdit)))
@@ -133,8 +133,9 @@ private[web] object Ics205Editor:
     val prefix = s"row.$index."
     def current(key: String): String = values.getOrElse(prefix + key, "")
     val isOther = current("mode") == "Other"
-    def edit(key: String, caption: String, numeric: Boolean = false): Frag =
+    def edit(key: String, caption: String, numeric: Boolean = false, tooltip: String = ""): Frag =
       input(name := prefix + key, attr("data-field") := key, attr("aria-label") := caption,
+        if tooltip.nonEmpty then title := tooltip else cls := "",
         tpe := (if numeric && !isOther then "number" else "text"), value := current(key),
         if numeric then step := "any" else cls := "",
         if !canEdit then readonly else if !isOther && (key == "rx" || key == "offset") then required else cls := "")
@@ -154,7 +155,10 @@ private[web] object Ics205Editor:
         edit("zoneGroup", "Zone / Group")),
       td(edit("channelNumber", "Channel number")),
       td(edit("function", "Function")),
-      td(edit("name", "Channel name / Talkgroup")),
+      td(div(cls := "name-controls")(
+        edit("name", "Channel name / Talkgroup"),
+        edit("extra", "Append to Channel Name", tooltip = "Append to Channel Name")
+      )),
       td(edit("assignment", "Assignment")),
       td(edit("rx", "RX frequency in MHz", true)),
       td(edit("offset", "Offset in MHz", true)),
@@ -208,6 +212,7 @@ private[web] object Ics205Editor:
           const channelNumber = row.querySelector('[data-field=channelNumber]')?.value || null;
           const func = row.querySelector('[data-field=function]')?.value || '';
           const name = row.querySelector('[data-field=name]')?.value || '';
+          const extra = row.querySelector('[data-field=extra]')?.value || '';
           const assignment = row.querySelector('[data-field=assignment]')?.value || '';
           const rxVal = row.querySelector('[data-field=rx]')?.value;
           const offsetVal = row.querySelector('[data-field=offset]')?.value;
@@ -236,6 +241,7 @@ private[web] object Ics205Editor:
               mode: ctcssMode
             },
             remarks: remarks,
+            extra: extra,
             id: id
           };
           if (zoneGroup) channelObj.zoneGroup = zoneGroup;
@@ -570,6 +576,7 @@ private[web] object Ics205Editor:
                   channelNumber: ch.channelNumber || '',
                   function: ch.function || '',
                   name: ch.name || '',
+                  extra: ch.extra || '',
                   assignment: ch.assignment || '',
                   rx: String(rxFreq),
                   offset: String(offsetFreq),

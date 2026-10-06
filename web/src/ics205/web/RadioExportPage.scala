@@ -32,6 +32,7 @@ object RadioExportPage:
     selectedDefinition: Option[String] = None,
     groupOrBank: Option[String] = None,
     includeHeader: Boolean = true,
+    appendExtra: Boolean = false,
     generatedCsv: Option[String] = None,
     message: Option[String] = None,
     error: Option[String] = None,
@@ -45,6 +46,7 @@ object RadioExportPage:
       selectedDefinition = selectedDefinition,
       groupOrBank = groupOrBank,
       includeHeader = includeHeader,
+      appendExtra = appendExtra,
       generatedCsv = generatedCsv,
       message = message,
       error = error,
@@ -60,6 +62,7 @@ object RadioExportPage:
     selectedDefinition: Option[String] = None,
     groupOrBank: Option[String] = None,
     includeHeader: Boolean = true,
+    appendExtra: Boolean = false,
     generatedCsv: Option[String] = None,
     message: Option[String] = None,
     error: Option[String] = None,
@@ -171,6 +174,22 @@ object RadioExportPage:
                       if includeHeader then checked else cls := ""
                     ),
                     span(strong("Include Header Row"), " (column headings in first line)")
+                  )
+                ),
+
+                div(cls := "form-group", style := "margin-top: 16px;")(
+                  label(
+                    cls := "checkbox-group",
+                    style := "display: flex; align-items: center; gap: 8px; cursor: pointer;"
+                  )(
+                    input(
+                      tpe := "checkbox",
+                      id := "appendExtra",
+                      name := "appendExtra",
+                      value := "true",
+                      if appendExtra then checked else cls := ""
+                    ),
+                    span(strong("Append Extra to Channel Name"), " (adds each channel's extra text to its name)")
                   )
                 ),
 

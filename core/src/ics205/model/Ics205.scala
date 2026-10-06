@@ -34,7 +34,11 @@ case class Ics205(formatVersion: String = "1.0",
                   channels: Seq[Ics205Channel],
                   specialInstructions:String  = "",
                   preparedBy: Option[PreparedBy] = None,
-                  prepared: LocalDateTime = LocalDateTime.now()) derives Codec.AsObject
+                  prepared: LocalDateTime = LocalDateTime.now()) derives Codec.AsObject:
+  /** Copy with each channel's non-empty extra appended to its name, separated by a space. */
+  def withExtraAppendedToNames: Ics205 =
+    copy(channels = channels.map(channel =>
+      if channel.extra.isEmpty then channel else channel.copy(name = s"${channel.name} ${channel.extra}")))
 
 case class OperationalPeriod(from: Option[LocalDateTime] = None, to: Option[LocalDateTime] = None) derives Codec.AsObject
 case class PreparedBy(name: String, callsign: Option[String] = None) derives Codec.AsObject
@@ -49,6 +53,7 @@ case class Ics205Channel(zoneGroup: Option[String] = None,
                          bandwidth: Bandwidth = Bandwidth.Wide,
                          ctcss: Ctcss = Ctcss(),
                          remarks: String = "",
+                         extra: String = "",
                          id: ChannelId = Ids.generateId())
 
 object Ics205Channel:

@@ -148,6 +148,12 @@ textarea {
   }
 }
 
+.name-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .row-controls button {
   border: none;
   background: transparent;

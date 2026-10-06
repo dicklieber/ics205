@@ -55,7 +55,8 @@ class RadioExportEndpointsTests extends munit.FunSuite:
         assignment = "Operations",
         frequency = RxWithOffset(Frequency(BigDecimal("146.520")), Frequency(BigDecimal("0.600"))),
         mode = RadioMode.Fm,
-        remarks = "Primary tactical channel"
+        remarks = "Primary tactical channel",
+        extra = "XTRA"
       )
       val plan = Ics205(
         incidentName = "Wildfire Incident",
@@ -187,6 +188,22 @@ class RadioExportEndpointsTests extends munit.FunSuite:
         assertEquals(res.headers.get(CIString("Content-Type")).map(_.head.value), Some("text/csv; charset=utf-8"))
         assertEquals(res.headers.get(CIString("Content-Disposition")).map(_.head.value), Some("attachment; filename=\"Wildfire Incident_Kenwood TH-D75.csv\""))
         assertEquals(body, exporter.generateCsv("Kenwood TH-D75", store.ics205(), includeHeader))
+      }
+    }
+
+  test("Save CSV File appends extra to channel name only when appendExtra is checked"):
+    withContext { (_, userStore, _, _, authService, _, app) =>
+      userStore.add(User("csvuser", new ScalaPassPasswordService().hash("password"), RolePermissions.User, enabled = true, id = "csv-user"))
+      val session = authService.authenticate("csvuser", "password").get
+      Seq(true, false).foreach { appendExtra =>
+        val fields = Map("definition" -> "Kenwood TH-D75", "download" -> "true") ++
+          (if appendExtra then Map("appendExtra" -> "true") else Map.empty[String, String])
+        val req = Request[IO](Method.POST, Uri.unsafeFromString("/export/radio"))
+          .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+          .withEntity(UrlForm(fields.toSeq*))
+        val body = app.run(req).flatMap(_.as[String]).unsafeRunSync()
+        assert(body.contains("TAC1"))
+        assertEquals(body.contains("TAC1 XTRA"), appendExtra)
       }
     }
 

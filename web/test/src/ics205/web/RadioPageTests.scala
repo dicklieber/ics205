@@ -32,7 +32,7 @@ class RadioPageTests extends munit.FunSuite:
     preparedBy = Some(PreparedBy("Alex", Some("W9ABC"))), specialInstructions = "First line\nSecond line",
     channels = Seq(Ics205Channel(Some("Zone 1"), Some("7"), "Command", "Repeater", "All",
       RxWithOffset(mhz"146.94000", mhz"-0.600"), RadioMode.Digital, Bandwidth.Narrow,
-      Ctcss(Some(CtcssFrequency.Hz100_0), CtcssMode.TSQL), "<script>alert(1)</script>", "channel-id")))
+      Ctcss(Some(CtcssFrequency.Hz100_0), CtcssMode.TSQL), "<script>alert(1)</script>", id = "channel-id")))
 
   private def table(html: String): Element =
     val markup = html.substring(html.indexOf("<table>"), html.indexOf("</table>") + 8)

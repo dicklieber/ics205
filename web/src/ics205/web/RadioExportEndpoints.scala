@@ -59,10 +59,11 @@ class RadioExportEndpoints @Inject()(
     .in(query[Option[String]]("definition"))
     .in(query[Option[String]]("groupOrBank"))
     .in(query[Option[Boolean]]("includeHeader"))
+    .in(query[Option[Boolean]]("appendExtra"))
     .in(query[Option[String]]("msg"))
     .in(query[Option[String]]("err"))
     .out(statusCode.and(header[Option[String]]("Location")).and(htmlBodyUtf8))
-    .serverLogicSuccess[IO] { (sessionIdOpt, eventCookieOpt, eventQueryOpt, defOpt, groupOrBankOpt, incHeaderOpt, msg, err) =>
+    .serverLogicSuccess[IO] { (sessionIdOpt, eventCookieOpt, eventQueryOpt, defOpt, groupOrBankOpt, incHeaderOpt, appendExtraOpt, msg, err) =>
       IO.blocking {
         sessionIdOpt.flatMap(id => authService.authenticateSession(id).toOption) match
           case None =>
@@ -79,10 +80,12 @@ class RadioExportEndpoints @Inject()(
                   val plan = currentEvent.ics205
                   val allDefs = definitions.all
                   val incHeader = incHeaderOpt.getOrElse(true)
+                  val appendExtra = appendExtraOpt.getOrElse(false)
+                  val exportPlan = if appendExtra then plan.withExtraAppendedToNames else plan
                   val (selectedDef, csvOpt, errorOpt) = defOpt match
                     case Some(defName) =>
                       try
-                        val csv = radioExporter.generateCsv(defName, plan, incHeader, groupOrBankOpt)
+                        val csv = radioExporter.generateCsv(defName, exportPlan, incHeader, groupOrBankOpt)
                         Ics205ActivityLogger.logCsvExport(
                           username = user.username,
                           eventName = currentEvent.eventName,
@@ -107,6 +110,7 @@ class RadioExportEndpoints @Inject()(
                     selectedDefinition = selectedDef,
                     groupOrBank = groupOrBankOpt,
                     includeHeader = incHeader,
+                    appendExtra = appendExtra,
                     generatedCsv = csvOpt,
                     message = msg,
                     error = errorOpt,
@@ -147,6 +151,8 @@ class RadioExportEndpoints @Inject()(
                   val defName = formData.getOrElse("definition", allDefs.headOption.map(_.name).getOrElse("")).trim
                   val incHeader = formData.get("includeHeader").contains("true")
                   val groupOrBankOpt = formData.get("groupOrBank").map(_.trim).filter(_.nonEmpty)
+                  val appendExtra = formData.get("appendExtra").contains("true")
+                  val exportPlan = if appendExtra then plan.withExtraAppendedToNames else plan
 
                   if defName.isEmpty then
                     val html = RadioExportPage.renderDefinitions(
@@ -156,6 +162,7 @@ class RadioExportEndpoints @Inject()(
                       selectedDefinition = None,
                       groupOrBank = groupOrBankOpt,
                       includeHeader = incHeader,
+                      appendExtra = appendExtra,
                       generatedCsv = None,
                       error = Some("Please select a radio export definition."),
                       currentEventName = Some(currentEvent.eventName),
@@ -164,7 +171,7 @@ class RadioExportEndpoints @Inject()(
                     (StatusCode.Ok, None, "text/html; charset=utf-8", None, html)
                   else
                     try
-                      val csv = radioExporter.generateCsv(defName, plan, incHeader, groupOrBankOpt)
+                      val csv = radioExporter.generateCsv(defName, exportPlan, incHeader, groupOrBankOpt)
                       val isDownload = formData.get("download").contains("true")
                       Ics205ActivityLogger.logCsvExport(
                         username = user.username,
@@ -183,6 +190,7 @@ class RadioExportEndpoints @Inject()(
                         selectedDefinition = Some(defName),
                         groupOrBank = groupOrBankOpt,
                         includeHeader = incHeader,
+                        appendExtra = appendExtra,
                         generatedCsv = Some(csv),
                         currentEventName = Some(currentEvent.eventName),
                         availableEvents = authorizedEvents.map(_.eventName)
@@ -203,6 +211,7 @@ class RadioExportEndpoints @Inject()(
                           selectedDefinition = Some(defName),
                           groupOrBank = groupOrBankOpt,
                           includeHeader = incHeader,
+                          appendExtra = appendExtra,
                           generatedCsv = None,
                           error = Some(s"Failed to generate CSV: ${ex.getMessage}"),
                           currentEventName = Some(currentEvent.eventName),
