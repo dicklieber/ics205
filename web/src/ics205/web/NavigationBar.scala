@@ -29,7 +29,7 @@ import java.time.Instant
 object NavigationBar:
 
   enum ActivePage:
-    case Plan, Radio, ExportRadio, Events, UserAdmin, ChangePassword, Login, None
+    case Plan, Radio, ExportRadio, ocsEEvents, UserAdmin, ChangePassword, Login, None
 
   private val aboutDialogClick: String =
     "const d = document.getElementById('about-dialog');" +

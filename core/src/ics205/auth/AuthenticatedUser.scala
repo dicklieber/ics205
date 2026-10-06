@@ -18,7 +18,7 @@
 
 package ics205.auth
 
-import ics205.util.Ids
+import ics205.util.{Ids, UnauthorizedException}
 import io.circe.Codec
 import io.circe.derivation.{Configuration, ConfiguredCodec}
 
@@ -27,6 +27,8 @@ case class AuthenticatedUser(
   role: RolePermissions,
   id: UserId = Ids.generateId()
 ):
+  def check(permission: Permission):Unit =
+    if !hasPermission(permission) then throw new UnauthorizedException()
   def roles: Set[String] = Set(role.toString.toLowerCase)
   def hasPermission(permission: Permission): Boolean = role.hasPermission(permission)
 

@@ -23,13 +23,10 @@ import java.time.temporal.TemporalAccessor
 import java.time.{Instant, ZoneOffset}
 
 object UtcFormatter:
-  val formatter: DateTimeFormatter =
-    DateTimeFormatter
-      .ofPattern("yyyyMMdd'T'HHmmss'Z'")
-      .withZone(ZoneOffset.UTC)
+  val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC)
 
-  def format(timestamp: TemporalAccessor = Instant.now()): String =
-    formatter.format(timestamp)
+  def format(timestamp: TemporalAccessor = Instant.now()): String = formatter.format(timestamp)
 
-  def apply(timestamp: TemporalAccessor = Instant.now()): String =
-    format(timestamp)
+  def apply(timestamp: TemporalAccessor = Instant.now()): String = format(timestamp)
+
+  def apply(): String = format()
