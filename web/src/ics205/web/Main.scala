@@ -23,6 +23,7 @@ import com.comcast.ip4s.*
 import com.google.inject.Guice
 import com.typesafe.scalalogging.LazyLogging
 import ics205.BuildInfo
+import ics205.auth.{AuthConfig, AuthenticationService}
 import ics205.metrics.ApplicationMetrics
 import ics205.util.LoggingConfig
 import jakarta.inject.{Inject, Named}
@@ -42,8 +43,13 @@ object Main extends IOApp:
 
 class WebApplication @Inject() (
   endpointsSet: java.util.Set[ApiEndpoints],
-  @Named("port") val port: Int
+  @Named("port") val port: Int,
+  authService: AuthenticationService,
+  authConfig: AuthConfig
 ) extends LazyLogging:
+
+  def this(endpointsSet: java.util.Set[ApiEndpoints], port: Int) =
+    this(endpointsSet, port, null, AuthConfig.default)
 
   val httpApp: org.http4s.HttpApp[IO] =
     val configuredEndpoints = endpointsSet.asScala.toList
@@ -58,9 +64,15 @@ class WebApplication @Inject() (
       version = BuildInfo.version
     )
     val allEndpoints = configuredEndpoints ++ docsEndpoints
-    HttpTransactionMetrics(
-      Http4sServerInterpreter[IO]().toRoutes(allEndpoints).orNotFound,
+    val rawApp = Http4sServerInterpreter[IO]().toRoutes(allEndpoints).orNotFound
+    val metricsApp = HttpTransactionMetrics(
+      rawApp,
       ApplicationMetrics.default
+    )
+    HttpAccessLog(
+      metricsApp,
+      Option(authService),
+      Option(authConfig).map(_.cookieName).getOrElse(AuthConfig.default.cookieName)
     )
 
   def displayUri(server: org.http4s.server.Server): String =

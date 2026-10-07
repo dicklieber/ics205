@@ -74,6 +74,26 @@ class Log4jConfigurationTests extends munit.FunSuite with LazyLogging:
     val logContent = os.read(logFilePath)
     assert(logContent.contains(testLogMessage), s"Log file should contain logged message: $testLogMessage")
 
+  test("log4j configuration contains an access log rolling file appender writing to FileHelper log directory"):
+    val ctx = LogManager.getContext(false).asInstanceOf[LoggerContext]
+    val config = ctx.getConfiguration
+    val appender: Appender = config.getAppender[Appender]("AccessLog")
+    assert(appender != null, "AccessLog appender should be configured")
+    assert(appender.isInstanceOf[RollingFileAppender], "AccessLog appender should be a RollingFileAppender")
+
+    val rollingAppender = appender.asInstanceOf[RollingFileAppender]
+    val fileName = rollingAppender.getFileName
+    assert(fileName.contains("/log/access.log"), s"Access log file path should end in /log/access.log, got: $fileName")
+
+    val accessLogger = org.slf4j.LoggerFactory.getLogger(classOf[HttpAccessLog])
+    val testAccessMessage = s"127.0.0.1 - testuser [07/Oct/2026:18:35:00 +0000] \"GET /test HTTP/1.1\" 200 123 - ${System.currentTimeMillis()}"
+    accessLogger.info(testAccessMessage)
+
+    val logFilePath = os.Path(fileName)
+    assert(os.exists(logFilePath), s"Access log file should exist at $logFilePath")
+    val logContent = os.read(logFilePath)
+    assert(logContent.contains(testAccessMessage), s"Access log file should contain logged message: $testAccessMessage")
+
   test("log4j configuration has monitorInterval configured for automatic reloading"):
     val ctx = LogManager.getContext(false).asInstanceOf[LoggerContext]
     val config = ctx.getConfiguration
