@@ -35,10 +35,12 @@ import scala.collection.mutable
 trait SessionStore:
   def create(userId: UserId): Session
   def find(sessionId: SessionId): Option[Session]
+  def get(sessionId: SessionId): Option[Session] = find(sessionId)
   def delete(sessionId: SessionId): Unit
   def deleteAllForUser(userId: UserId): Unit
   def all(): Seq[Session]
   def cleanExpired(): Unit
+  def save(session: Session): Unit = ()
   def reload(): Unit = ()
 
 @Singleton
@@ -157,6 +159,11 @@ class InMemJsonSessionStore @Inject()(fileHelper: FileHelper, config: AuthConfig
   override def cleanExpired(): Unit = synchronized {
     if cleanExpiredInternal() then
       persist()
+  }
+
+  override def save(session: Session): Unit = synchronized {
+    sessions.put(session.id, session)
+    persist()
   }
 
   override def reload(): Unit = synchronized {

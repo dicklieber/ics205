@@ -167,7 +167,7 @@ class AuthEndpoints @Inject()(
                     val cookieMeta = security.sessionCookieWithMeta(session.id)
                     authService.authenticateSession(session.id) match
                       case Right(authUser) =>
-                        logger.info(s"Login successful for user '${authUser.username}' (id: '${authUser.id}', role: ${authUser.role}) from IP $ip (User-Agent: $userAgent)")
+                        logger.info(s"Login successful for user '${authUser.user}' (id: '${authUser.id}', role: ${authUser.session}) from IP $ip (User-Agent: $userAgent)")
                         val respJson = LoginResponse("Login successful", authUser).asJson.noSpaces
                         Right((StatusCode.Ok, None, List(cookieMeta), Some("application/json"), respJson))
                       case Left(err) =>
@@ -298,8 +298,8 @@ class AuthEndpoints @Inject()(
                               Left((StatusCode.BadRequest, None, Some("text/plain; charset=utf-8"), "Current password is incorrect."))
                             else
                               val newHash = passwordService.hash(newPassword)
-                              userStore.update(storedUser.copy(passwordHash = newHash))
-                              logger.info(s"User '${authUser.username}' (id: '${authUser.id}') changed their password from IP $ip")
+                              userStore.save(storedUser.copy(passwordHash = newHash))
+                              logger.info(s"User '${authUser.user}' (id: '${authUser.id}') changed their password from IP $ip")
                               val respJson = ChangePasswordResponse("Password changed successfully.").asJson.noSpaces
                               Right((StatusCode.Ok, None, Some("application/json"), respJson))
                       else
@@ -320,8 +320,8 @@ class AuthEndpoints @Inject()(
                           Left((StatusCode.SeeOther, Some(s"/change-password?err=${urlEncode("Current password is incorrect.")}"), None, ""))
                         else
                           val newHash = passwordService.hash(newPassword)
-                          userStore.update(storedUser.copy(passwordHash = newHash))
-                          logger.info(s"User '${authUser.username}' (id: '${authUser.id}') changed their password from IP $ip")
+                          userStore.save(storedUser.copy(passwordHash = newHash))
+                          logger.info(s"User '${authUser.user}' (id: '${authUser.id}') changed their password from IP $ip")
                           Right((StatusCode.SeeOther, Some(s"/change-password?msg=${urlEncode("Password changed successfully.")}"), None, ""))
                     case None =>
                       if isJson then

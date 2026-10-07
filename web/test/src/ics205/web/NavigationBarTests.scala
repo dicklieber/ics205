@@ -19,24 +19,16 @@
 package ics205.web
 
 import ics205.BuildInfo
-import ics205.auth.{AuthenticatedUser, RolePermissions}
+import ics205.auth.{AuthenticatedUser, Role}
 import ics205.util.FileHelper
 
 import java.time.Instant
 
 class NavigationBarTests extends munit.FunSuite:
 
-  val adminUser = AuthenticatedUser(
-    username = "adminUser",
-    role = RolePermissions.Admin,
-    id = "u-admin"
-  )
+  val adminUser = AuthenticatedUser(user = "adminUser", session = Role.Admin)
 
-  val viewerUser = AuthenticatedUser(
-    username = "viewerUser",
-    role = RolePermissions.Viewer,
-    id = "u-viewer"
-  )
+  val viewerUser = AuthenticatedUser(user = "viewerUser", session = Role.Viewer)
 
   test("NavigationBar renders brand, main links, and unauthenticated state"):
     val html = NavigationBar.render(activePage = NavigationBar.ActivePage.Plan, currentUser = None).render

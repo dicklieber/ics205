@@ -18,20 +18,29 @@
 
 package ics205.auth
 
+import ics205.model.EventId
 import ics205.util.{Ids, UnauthorizedException}
 import io.circe.Codec
 import io.circe.derivation.{Configuration, ConfiguredCodec}
 
-case class AuthenticatedUser(
-  username: String,
-  role: RolePermissions,
-  id: UserId = Ids.generateId()
-):
+import java.time.Instant
+
+case class AuthenticatedUser(user: User,
+                             session: Session):
+  def username: String = user.username
+  def role: Role = user.role
+  def id: UserId = user.id
+  def currentIcs205: Option[EventId] = session.currentIcs205
   def check(permission: Permission):Unit =
     if !hasPermission(permission) then throw new UnauthorizedException()
-  def roles: Set[String] = Set(role.toString.toLowerCase)
-  def hasPermission(permission: Permission): Boolean = role.hasPermission(permission)
+  def roles: Set[String] = Set(session.toString.toLowerCase)
+  def hasPermission(permission: Permission): Boolean = user.role.hasPermission(permission)
 
 object AuthenticatedUser:
+  def apply(user: String, session: Role): AuthenticatedUser =
+    val u = User(username = user, passwordHash = "", role = session)
+    val s = Session(userId = u.id, createdAt = Instant.now(), expiresAt = Instant.now().plusSeconds(3600))
+    AuthenticatedUser(u, s)
+
   private given Configuration = Configuration.default.withDefaults
   given Codec.AsObject[AuthenticatedUser] = ConfiguredCodec.derived[AuthenticatedUser]

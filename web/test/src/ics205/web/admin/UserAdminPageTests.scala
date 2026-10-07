@@ -1,21 +1,17 @@
 package ics205.web.admin
 
-import ics205.auth.{AuthenticatedUser, RolePermissions, User}
+import ics205.auth.{AuthenticatedUser, Role, User}
 
 class UserAdminPageTests extends munit.FunSuite:
 
-  val adminUser = AuthenticatedUser(
-    username = "admin",
-    role = RolePermissions.Admin,
-    id = "u-admin"
-  )
+  val adminUser = AuthenticatedUser(user = "admin", session = Role.Admin)
 
   test("UserAdminPage does not use inline onsubmit for delete confirmation and uses data-confirm"):
     val maliciousUsername = "admin', (alert(document.cookie), true) || '"
     val user = User(
       username = maliciousUsername,
       passwordHash = "hash",
-      role = RolePermissions.User,
+      role = Role.User,
       enabled = true,
       id = "u-malicious"
     )
@@ -44,7 +40,7 @@ class UserAdminPageTests extends munit.FunSuite:
     val user = User(
       username = "testuser",
       passwordHash = "hash",
-      role = RolePermissions.User,
+      role = Role.User,
       enabled = true,
       id = "u-test"
     )
@@ -62,7 +58,7 @@ class UserAdminPageTests extends munit.FunSuite:
     val user = User(
       username = "johndoe",
       passwordHash = "hash",
-      role = RolePermissions.User,
+      role = Role.User,
       enabled = true,
       id = "user-uuid-12345"
     )

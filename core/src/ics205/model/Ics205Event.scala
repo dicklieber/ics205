@@ -18,7 +18,7 @@
 
 package ics205.model
 
-import ics205.auth.{AuthenticatedUser, Permission, RolePermissions, User, UserId}
+import ics205.auth.{AuthenticatedUser, Permission, Role, User, UserId}
 import ics205.util.{Ids, UtcFormatter}
 import ics205.util.Ids.Id
 import io.circe.{Codec, Decoder, Encoder, HCursor, Json, JsonObject}
@@ -28,8 +28,6 @@ import Ics205Event.extension
 import java.time.Instant
 import scala.collection.immutable.TreeSeqMap.OrderBy
 
-type EventId = Id
-
 case class Ics205Event(id: EventId = Ids.generateId(),
                        ics205: Ics205,
                        metadata: Ics205Metadata = Ics205Metadata()) derives Codec.AsObject:
@@ -37,8 +35,22 @@ case class Ics205Event(id: EventId = Ids.generateId(),
 
   def bakFileName: String = s"$id-$UtcFormatter().$extension"
 
-  def update(authenticatedUser: AuthenticatedUser): Ics205Event = copy(metadata = metadata.copy(lastEditedBy = Option(
-    authenticatedUser.id), savedAt = Instant.now))
+  def eventName: String = if id.nonEmpty then id else ics205.incidentName
+
+  def canView(user: AuthenticatedUser): Boolean = metadata.canView(user)
+
+  def canView(user: User): Boolean = metadata.canView(user)
+
+  def canEdit(user: AuthenticatedUser): Boolean = metadata.canEdit(user)
+
+  def canEdit(user: User): Boolean = metadata.canEdit(user)
+
+  def accessFor(user: AuthenticatedUser): Option[PlanAccess] = metadata.accessFor(user)
+
+  def accessFor(user: User): Option[PlanAccess] = metadata.accessFor(user)
+
+  def update(authenticatedUser: AuthenticatedUser): Ics205Event =
+    copy(metadata = metadata.withLastEditedBy(authenticatedUser.user.id).withSavedAt(Instant.now()))
 
 
 object Ics205Event:
@@ -46,7 +58,14 @@ object Ics205Event:
 
   given Ordering[Ics205Event] = Ordering.by(_.ics205.incidentName)
 
-  def apply(ics205: Ics205,
-            metadata: Ics205Metadata): Ics205Event = Ics205Event(ics205.incidentName, ics205, metadata)
+  def apply(id: EventId,
+            ics205: Ics205,
+            metadata: Ics205Metadata): Ics205Event = new Ics205Event(id, ics205, metadata)
 
-  def apply(ics205: Ics205): Ics205Event = Ics205Event(ics205.incidentName, ics205, Ics205Metadata())
+  def apply(id: EventId,
+            ics205: Ics205): Ics205Event = new Ics205Event(id, ics205, Ics205Metadata())
+
+  def apply(ics205: Ics205,
+            metadata: Ics205Metadata): Ics205Event = new Ics205Event(ics205.incidentName, ics205, metadata)
+
+  def apply(ics205: Ics205): Ics205Event = new Ics205Event(ics205.incidentName, ics205, Ics205Metadata())

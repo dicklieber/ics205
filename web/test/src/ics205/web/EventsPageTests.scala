@@ -1,20 +1,16 @@
 package ics205.web
 
-import ics205.auth.{AuthenticatedUser, RolePermissions}
+import ics205.auth.{AuthenticatedUser, Role}
 import ics205.model.{Ics205, Ics205Event, OperationalPeriod}
 
 class EventsPageTests extends munit.FunSuite:
 
-  val adminUser = AuthenticatedUser(
-    username = "admin",
-    role = RolePermissions.Admin,
-    id = "u-admin"
-  )
+  val adminUser = AuthenticatedUser("admin", Role.Admin)
 
   test("EventsPage does not use inline onsubmit for delete confirmation and uses data-confirm"):
     val maliciousEventName = "Test', (alert(document.domain), true) || '"
     val event = Ics205Event(
-      eventName = maliciousEventName,
+      id = maliciousEventName,
       ics205 = Ics205(incidentName = "Test Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
     )
 
@@ -31,7 +27,7 @@ class EventsPageTests extends munit.FunSuite:
 
   test("EventsPage renders export buttons for events and import event form"):
     val event = Ics205Event(
-      eventName = "Field Day",
+      id = "Field Day",
       ics205 = Ics205(incidentName = "Field Day 2026", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
     )
 
@@ -50,7 +46,7 @@ class EventsPageTests extends munit.FunSuite:
 
   test("Event table links names, removes operational period, and suggests the next duplicate name"):
     val event = Ics205Event("Field Day", Ics205(incidentName = "Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
-    val html = EventsPage.render(adminUser, Seq(event, event.copy(eventName = "Field Day (1)")))
+    val html = EventsPage.render(adminUser, Seq(event, event.copy(id = "Field Day (1)")))
     assert(!html.contains("<th>Operational Period</th>"))
     assert(html.contains("href=\"/?event=Field+Day\"><strong>Field Day</strong></a>"))
     assert(html.contains("class=\"event-action-select\""))

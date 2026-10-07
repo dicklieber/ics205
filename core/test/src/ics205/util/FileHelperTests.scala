@@ -34,30 +34,23 @@ class FileHelperTests extends munit.FunSuite:
     val helper = new FileHelper()
     try
       val payload = TestPayload("hello", 42)
-      assertEquals(helper.loadOrDefault[TestPayload]("payload.json")(TestPayload("default", 0)), TestPayload("default", 0))
+      assertEquals(helper.loadOrDefault[TestPayload](Locus.admin, "payload.json")(TestPayload("default", 0)), TestPayload("default", 0))
 
-      helper.save("payload.json", payload)
-      assertEquals(helper.loadOrDefault[TestPayload]("payload.json")(TestPayload("default", 0)), payload)
+      helper.save(Locus.admin, "payload.json", payload)
+      assertEquals(helper.loadOrDefault[TestPayload](Locus.admin, "payload.json")(TestPayload("default", 0)), payload)
+      assert(os.exists(helper.directory / "admin" / "payload.json"))
 
-      helper.remove("payload.json")
-      assert(!os.exists(helper.directory / "payload.json"))
-      assertEquals(helper.loadOrDefault[TestPayload]("payload.json")(TestPayload("default", 0)), TestPayload("default", 0))
+      helper.remove(Locus.admin, "payload.json")
+      assert(!os.exists(helper.directory / "admin" / "payload.json"))
+      assertEquals(helper.loadOrDefault[TestPayload](Locus.admin, "payload.json")(TestPayload("default", 0)), TestPayload("default", 0))
     finally
       if os.exists(helper.directory) then os.remove.all(helper.directory)
 
-  test("appHome and configHome provide OS-specific base directories"):
+  test("appHome and configHome always use .ics205 in user home directory regardless of OS"):
     val dataHome = FileHelper.appHome("ICS-205", "ics205")
     val cfgHome = FileHelper.configHome("ICS-205", "ics205")
-    val osName = System.getProperty("os.name", "").toLowerCase
-    if osName.contains("mac") then
-      assertEquals(dataHome, os.home / "Library" / "Application Support" / "ICS-205")
-      assertEquals(cfgHome, os.home / "Library" / "Application Support" / "ICS-205" / "config")
-    else if osName.contains("win") then
-      assertEquals(dataHome, os.home / "AppData" / "Local" / "ICS-205")
-      assertEquals(cfgHome, os.home / "AppData" / "Local" / "ICS-205" / "config")
-    else
-      assertEquals(dataHome, os.Path("/home/ics205/data"))
-      assertEquals(cfgHome, os.Path("/home/ics205/config"))
+    assertEquals(dataHome, os.home / ".ics205")
+    assertEquals(cfgHome, os.home / ".ics205" / "config")
 
   test("logDirectory is within FileHelper directory and creates directory"):
     val tempDir = os.temp.dir()

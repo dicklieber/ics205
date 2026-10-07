@@ -18,7 +18,7 @@
 
 package ics205.web
 
-import ics205.auth.{AuthenticatedUser, Permission, RolePermissions, User}
+import ics205.auth.{AuthenticatedUser, Permission, Role, User}
 import ics205.model.Ics205Event
 import scalatags.Text.all.*
 
@@ -132,7 +132,7 @@ object EventMetadataPage:
                     else
                       users.map { user =>
                         val currentPerm = event.metadata.permissions.get(user.id)
-                        val isAdminUser = user.role == RolePermissions.Admin
+                        val isAdminUser = user.role == Role.Admin
 
                         tr(
                           td(

@@ -18,7 +18,7 @@
 
 package ics205.web
 
-import ics205.auth.{AuthenticatedUser, RolePermissions}
+import ics205.auth.{AuthenticatedUser, Role}
 import ics205.model.{Ics205Event, PlanAccess}
 import scalatags.Text.all.*
 
@@ -37,7 +37,7 @@ object EventsPage:
   ): String =
     val sortedEvents = events.sortBy(ev => (ev.eventName.toLowerCase(java.util.Locale.ROOT), ev.eventName))
     val availableNames = sortedEvents.map(_.eventName)
-    val isAdmin = currentUser.role == RolePermissions.Admin
+    val isAdmin = currentUser.session == Role.Admin
 
     doctype("html")(
       html(lang := "en")(

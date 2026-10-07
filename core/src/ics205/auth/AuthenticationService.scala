@@ -41,7 +41,7 @@ class AuthenticationService @Inject()(
       case Some(session) =>
         userStore.findById(session.userId) match
           case Some(user) if user.enabled =>
-            Right(AuthenticatedUser(username = user.username, role = user.role, id = user.id))
+            Right(AuthenticatedUser(user = user, session = session))
           case _ =>
             Left(Unauthorized("User disabled or does not exist"))
       case None =>

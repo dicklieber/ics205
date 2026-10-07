@@ -29,7 +29,7 @@ import java.time.Instant
 object NavigationBar:
 
   enum ActivePage:
-    case Plan, Radio, ExportRadio, ocsEEvents, UserAdmin, ChangePassword, Login, None
+    case Plan, Radio, ExportRadio, Events, UserAdmin, ChangePassword, Login, None
 
   private val aboutDialogClick: String =
     "const d = document.getElementById('about-dialog');" +
@@ -232,7 +232,7 @@ object NavigationBar:
                   li(cls := "nav-item")(
                     span(cls := "navbar-text me-3")(
                       "Logged in as: ",
-                      strong(user.username)
+                      strong(user.user.username)
                     )
                   ),
                   li(cls := "nav-item")(

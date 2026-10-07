@@ -44,11 +44,12 @@ import scala.collection.concurrent.TrieMap
 
   private def loadFromDisk(): TrieMap[EventId, Ics205Event] = synchronized {
     val newMap = TrieMap.empty[EventId, Ics205Event]
-    for file <- os.list(eventsDirectory) 
-      if file.last.endsWith(Ics205Event.extension) 
-      ics205Event <- parseEventFile(file) 
-    yield
-      newMap.put(ics205Event.id, ics205Event)
+    if os.exists(eventsDirectory) then
+      for file <- os.list(eventsDirectory) 
+        if file.last.endsWith(Ics205Event.extension) || file.last.endsWith(".json") || file.last.endsWith(".ics205")
+        ics205Event <- parseEventFile(file) 
+      yield
+        newMap.put(ics205Event.id, ics205Event)
     newMap
   }
 
@@ -74,53 +75,169 @@ import scala.collection.concurrent.TrieMap
 
   def save(event: Ics205Event,
            authenticatedUser: AuthenticatedUser): Unit = synchronized { // add to in-memory store
-    allEvents.put(event.id, event)
+    val withUpdateMetadata = event.update(authenticatedUser)
+    allEvents.put(withUpdateMetadata.id, withUpdateMetadata)
     // then copy current file to the backup directory for this event
-    val path = eventsDirectory / event.fileName
+    val path = eventsDirectory / withUpdateMetadata.fileName
     if os.isFile(path) then 
-      val bakDir = eventsDirectory / event.id / "bak"
+      val bakDir = eventsDirectory / withUpdateMetadata.id / "bak"
       os.makeDir.all(bakDir)
-      val bakFileName = event.bakFileName
+      val bakFileName = withUpdateMetadata.bakFileName
       val bakPath = bakDir / bakFileName
       os.copy(path, bakPath, replaceExisting = true, createFolders = true)
-      // then update metadata
-      val withUpdateMetadata = event.update(authenticatedUser)
-  
-      // lastly write the file
-      os.write
-        .over(path,
-          withUpdateMetadata.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true)),
-          createFolders = true)
+
+    // lastly write the file
+    os.write
+      .over(path,
+        withUpdateMetadata.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true)),
+        createFolders = true)
   }
+
+  def save(event: Ics205Event): Unit = synchronized {
+    allEvents.put(event.id, event)
+    val path = eventsDirectory / event.fileName
+    os.write
+      .over(path,
+        event.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true)),
+        createFolders = true)
+  }
+
+
+  def events(): Seq[Ics205Event] = listEvents()
   
   def listEvents(): Seq[Ics205Event] = synchronized {
     allEvents.values.toSeq
+  }
+  
+  def currentEvent(): Option[Ics205Event] = listEvents().headOption
+
+  def currentEventName: Option[String] = currentEvent().map(_.eventName)
+
+  def event(): Option[Ics205Event] = currentEvent()
+
+  def ics205Event(): Option[Ics205Event] = currentEvent()
+
+  def ics205(): Ics205 = currentEvent().map(_.ics205).getOrElse(Ics205(incidentName = "", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+  
+  def metadata(): Ics205Metadata = currentEvent().map(_.metadata).getOrElse(Ics205Metadata())
+
+  def setUserPermission(userId: String, perm: Permission): Unit = synchronized {
+    currentEvent().foreach { ev =>
+      val updated = ev.copy(metadata = ev.metadata.copy(permissions = ev.metadata.permissions + (userId -> perm)))
+      save(updated)
+    }
+  }
+
+  def setUserPermission(userId: String, perm: Option[Permission]): Unit = synchronized {
+    perm match
+      case Some(p) => setUserPermission(userId, p)
+      case None => removeUserPermission(userId)
+  }
+
+  def removeUserPermission(userId: String): Unit = synchronized {
+    currentEvent().foreach { ev =>
+      val updated = ev.copy(metadata = ev.metadata.copy(permissions = ev.metadata.permissions - userId))
+      save(updated)
+    }
   }
   
   
   def getEvent(id: EventId): Option[Ics205Event] = synchronized {
     allEvents.get(id)
   }
-  
+
+  def findByName(name: String): Option[Ics205Event] = synchronized {
+    getEvent(name).orElse(listEvents().find(_.eventName.equalsIgnoreCase(name)))
+  }
+
+  def setCurrentEvent(name: String): Unit = ()
+
+  def setUserPermission(eventName: String, userId: String, perm: Permission): Unit = synchronized {
+    getEvent(eventName).orElse(findByName(eventName)).foreach { ev =>
+      val updated = ev.copy(metadata = ev.metadata.copy(permissions = ev.metadata.permissions + (userId -> perm)))
+      save(updated)
+    }
+  }
+
+  def setUserPermission(eventName: String, userId: String, perm: Option[Permission]): Unit = perm match {
+    case Some(p) => setUserPermission(eventName, userId, p)
+    case None => removeUserPermission(eventName, userId)
+  }
+
+  def removeUserPermission(eventName: String, userId: String): Unit = synchronized {
+    getEvent(eventName).orElse(findByName(eventName)).foreach { ev =>
+      val updated = ev.copy(metadata = ev.metadata.copy(permissions = ev.metadata.permissions - userId))
+      save(updated)
+    }
+  }
+
+  def uniqueEventName(name: String): String = synchronized {
+    val cleanName = if name.matches(""".* \(\d+\)$""") then name.replaceFirst(""" \(\d+\)$""", "") else name
+    if getEvent(name).isEmpty && !listEvents().exists(_.eventName.equalsIgnoreCase(name)) then
+      name
+    else
+      var counter = 1
+      while getEvent(s"$cleanName ($counter)").isDefined || listEvents().exists(_.eventName.equalsIgnoreCase(s"$cleanName ($counter)")) do
+        counter += 1
+      s"$cleanName ($counter)"
+  }
+
+  def importEvent(event: Ics205Event, userId: Option[UserId] = None): Ics205Event = synchronized {
+    val baseName = if event.eventName.trim.nonEmpty then event.eventName.trim else "Imported Event"
+    val finalName = if getEvent(baseName).isDefined || listEvents().exists(_.eventName.equalsIgnoreCase(baseName)) then
+      uniqueEventName(baseName)
+    else
+      baseName
+    val toSave = event.copy(id = finalName, metadata = event.metadata.copy(lastEditedBy = userId, savedAt = Instant.now()))
+    save(toSave)
+    toSave
+  }
+
+  def deleteEvent(id: EventId): Boolean = synchronized {
+    allEvents.remove(id) match
+      case Some(removed) =>
+        val path = eventsDirectory / removed.fileName
+        if os.exists(path) then os.remove(path)
+        val eventDir = eventsDirectory / removed.id
+        if os.exists(eventDir) then os.remove.all(eventDir)
+        val oldBakDir = eventsDirectory / s"${removed.id}.bak"
+        if os.exists(oldBakDir) then os.remove.all(oldBakDir)
+        true
+      case None =>
+        findByName(id) match
+          case Some(ev) =>
+            allEvents.remove(ev.id)
+            val path = eventsDirectory / ev.fileName
+            if os.exists(path) then os.remove(path)
+            val eventDir = eventsDirectory / ev.id
+            if os.exists(eventDir) then os.remove.all(eventDir)
+            val oldBakDir = eventsDirectory / s"${ev.id}.bak"
+            if os.exists(oldBakDir) then os.remove.all(oldBakDir)
+            true
+          case None =>
+            false
+  }
   
   def deleteEvent(id: EventId,
                   authenticatedUser: AuthenticatedUser): Boolean = synchronized {
     authenticatedUser.check(EditPlans)
-  
-    allEvents.remove(id) match 
-      case Some(removed) => 
-        val path = eventsDirectory / removed.fileName
-        os.remove(path)
-        logger.info(s"Event with id $id deleted")
-        true
-      case None =>
-        false
+    deleteEvent(id)
   }
-  
-  
-
   
   def reload(): Unit = synchronized {
     allEvents = loadFromDisk()
   }
+
+object Ics205Store:
+  private val timestampFormatter = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC)
+
+  def insertTimestamp(fileName: String, timestamp: TemporalAccessor = Instant.now()): String =
+    val ts = timestampFormatter.format(timestamp)
+    val dotIndex = fileName.lastIndexOf('.')
+    if dotIndex > 0 then
+      val base = fileName.substring(0, dotIndex)
+      val ext = fileName.substring(dotIndex)
+      s"$base.$ts$ext"
+    else
+      s"$fileName.$ts.json"
 

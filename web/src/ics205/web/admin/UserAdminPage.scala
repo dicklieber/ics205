@@ -18,7 +18,7 @@
 
 package ics205.web.admin
 
-import ics205.auth.{AuthenticatedUser, RolePermissions, User}
+import ics205.auth.{AuthenticatedUser, Role, User}
 import ics205.web.NavigationBar
 import scalatags.Text.all.*
 import scalatags.Text.tags2.{details, summary}
@@ -170,17 +170,17 @@ object UserAdminPage:
                       id := "role",
                       name := "role"
                     )(
-                      RolePermissions.values.map { r =>
+                      Role.values.map { r =>
                         option(
                           value := r.toString.toLowerCase,
-                          if editingUser.exists(_.role == r) || (editingUser.isEmpty && r == (if users.isEmpty then RolePermissions.Admin else RolePermissions.User)) then selected else cls := ""
+                          if editingUser.exists(_.role == r) || (editingUser.isEmpty && r == (if users.isEmpty then Role.Admin else Role.User)) then selected else cls := ""
                         )(r.toString)
                       }
                     ),
                     details(cls := "role-permissions-info", style := "margin-top: 6px; padding: 6px 10px; background: #f4f5f7; border: 1px solid #ebecf0; border-radius: 4px; font-size: 8.5pt;")(
                       summary(style := "cursor: pointer; color: #0052cc; font-weight: 600;")("Role Permissions Reference:"),
                       ul(style := "margin: 4px 0 0 0; padding-left: 18px;")(
-                        RolePermissions.values.map { r =>
+                        Role.values.map { r =>
                           li(
                             strong(r.toString),
                             ": ",

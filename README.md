@@ -151,7 +151,7 @@ exported under `ics205_http_transactions` with durations in seconds.
 
 ### User and Session Storage
 
-User and session databases are stored in the application data directory (resolved by `FileHelper`, e.g., `~/Library/Application Support/ICS-205` on macOS, `%LOCALAPPDATA%\ICS-205` on Windows, `~/.ics205` on Linux):
+User and session databases are stored in the application data directory (resolved by `FileHelper`, `~/.ics205` in the user's home directory):
 
 - **Users file**: `users.json` (configurable via `auth.userFileName` or `AuthConfig.userFileName`)
   ```json
