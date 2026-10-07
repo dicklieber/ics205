@@ -81,10 +81,10 @@ class DebugEndpoints @Inject()(
         }
       }
 
-  private val downloadDirectoryZipEndpoint: ServerEndpoint[Any, IO] =
+  private def downloadZipEndpoint(path: String): ServerEndpoint[Any, IO] =
     security.authorizedEndpoint(Permission.Debug)
       .get
-      .in("debug" / "download-directory")
+      .in("debug" / path)
       .out(statusCode
         .and(header[String]("Content-Type"))
         .and(header[Option[String]]("Content-Disposition"))
@@ -105,34 +105,32 @@ class DebugEndpoints @Inject()(
         }
       }
 
+  private val downloadDirectoryZipEndpoint: ServerEndpoint[Any, IO] =
+    downloadZipEndpoint("download-directory.zip")
+
+  private val downloadDirectoryLegacyEndpoint: ServerEndpoint[Any, IO] =
+    downloadZipEndpoint("download-directory")
+
   private val downloadDataZipEndpoint: ServerEndpoint[Any, IO] =
-    security.authorizedEndpoint(Permission.Debug)
-      .get
-      .in("debug" / "download-data")
-      .out(statusCode
-        .and(header[String]("Content-Type"))
-        .and(header[Option[String]]("Content-Disposition"))
-        .and(header[String]("Cache-Control"))
-        .and(byteArrayBody))
-      .serverLogicSuccess { currentUser => _ =>
-        IO.blocking {
-          logger.info(s"User '${currentUser.user}' requested downloading zip of FileHelper.directory (${fileHelper.directory}).")
-          val zipBytes = fileHelper.zipDirectory()
-          val zipFileName = s"ics205-${UtcFormatter.format()}.zip"
-          (
-            StatusCode.Ok,
-            "application/zip",
-            Some(s"""attachment; filename="$zipFileName""""),
-            "no-store",
-            zipBytes
-          )
-        }
-      }
+    downloadZipEndpoint("download-data.zip")
+
+  private val downloadDataLegacyEndpoint: ServerEndpoint[Any, IO] =
+    downloadZipEndpoint("download-data")
+
+  private val downloadAllDataZipEndpoint: ServerEndpoint[Any, IO] =
+    downloadZipEndpoint("download-all-data.zip")
+
+  private val downloadAllDataLegacyEndpoint: ServerEndpoint[Any, IO] =
+    downloadZipEndpoint("download-all-data")
 
   override val endpoints: List[ServerEndpoint[Any, IO]] =
     List(
       reloadFilesGetEndpoint,
       reloadFilesPostEndpoint,
       downloadDirectoryZipEndpoint,
-      downloadDataZipEndpoint
+      downloadDirectoryLegacyEndpoint,
+      downloadDataZipEndpoint,
+      downloadDataLegacyEndpoint,
+      downloadAllDataZipEndpoint,
+      downloadAllDataLegacyEndpoint
     )

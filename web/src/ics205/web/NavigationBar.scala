@@ -201,7 +201,7 @@ object NavigationBar:
                   li(
                     a(
                       cls := "dropdown-item",
-                      href := "/debug/download-directory"
+                      href := "/debug/download-directory.zip"
                     )("Download Data Directory")
                   ),
                   li(
@@ -336,7 +336,7 @@ object NavigationBar:
                     frag(
                       " ",
                       a(
-                        href := "/debug/download-directory",
+                        href := "/debug/download-directory.zip",
                         cls := "btn btn-outline-secondary btn-sm ms-2",
                         style := "margin-left: 8px; font-size: 0.8rem; padding: 2px 6px;"
                       )("Download ZIP")

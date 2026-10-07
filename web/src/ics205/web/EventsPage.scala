@@ -37,7 +37,7 @@ object EventsPage:
   ): String =
     val sortedEvents = events.sortBy(ev => (ev.eventName.toLowerCase(java.util.Locale.ROOT), ev.eventName))
     val availableNames = sortedEvents.map(_.eventName)
-    val isAdmin = currentUser.session == Role.Admin
+    val isAdmin = currentUser.role == Role.Admin
 
     doctype("html")(
       html(lang := "en")(
