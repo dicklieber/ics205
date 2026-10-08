@@ -24,6 +24,7 @@ import ics205.auth.Permission
 import ics205.store.{Ics205Store, SessionStore, UserStore}
 import ics205.util.{FileHelper, UtcFormatter}
 import ics205.web.auth.AuthSecurity
+import ics205.web.util.RequestUtils
 import jakarta.inject.{Inject, Singleton}
 import sttp.model.StatusCode
 import sttp.tapir.*
@@ -58,7 +59,8 @@ class DebugEndpoints @Inject()(
           store.reload()
           userStore.reload()
           sessionStore.reload()
-          val target = returnUrlOpt.orElse(refererOpt).getOrElse("/")
+          val target = returnUrlOpt.flatMap(RequestUtils.localRedirect)
+            .orElse(refererOpt.flatMap(RequestUtils.refererPath)).getOrElse("/")
           (StatusCode.SeeOther, Some(target), "Files reloaded successfully.")
         }
       }
@@ -76,7 +78,8 @@ class DebugEndpoints @Inject()(
           store.reload()
           userStore.reload()
           sessionStore.reload()
-          val target = returnUrlOpt.orElse(refererOpt).getOrElse("/")
+          val target = returnUrlOpt.flatMap(RequestUtils.localRedirect)
+            .orElse(refererOpt.flatMap(RequestUtils.refererPath)).getOrElse("/")
           (StatusCode.SeeOther, Some(target), "Files reloaded successfully.")
         }
       }

@@ -21,6 +21,20 @@ package ics205.web.util
 import sttp.tapir.model.ServerRequest
 
 object RequestUtils:
+  /** Keeps only same-site paths like "/events"; rejects "//evil.com", "/\evil.com" and absolute URLs,
+    * which browsers would follow off-site. */
+  def localRedirect(target: String): Option[String] =
+    Option(target).filter(t =>
+      t.startsWith("/") && !t.startsWith("//") && !t.startsWith("/\\") && !t.exists(_.isControl))
+
+  /** Path and query of a Referer URL, so a redirect "back" always stays on this site. */
+  def refererPath(referer: String): Option[String] =
+    scala.util.Try(java.net.URI(referer)).toOption
+      .flatMap(uri => Option(uri.getRawPath).filter(_.nonEmpty)
+        .map(path => path + Option(uri.getRawQuery).fold("")("?" + _)))
+      .flatMap(localRedirect)
+
+
   def clientIp(request: ServerRequest): String =
     request.header("X-Forwarded-For")
       .flatMap(_.split(',').headOption.map(_.trim))

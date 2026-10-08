@@ -177,7 +177,7 @@ class AuthEndpoints @Inject()(
             val formData = parseFormData(body)
             val username = formData.getOrElse("username", "").trim
             val password = formData.getOrElse("password", "")
-            val redirect = formData.get("redirect").filter(r => r.startsWith("/") && !r.startsWith("//"))
+            val redirect = formData.get("redirect").flatMap(RequestUtils.localRedirect)
             val redirectInfo = redirect.map(r => s", redirect: '$r'").getOrElse("")
 
             if username.isEmpty || password.isEmpty then

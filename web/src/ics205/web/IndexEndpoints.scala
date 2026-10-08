@@ -25,6 +25,7 @@ import ics205.model.{Ics205, Ics205Event, Ics205Metadata, OperationalPeriod}
 import ics205.store.{Ics205Store, SessionStore, UserStore}
 import ics205.util.Ids
 import ics205.web.auth.AuthSecurity
+import ics205.web.util.RequestUtils
 import io.circe.syntax.*
 import jakarta.inject.{Inject, Singleton}
 import sttp.model.{Part, StatusCode}
@@ -346,14 +347,13 @@ class IndexEndpoints @Inject() (
             store.findByName(name) match
               case Some(ev) if ev.canView(user) || user.role == Role.Admin =>
                 sessionStore.save(user.session.copy(currentIcs205 = Some(ev.id)))
-                val target = returnUrlOpt.getOrElse("/")
-                (StatusCode.SeeOther, target, "")
+                (StatusCode.SeeOther, returnUrlOpt.flatMap(RequestUtils.localRedirect).getOrElse("/"), "")
               case Some(_) =>
                 (StatusCode.Forbidden, "/events?err=Unauthorized", "You do not have permission to access this event.")
               case None =>
                 (StatusCode.SeeOther, "/events?err=Event+not+found", "")
           case None =>
-            (StatusCode.SeeOther, returnUrlOpt.getOrElse("/"), "")
+            (StatusCode.SeeOther, returnUrlOpt.flatMap(RequestUtils.localRedirect).getOrElse("/"), "")
       }
     }
 

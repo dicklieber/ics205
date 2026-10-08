@@ -66,7 +66,7 @@ class WebApplication @Inject() (
     val allEndpoints = configuredEndpoints ++ docsEndpoints
     val rawApp = Http4sServerInterpreter[IO]().toRoutes(allEndpoints).orNotFound
     val metricsApp = HttpTransactionMetrics(
-      rawApp,
+      OriginCheck(rawApp),
       ApplicationMetrics.default
     )
     HttpAccessLog(
