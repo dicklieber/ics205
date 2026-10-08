@@ -78,3 +78,17 @@ class AssetEndpointsTests extends munit.FunSuite:
     assert(body.contains(".radio-details"))
     assert(body.contains(".radio-table-scroll"))
   }
+
+  test("serves editor JavaScript files with JavaScript content type") {
+    Seq(
+      "ics205-export.js" -> "getEditorIcs205",
+      "ics205-editor.js" -> "applyChannelNumbers",
+      "ics205-remarks.js" -> "fitRemarks"
+    ).foreach { (fileName, expected) =>
+      val req = Request[IO](Method.GET, Uri.unsafeFromString(s"/js/$fileName"))
+      val resp = app.run(req).unsafeRunSync()
+      assertEquals(resp.status, Status.Ok, fileName)
+      assert(resp.headers.headers.exists(h => h.name.toString.equalsIgnoreCase("Content-Type") && h.value.startsWith("text/javascript")), fileName)
+      assert(resp.as[String].unsafeRunSync().contains(expected), fileName)
+    }
+  }

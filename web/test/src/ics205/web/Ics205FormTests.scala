@@ -146,8 +146,7 @@ class Ics205FormTests extends munit.FunSuite:
     assert(html.contains("class=\"btn btn-secondary\" value=\"cancel\">Cancel</button>"))
     assert(html.contains("class=\"btn btn-primary\" value=\"ok\">OK</button>"))
     assert(html.contains("<template id=\"channel-template\">"))
-    assert(html.contains("const form = document.getElementById('plan-form');"))
-    assert(html.contains("applyChannelNumbers"))
+    assert(html.contains("<script src=\"/js/ics205-editor.js\"></script>"))
 
   test("Ics205Editor renders read-only controls for user without EditPlans permission"):
     val viewerUser = ics205.auth.AuthenticatedUser("viewer1", ics205.auth.Role.Viewer)
@@ -166,7 +165,8 @@ class Ics205FormTests extends munit.FunSuite:
     assert(html.contains("data-action=\"copy\""))
     assert(html.contains("data-action=\"delete\""))
     assert(!html.contains("<template id=\"channel-template\">"))
-    assert(!html.contains("const form = document.getElementById('plan-form');"))
+    assert(!html.contains("/js/ics205-editor.js"))
+    assert(html.contains("<script src=\"/js/ics205-export.js\"></script>"))
 
   test("POST / without EditPlans permission returns 403 Forbidden and does not save"):
     val tempDirectory = os.temp.dir()
