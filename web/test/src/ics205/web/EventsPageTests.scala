@@ -10,7 +10,7 @@ class EventsPageTests extends munit.FunSuite:
   test("EventsPage displays file modification date and time in UTC"):
     val event = Ics205Event("Field Day", Ics205(incidentName = "Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
     val modified = java.time.Instant.parse("2026-10-06T15:30:45Z")
-    val html = EventsPage.render(adminUser, Seq(event), fileModifiedAt = Map(event.eventName -> modified))
+    val html = EventsPage.render(adminUser, Seq(event), fileModifiedAt = Map(event.id -> modified))
     assert(html.contains("<th>File Modified</th>"))
     assert(html.contains("<time datetime=\"2026-10-06T15:30:45Z\">2026-10-06 15:30:45 UTC</time>"))
     assert(EventsPage.render(adminUser, Seq.empty).contains("colspan=\"6\""))
@@ -64,4 +64,4 @@ class EventsPageTests extends munit.FunSuite:
   test("EventsPage links to event editor using event ID"):
     val event = Ics205Event("ev-unique-id-777", Ics205(incidentName = "Grand Prix", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
     val html = EventsPage.render(adminUser, Seq(event))
-    assert(html.contains("href=\"/?event=ev-unique-id-777\"><strong>ev-unique-id-777</strong></a>"))
+    assert(html.contains("href=\"/?event=ev-unique-id-777\"><strong>Grand Prix</strong></a>"))

@@ -115,7 +115,7 @@ object EventsPage:
                         td(if ev.ics205.incidentName.nonEmpty then ev.ics205.incidentName else "—"),
                         td(ev.ics205.channels.size.toString),
                         td(
-                          fileModifiedAt.get(ev.eventName).map { modified =>
+                          fileModifiedAt.get(ev.id).map { modified =>
                             scalatags.Text.tags2.time(attr("datetime") := modified.toString)(fileDateFormatter.format(modified))
                           }.getOrElse[Modifier](span("—"))
                         ),

@@ -105,6 +105,13 @@ import scala.collection.concurrent.TrieMap
 
   def events(): Seq[Ics205Event] = listEvents()
 
+  def fileModifiedAt(idOrName: String): Option[Instant] = synchronized {
+    findByName(idOrName).flatMap { event =>
+      try Some(java.nio.file.Files.getLastModifiedTime((eventsDirectory / event.fileName).toNIO).toInstant)
+      catch case _: NoSuchFileException => None
+    }
+  }
+
   def listEvents(): Seq[Ics205Event] = synchronized {
     allEvents.values.toSeq
   }

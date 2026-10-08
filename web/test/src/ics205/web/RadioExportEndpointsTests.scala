@@ -223,7 +223,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
     withContext { (_, userStore, _, store, authService, _, app) =>
       userStore.add(User("pdfuser", new ScalaPassPasswordService().hash("password"), Role.User, enabled = true, id = "pdf-user"))
       val session = authService.authenticate("pdfuser", "password").get
-      store.save(ics205.model.Ics205Event(store.ics205().copy(incidentName = "Updated incident")))
+      store.save(store.ics205().copy(incidentName = "Updated incident"))
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/pdf"))
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       val res = app.run(req).unsafeRunSync()

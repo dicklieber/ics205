@@ -68,7 +68,7 @@ class Ics205StoreTests extends munit.FunSuite:
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
       store.save(plan)
-      val path = directory / "events" / "Test incident.json"
+      val path = directory / "events" / store.findByName("Test incident").get.fileName
       val modified = Instant.parse("2026-10-06T15:30:45Z")
       java.nio.file.Files.setLastModifiedTime(path.toNIO, java.nio.file.attribute.FileTime.from(modified))
       assertEquals(store.fileModifiedAt("Test incident"), Some(modified))
@@ -172,7 +172,7 @@ class Ics205StoreTests extends munit.FunSuite:
       os.write(directory / "events" / "Drill.json", event.asJson.noSpaces, createFolders = true)
       val store = new Ics205Store(helper(directory))
       assertEquals(store.events().size, 1)
-      assertEquals(store.getEvent("Drill").map(_.eventName), Some("Drill"))
+      assertEquals(store.getEvent("Drill").map(_.eventName), Some(plan.incidentName))
       assertEquals(store.getEvent("Drill").map(_.ics205.incidentName), Some(plan.incidentName))
     }
 
@@ -253,13 +253,13 @@ class Ics205StoreTests extends munit.FunSuite:
       assert(os.exists(directory / "events" / event2.fileName))
 
       assertEquals(store.events().size, 2)
-      assertEquals(store.listEvents().map(_.eventName), Seq("Field Day", "Marathon"))
+      assertEquals(store.listEvents().map(_.eventName).sorted, Seq("City Marathon", "Field Day 2026"))
 
       val retrieved1 = store.getEvent("Field Day")
       assert(retrieved1.isDefined)
       assertEquals(retrieved1.get.ics205.incidentName, "Field Day 2026")
 
-      val retrieved2 = store.findByName("marathon")
+      val retrieved2 = store.findByName("city marathon")
       assert(retrieved2.isDefined)
       assertEquals(retrieved2.get.ics205.incidentName, "City Marathon")
 
@@ -298,7 +298,7 @@ class Ics205StoreTests extends munit.FunSuite:
 
       val reloaded = new Ics205Store(helper(directory))
       assertEquals(reloaded.events().size, 1)
-      assertEquals(reloaded.events().head.eventName, "Beta Event")
+      assertEquals(reloaded.events().head.id, "Beta Event")
     }
 
   test("insertTimestamp formats UTC timestamp before trailing .json extension"):
@@ -346,7 +346,7 @@ class Ics205StoreTests extends munit.FunSuite:
       // Ensure store listEvents ignores the bak directory
       val reloaded = new Ics205Store(helper(directory))
       assertEquals(reloaded.events().size, 1)
-      assertEquals(reloaded.events().head.eventName, "Field Day")
+      assertEquals(reloaded.events().head.id, "Field Day")
       assertEquals(reloaded.events().head.ics205.specialInstructions, "Version 2")
     }
 
@@ -389,14 +389,14 @@ class Ics205StoreTests extends munit.FunSuite:
   test("importEvent saves new event or adds suffix if duplicate"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
-      val event1 = Ics205Event("Skywarn", plan.copy(incidentName = "Skywarn Drill"))
+      val event1 = Ics205Event("Skywarn", plan.copy(incidentName = "Skywarn"))
       val imported1 = store.importEvent(event1, userId = Some("admin-1"))
-      assertEquals(imported1.eventName, "Skywarn")
+      assertEquals(imported1.id, "Skywarn")
       assertEquals(store.getEvent("Skywarn").isDefined, true)
 
       // Import same event again -> should be suffixed
       val imported2 = store.importEvent(event1, userId = Some("admin-1"))
-      assertEquals(imported2.eventName, "Skywarn (1)")
+      assertEquals(imported2.id, "Skywarn (1)")
       assertEquals(store.getEvent("Skywarn (1)").isDefined, true)
       assertEquals(store.events().size, 2)
 

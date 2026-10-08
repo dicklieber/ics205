@@ -328,7 +328,8 @@ class IndexEndpoints @Inject() (
           events = visibleEvents,
           currentEventName = currentEventName,
           message = msg,
-          error = err
+          error = err,
+          fileModifiedAt = visibleEvents.flatMap(ev => store.fileModifiedAt(ev.id).map(ev.id -> _)).toMap
         )
         (StatusCode.Ok, None, html)
       }

@@ -75,7 +75,7 @@ class EventsEndpointsTests extends munit.FunSuite:
 
       val res = routes.orNotFound.run(req).unsafeRunSync()
       assertEquals(res.status, Status.SeeOther)
-      val created = store.findByName("Winter Drill")
+      val created = store.findByName("Winter Drill 2026")
       assert(created.isDefined)
       assertEquals(sessionStore.get(session.id).flatMap(_.currentIcs205), Some(created.get.id))
       assertEquals(created.get.ics205.incidentName, "Winter Drill 2026")
@@ -159,7 +159,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       assertEquals(store.getEvent("OldEvent"), None)
       val renamed = store.getEvent("NewEvent")
       assert(renamed.isDefined)
-      assertEquals(renamed.get.eventName, "NewEvent")
+      assertEquals(renamed.get.eventName, "New Incident")
       assertEquals(renamed.get.ics205.incidentName, "New Incident")
     }
 
@@ -258,11 +258,12 @@ class EventsEndpointsTests extends munit.FunSuite:
       val res = routes.orNotFound.run(req).unsafeRunSync()
       assertEquals(res.status, Status.Ok)
       val disposition = res.headers.get(CIString("Content-Disposition")).map(_.head.value).getOrElse("")
-      assert(disposition.contains("attachment; filename=\"Wildfire 2026.json\""))
+      assert(disposition.contains("attachment; filename=\"Wildfire Incident.json\""))
       val body = res.as[String].unsafeRunSync()
       val decoded = decode[Ics205Event](body)
       assert(decoded.isRight)
-      assertEquals(decoded.toOption.get.eventName, "Wildfire 2026")
+      assertEquals(decoded.toOption.get.id, "Wildfire 2026")
+      assertEquals(decoded.toOption.get.eventName, "Wildfire Incident")
       assertEquals(decoded.toOption.get.ics205.incidentName, "Wildfire Incident")
     }
 
@@ -273,10 +274,10 @@ class EventsEndpointsTests extends munit.FunSuite:
       val session = sessionStore.create(admin.id)
 
       // Seed an existing event named "Winter Drill"
-      store.save(Ics205Event("Winter Drill", Ics205(incidentName = "Winter Drill Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Event("Winter Drill", Ics205(incidentName = "Winter Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
 
       // Prepare an imported event JSON with the same name "Winter Drill"
-      val importPayload = Ics205Event("Winter Drill", Ics205(incidentName = "Winter Drill Imported", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+      val importPayload = Ics205Event("Winter Drill", Ics205(incidentName = "Winter Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty, specialInstructions = "Imported"))
       val jsonBytes = importPayload.asJson.spaces2.getBytes(java.nio.charset.StandardCharsets.UTF_8)
 
       val multipart = Multipart[IO](Vector(
@@ -296,7 +297,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       assert(store.getEvent("Winter Drill").isDefined)
       val imported = store.getEvent("Winter Drill (1)")
       assert(imported.isDefined)
-      assertEquals(imported.get.ics205.incidentName, "Winter Drill Imported")
+      assertEquals(imported.get.ics205.specialInstructions, "Imported")
     }
 
   test("POST /events/import imports unwrapped Ics205 plan JSON"):
@@ -352,7 +353,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val viewer = userStore.add(User("viewer", passwordService.hash("pass"), Role.Viewer, enabled = true, id = "u-view")).toOption.get
       val adminSession = sessionStore.create(admin.id)
       val viewerSession = sessionStore.create(viewer.id)
-      store.save(Ics205Event("Original", Ics205(incidentName = "Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty),
+      store.save(Ics205Event("Original", Ics205(incidentName = "Original", operationalPeriod = OperationalPeriod(), channels = Seq.empty),
         Ics205Metadata()))
       val original = store.getEvent("Original").get
       def duplicate(name: String, sessionId: String) =
@@ -361,10 +362,10 @@ class EventsEndpointsTests extends munit.FunSuite:
           .withEntity(UrlForm("eventName" -> "Original", "newEventName" -> name))).unsafeRunSync()
 
       assertEquals(duplicate("Original (1)", viewerSession.id).status, Status.Forbidden)
-      assertEquals(store.getEvent("Original (1)"), None)
+      assertEquals(store.findByName("Original (1)"), None)
       assertEquals(duplicate("Original (1)", adminSession.id).status, Status.SeeOther)
-      val copied = store.getEvent("Original (1)").get
-      assertEquals(copied.ics205, original.ics205)
+      val copied = store.findByName("Original (1)").get
+      assertEquals(copied.ics205, original.ics205.copy(incidentName = "Original (1)"))
       assertEquals(copied.metadata.permissions, original.metadata.permissions)
       assertEquals(copied.metadata.lastEditedBy, Some(admin.id))
       assertEquals(store.getEvent("Original").get, original)
