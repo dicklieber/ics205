@@ -62,8 +62,6 @@ import scala.collection.concurrent.TrieMap
       case Right(event) => 
         Some(event)
 
-
-
   def save(event: Ics205Event,
            authenticatedUser: AuthenticatedUser): Unit = synchronized { // add to in-memory store
     val withUpdateMetadata = event.update(authenticatedUser)

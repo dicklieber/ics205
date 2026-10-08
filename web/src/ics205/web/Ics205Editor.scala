@@ -568,11 +568,16 @@ private[web] object Ics205Editor:
               // Replace channel rows
               rows.replaceChildren();
               const rawChannels = Array.isArray(plan.channels) ? plan.channels : [];
+              // Exported JSON encodes enum cases as objects, e.g. {"Fm": {}}; selects need the bare case name.
+              const enumName = (v, fallback) => {
+                if (v && typeof v === 'object') return Object.keys(v)[0] ?? fallback;
+                return v || fallback;
+              };
               rawChannels.forEach(ch => {
                 const rxFreq = ch.frequency?.rxFrequency?.mhz ?? ch.frequency?.rx?.mhz ?? ch.frequency?.rxFrequency ?? ch.frequency?.rx ?? ch.rx ?? '';
                 const offsetFreq = ch.frequency?.offset?.mhz ?? ch.frequency?.offset ?? ch.offset ?? '0';
                 const ctcssFreq = ch.ctcss?.frequency?.hz ?? ch.ctcss?.frequency ?? ch.ctcssFrequency ?? '';
-                const ctcssMode = ch.ctcss?.mode ?? ch.ctcssMode ?? 'None';
+                const ctcssMode = enumName(ch.ctcss?.mode ?? ch.ctcssMode, 'None');
 
                 const rowValues = {
                   id: ch.id || crypto.randomUUID(),
@@ -584,10 +589,10 @@ private[web] object Ics205Editor:
                   assignment: ch.assignment || '',
                   rx: String(rxFreq),
                   offset: String(offsetFreq),
-                  bandwidth: ch.bandwidth || 'Wide',
+                  bandwidth: enumName(ch.bandwidth, 'Wide'),
                   ctcssMode: ctcssMode,
                   ctcssFrequency: String(ctcssFreq),
-                  mode: ch.mode || 'Fm',
+                  mode: enumName(ch.mode, 'Fm'),
                   remarks: ch.remarks || ''
                 };
 
@@ -596,6 +601,12 @@ private[web] object Ics205Editor:
                   const field = control.dataset.field;
                   if (Object.hasOwn(rowValues, field)) {
                     control.value = rowValues[field];
+                  }
+                  // Tone option values look like "100.0" while JSON numbers print as "100"; match numerically.
+                  if (field === 'ctcssFrequency' && control.value === '' && rowValues.ctcssFrequency !== '') {
+                    const hz = Number(rowValues.ctcssFrequency);
+                    const match = [...control.options].find(o => o.value !== '' && Number(o.value) === hz);
+                    if (match) control.value = match.value;
                   }
                 });
                 rows.append(row);
@@ -633,7 +644,21 @@ private[web] object Ics205Editor:
       }
       form.addEventListener('input', changed);
       form.addEventListener('change', () => { refresh(); changed(); });
+      let invalidReported = false;
+      form.addEventListener('invalid', event => {
+        if (invalidReported) return;
+        invalidReported = true;
+        setTimeout(() => { invalidReported = false; }, 0);
+        const control = event.target;
+        const row = control.closest('.channel-row');
+        const where = row ? 'Channel ' + row.querySelector('.row-number').textContent + ', ' : '';
+        const caption = control.getAttribute('aria-label') || control.name;
+        showError('Not saved: ' + where + caption + ': ' + control.validationMessage);
+        if (control.hidden) control.hidden = false;
+        control.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      }, true);
       form.addEventListener('submit', () => {
+        hideError();
         refresh();
         dirty = false;
       });
