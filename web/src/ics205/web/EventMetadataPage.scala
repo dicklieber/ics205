@@ -74,6 +74,7 @@ object EventMetadataPage:
             ),
 
             form(method := "post", action := "/events/metadata")(
+              input(tpe := "hidden", name := "eventId", value := event.id),
               input(tpe := "hidden", name := "originalEventName", value := event.eventName),
               input(tpe := "hidden", name := "eventName", value := event.eventName),
 

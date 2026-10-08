@@ -29,7 +29,7 @@ import java.time.Instant
 object NavigationBar:
 
   enum ActivePage:
-    case Plan, Radio, ExportRadio, Events, UserAdmin, ChangePassword, Login, Logging, None
+    case Plan, Radio, ExportRadio, Events, UserAdmin, ChangePassword, Login, Logging, LoggingYaml, None
 
   private val aboutDialogClick: String =
     "const d = document.getElementById('about-dialog');" +
@@ -74,7 +74,7 @@ object NavigationBar:
     val showDebug = currentUser.exists(_.hasPermission(Permission.Debug))
     val isExportActive = activePage == ActivePage.ExportRadio
     val isEventsActive = activePage == ActivePage.Events
-    val isDebugActive = activePage == ActivePage.Logging
+    val isDebugActive = activePage == ActivePage.Logging || activePage == ActivePage.LoggingYaml
 
     frag(
       nav(
@@ -198,6 +198,12 @@ object NavigationBar:
                       cls := s"dropdown-item ${if activePage == ActivePage.Logging then "active" else ""}".trim,
                       href := "/debug/logging"
                     )("Logging Configuration")
+                  ),
+                  li(
+                    a(
+                      cls := s"dropdown-item ${if activePage == ActivePage.LoggingYaml then "active" else ""}".trim,
+                      href := "/debug/logging/yaml"
+                    )("Logging Configuration (YAML)")
                   ),
                   li(
                     a(

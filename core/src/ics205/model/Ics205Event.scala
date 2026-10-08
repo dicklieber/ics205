@@ -35,7 +35,7 @@ case class Ics205Event(id: EventId = Ids.generateId(),
 
   def bakFileName: String = s"$id-$UtcFormatter().$extension"
 
-  def eventName: String = if id.nonEmpty then id else ics205.incidentName
+  def eventName: String = if ics205.incidentName.nonEmpty then ics205.incidentName else id
 
   def canView(user: AuthenticatedUser): Boolean = metadata.canView(user)
 
@@ -66,6 +66,6 @@ object Ics205Event:
             ics205: Ics205): Ics205Event = new Ics205Event(id, ics205, Ics205Metadata())
 
   def apply(ics205: Ics205,
-            metadata: Ics205Metadata): Ics205Event = new Ics205Event(ics205.incidentName, ics205, metadata)
+            metadata: Ics205Metadata): Ics205Event = new Ics205Event(Ids.generateId(), ics205, metadata)
 
-  def apply(ics205: Ics205): Ics205Event = new Ics205Event(ics205.incidentName, ics205, Ics205Metadata())
+  def apply(ics205: Ics205): Ics205Event = new Ics205Event(Ids.generateId(), ics205, Ics205Metadata())

@@ -101,7 +101,7 @@ object EventsPage:
 
                       tr(
                         td(
-                          a(href := s"/?event=${encode(ev.eventName)}")(strong(ev.eventName)),
+                          a(href := s"/?event=${encode(ev.id)}")(strong(ev.eventName)),
                           if isSelected then
                             span(cls := "badge badge-active", style := "margin-left: 8px;")("Current")
                           else
@@ -118,10 +118,10 @@ object EventsPage:
                         td(cls := "event-actions")(
                           select(cls := "event-action-select", attr("aria-label") := s"Actions for ${ev.eventName}")(
                             option(value := "")("Actions…"),
-                            option(value := s"/events/export?name=${encode(ev.eventName)}")("Export"),
+                            option(value := s"/events/export?name=${encode(ev.id)}")("Export"),
                             if canEdit || isAdmin then
                               Seq[Modifier](
-                                option(value := s"/events/metadata?name=${encode(ev.eventName)}")("Metadata"),
+                                option(value := s"/events/metadata?name=${encode(ev.id)}")("Metadata"),
                                 option(value := "duplicate")("Duplicate")
                               )
                             else Seq.empty[Modifier],
@@ -130,6 +130,7 @@ object EventsPage:
                           if canEdit || isAdmin then
                             form(method := "post", action := "/events/duplicate", hidden,
                               attr("data-duplicate-name") := duplicateName)(
+                              input(tpe := "hidden", name := "eventId", value := ev.id),
                               input(tpe := "hidden", name := "eventName", value := ev.eventName),
                               input(tpe := "hidden", name := "newEventName")
                             )
@@ -137,6 +138,7 @@ object EventsPage:
                           if isAdmin then
                             form(method := "post", action := "/events/delete", hidden,
                               attr("data-confirm") := s"Are you sure you want to delete event '${ev.eventName}'?")(
+                              input(tpe := "hidden", name := "eventId", value := ev.id),
                               input(tpe := "hidden", name := "eventName", value := ev.eventName)
                             )
                           else span()

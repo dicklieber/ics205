@@ -169,3 +169,62 @@ class LoggingEndpointsTests extends munit.FunSuite:
 
       assertEquals(loggingStore.getLevel("ics205.util.FileHelper"), Some("WARN"))
     }
+
+  test("GET /debug/logging/yaml requires Debug permission and renders Log4j2 YAML Configuration"):
+    withContext { (_, _, userStore, _, passwordService, authService, _, _, _, app) =>
+      // Unauthorized
+      val unauthReq = Request[IO](Method.GET, Uri.unsafeFromString("/debug/logging/yaml"))
+      assertEquals(app.run(unauthReq).unsafeRunSync().status, Status.Unauthorized)
+
+      // Forbidden (viewer)
+      val hash = passwordService.hash("password")
+      userStore.add(User("viewer1", hash, Role.Viewer, enabled = true, id = "u-view"))
+      val viewSession = authService.authenticate("viewer1", "password").get
+      val viewReq = Request[IO](Method.GET, Uri.unsafeFromString("/debug/logging/yaml"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${viewSession.id}"))
+      assertEquals(app.run(viewReq).unsafeRunSync().status, Status.Forbidden)
+
+      // Admin
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
+      val adminSession = authService.authenticate("admin", "password").get
+      val adminReq = Request[IO](Method.GET, Uri.unsafeFromString("/debug/logging/yaml"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${adminSession.id}"))
+      val res = app.run(adminReq).unsafeRunSync()
+      assertEquals(res.status, Status.Ok)
+      val body = res.as[String].unsafeRunSync()
+      assert(body.contains("Log4j2 YAML Configuration"))
+      assert(body.contains("Configuration:"))
+      assert(body.contains("Appenders:"))
+      assert(body.contains("RollingFile:"))
+      assert(body.contains("ics205.log"))
+      assert(body.contains("ics205.exporter.RadioExportDefinitions"))
+      assert(body.contains("Copy YAML"))
+    }
+
+  test("GET /debug/logging.yaml and /api/debug/logging/yaml return raw YAML text"):
+    withContext { (_, _, userStore, _, passwordService, authService, _, loggingStore, _, app) =>
+      val hash = passwordService.hash("password")
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
+      val session = authService.authenticate("admin", "password").get
+
+      loggingStore.setLevel("ics205.util.FileHelper", "DEBUG")
+
+      // Test /debug/logging.yaml
+      val req1 = Request[IO](Method.GET, Uri.unsafeFromString("/debug/logging.yaml"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val res1 = app.run(req1).unsafeRunSync()
+      assertEquals(res1.status, Status.Ok)
+      val body1 = res1.as[String].unsafeRunSync()
+      assert(body1.contains("Configuration:"))
+      assert(body1.contains("ics205.util.FileHelper"))
+      assert(body1.contains("DEBUG"))
+
+      // Test /api/debug/logging/yaml
+      val req2 = Request[IO](Method.GET, Uri.unsafeFromString("/api/debug/logging/yaml"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val res2 = app.run(req2).unsafeRunSync()
+      assertEquals(res2.status, Status.Ok)
+      val body2 = res2.as[String].unsafeRunSync()
+      assert(body2.contains("Configuration:"))
+      assert(body2.contains("ics205.util.FileHelper"))
+    }

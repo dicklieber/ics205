@@ -57,6 +57,9 @@ object LoggingPage:
                 p(style := "color: #6b778c; margin-top: 4px;")(
                   "Select any class implementing LazyLogging, choose a log level, and persist changes to Locus.config."
                 )
+              ),
+              div(
+                a(href := "/debug/logging/yaml", cls := "btn btn-secondary")("View YAML Configuration")
               )
             ),
 

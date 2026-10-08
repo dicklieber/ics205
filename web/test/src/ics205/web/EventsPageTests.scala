@@ -45,10 +45,15 @@ class EventsPageTests extends munit.FunSuite:
     assert(html.contains("type=\"file\""), "Should contain file input")
 
   test("Event table links names, removes operational period, and suggests the next duplicate name"):
-    val event = Ics205Event("Field Day", Ics205(incidentName = "Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
-    val html = EventsPage.render(adminUser, Seq(event, event.copy(id = "Field Day (1)")))
+    val event = Ics205Event("Field Day", Ics205(incidentName = "Field Day", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+    val html = EventsPage.render(adminUser, Seq(event, event.copy(id = "Field Day (1)", ics205 = event.ics205.copy(incidentName = "Field Day (1)"))))
     assert(!html.contains("<th>Operational Period</th>"))
     assert(html.contains("href=\"/?event=Field+Day\"><strong>Field Day</strong></a>"))
     assert(html.contains("class=\"event-action-select\""))
     assert(html.contains("data-duplicate-name=\"Field Day (2)\""))
     assert(html.contains("action=\"/events/duplicate\""))
+
+  test("EventsPage links to event editor using event ID"):
+    val event = Ics205Event("ev-unique-id-777", Ics205(incidentName = "Grand Prix", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+    val html = EventsPage.render(adminUser, Seq(event))
+    assert(html.contains("href=\"/?event=ev-unique-id-777\"><strong>ev-unique-id-777</strong></a>"))

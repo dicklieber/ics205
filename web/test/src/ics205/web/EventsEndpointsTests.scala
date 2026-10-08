@@ -75,11 +75,11 @@ class EventsEndpointsTests extends munit.FunSuite:
 
       val res = routes.orNotFound.run(req).unsafeRunSync()
       assertEquals(res.status, Status.SeeOther)
-      assertEquals(sessionStore.get(session.id).flatMap(_.currentIcs205), Some("Winter Drill"))
-
-      val created = store.getEvent("Winter Drill")
+      val created = store.findByName("Winter Drill")
       assert(created.isDefined)
+      assertEquals(sessionStore.get(session.id).flatMap(_.currentIcs205), Some(created.get.id))
       assertEquals(created.get.ics205.incidentName, "Winter Drill 2026")
+      assertEquals(res.headers.get(org.typelevel.ci.CIString("Location")).map(_.head.value), Some(s"/?event=${java.net.URLEncoder.encode(created.get.id, "UTF-8")}&saved=1"))
     }
 
   test("GET /events/select selects active event and sets current event in session"):
@@ -373,4 +373,88 @@ class EventsEndpointsTests extends munit.FunSuite:
       val blank = duplicate("   ", adminSession.id)
       assert(blank.headers.get(CIString("Location")).get.head.value.contains("err="))
       assertEquals(store.events().size, 2)
+    }
+
+  test("POST / saves plan to store for existing event"):
+    withTestContext { (_, store, userStore, sessionStore, _, routes) =>
+      val passwordService = new ScalaPassPasswordService
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
+      val session = sessionStore.create(admin.id)
+
+      val originalPlan = Ics205(incidentName = "Field Day Original", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
+      store.save(Ics205Event("Field Day", originalPlan))
+
+      val fields = Ics205Form.fields(originalPlan)
+        .updated("eventName", "Field Day")
+        .updated("incidentName", "Field Day Updated")
+        .updated("specialInstructions", "Check repeaters")
+
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/?event=Field+Day"))
+        .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        .withEntity(UrlForm(fields.toSeq*))
+
+      val res = routes.orNotFound.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+
+      val savedEvent = store.findByName("Field Day")
+      assert(savedEvent.isDefined)
+      assertEquals(savedEvent.get.ics205.incidentName, "Field Day Updated")
+      assertEquals(savedEvent.get.ics205.specialInstructions, "Check repeaters")
+      assertEquals(savedEvent.get.metadata.lastEditedBy, Some(admin.id))
+    }
+
+  test("POST / saves plan when event has different ID from event name"):
+    withTestContext { (_, store, userStore, sessionStore, _, routes) =>
+      val passwordService = new ScalaPassPasswordService
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
+      val session = sessionStore.create(admin.id)
+
+      val originalPlan = Ics205(incidentName = "Custom Event", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
+      val customEvent = Ics205Event(
+        id = "custom-uuid-12345",
+        ics205 = originalPlan,
+        metadata = Ics205Metadata()
+      )
+      store.save(customEvent)
+
+      val fields = Ics205Form.fields(originalPlan)
+        .updated("eventId", "custom-uuid-12345")
+        .updated("eventName", "Custom Event")
+        .updated("incidentName", "Custom Event Modified")
+
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/?event=custom-uuid-12345"))
+        .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        .withEntity(UrlForm(fields.toSeq*))
+
+      val res = routes.orNotFound.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+      assertEquals(res.headers.get(CIString("Location")).map(_.head.value), Some("/?saved=1&event=custom-uuid-12345"))
+
+      val savedEvent = store.getEvent("custom-uuid-12345")
+      assert(savedEvent.isDefined)
+      assertEquals(savedEvent.get.ics205.incidentName, "Custom Event Modified")
+    }
+
+  test("GET /?event=<id> renders editor referencing event by id"):
+    withTestContext { (_, store, userStore, sessionStore, _, routes) =>
+      val passwordService = new ScalaPassPasswordService
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
+      val session = sessionStore.create(admin.id)
+
+      val plan = Ics205(incidentName = "Special Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
+      val event = Ics205Event(
+        id = "ev-drill-999",
+        ics205 = plan,
+        metadata = Ics205Metadata()
+      )
+      store.save(event)
+
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/?event=ev-drill-999"))
+        .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+
+      val res = routes.orNotFound.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.Ok)
+      val html = res.as[String].unsafeRunSync()
+      assert(html.contains("action=\"/?event=ev-drill-999\""))
+      assert(html.contains("name=\"eventId\" value=\"ev-drill-999\""))
     }

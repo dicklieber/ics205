@@ -95,3 +95,17 @@ class LoggingConfigTests extends munit.FunSuite:
           case None => sys.props.remove("log4j.configurationFile")
     finally
       os.remove.all(tempDir)
+
+  test("toYaml renders Log4j2 configuration structure and handles configured dynamic loggers"):
+    val yamlWithoutDynamic = LoggingConfig.toYaml()
+    assert(yamlWithoutDynamic.contains("Configuration:"))
+    assert(yamlWithoutDynamic.contains("name: ICS205"))
+    assert(yamlWithoutDynamic.contains("Console:"))
+    assert(yamlWithoutDynamic.contains("RollingFile:"))
+    assert(yamlWithoutDynamic.contains("ics205.exporter.RadioExportDefinitions"))
+    assert(yamlWithoutDynamic.contains("ics205.web.HttpAccessLog"))
+    assert(yamlWithoutDynamic.contains("AccessLog"))
+
+    val yamlWithDynamic = LoggingConfig.toYaml(Map("ics205.test.CustomLogger" -> "DEBUG"))
+    assert(yamlWithDynamic.contains("name: ics205.test.CustomLogger"))
+    assert(yamlWithDynamic.contains("level: DEBUG"))

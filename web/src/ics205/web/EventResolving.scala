@@ -31,8 +31,8 @@ trait EventResolving:
   ): (Option[Ics205Event], Seq[Ics205Event]) =
     val allEvents = store.listEvents()
     val authorizedEvents = if user.role == Role.Admin then allEvents else allEvents.filter(_.canView(user))
-    val chosenEvent = eventQuery.filter(_.nonEmpty).flatMap(store.getEvent)
-      .orElse(user.session.currentIcs205.flatMap(store.getEvent))
+    val chosenEvent = eventQuery.filter(_.nonEmpty).flatMap(store.findByName)
+      .orElse(user.session.currentIcs205.flatMap(store.findByName))
       .orElse(authorizedEvents.headOption)
     (chosenEvent, authorizedEvents)
 

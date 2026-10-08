@@ -63,15 +63,6 @@ import scala.collection.concurrent.TrieMap
         Some(event)
 
 
-//
-//  def insertTimestamp(fileName: String,
-//                      timestamp: TemporalAccessor = Instant.now()): String = Ics205Store.insertTimestamp(fileName,
-//    timestamp)
-//
-//  def timestampedFileName(fileName: String,
-//                          timestamp: TemporalAccessor = Instant.now()): String = Ics205Store.timestampedFileName(
-//    fileName,
-//    timestamp)
 
   def save(event: Ics205Event,
            authenticatedUser: AuthenticatedUser): Unit = synchronized { // add to in-memory store
@@ -100,6 +91,17 @@ import scala.collection.concurrent.TrieMap
       .over(path,
         event.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true)),
         createFolders = true)
+  }
+
+  def save(ics205: Ics205): Unit = synchronized {
+    val ev = currentEvent().getOrElse(Ics205Event(ics205 = ics205))
+    save(ev.copy(ics205 = ics205))
+  }
+
+  def save(ics205: Ics205,
+           authenticatedUser: AuthenticatedUser): Unit = synchronized {
+    val ev = currentEvent().getOrElse(Ics205Event(ics205 = ics205))
+    save(ev.copy(ics205 = ics205), authenticatedUser)
   }
 
 

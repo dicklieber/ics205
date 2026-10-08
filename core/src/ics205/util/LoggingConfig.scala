@@ -137,6 +137,85 @@ object LoggingConfig extends LazyLogging:
     builder.build()
 
   /**
+   * Renders the current Log4j2 configuration as YAML.
+   *
+   * @param configuredLoggers optional map of custom logger names to configured log levels
+   * @return YAML string representing the Log4j2 configuration
+   */
+  def toYaml(configuredLoggers: Map[String, String] = Map.empty): String =
+    val staticLoggers = Seq(
+      ("ics205.exporter.RadioExportDefinitions", "DEBUG", true, Seq.empty[String]),
+      ("ics205.web.HttpAccessLog", "INFO", false, Seq("AccessLog"))
+    )
+    val dynamicLoggers = configuredLoggers.toSeq.sortBy(_._1).filterNot(l => staticLoggers.exists(_._1 == l._1)).map {
+      case (name, level) => (name, level, true, Seq.empty[String])
+    }
+    val allLoggers = staticLoggers ++ dynamicLoggers
+
+    val loggersYaml = allLoggers.map { case (name, level, additivity, appenderRefs) =>
+      val sb = new StringBuilder()
+      sb.append(s"      - name: $name\n")
+      sb.append(s"        level: $level")
+      if !additivity then
+        sb.append(s"\n        additivity: false")
+      if appenderRefs.nonEmpty then
+        sb.append(s"\n        AppenderRef:")
+        appenderRefs.foreach { ref =>
+          sb.append(s"\n          - ref: $ref")
+        }
+      sb.toString()
+    }.mkString("\n\n")
+
+    s"""Configuration:
+       |  name: ICS205
+       |  status: WARN
+       |
+       |  Appenders:
+       |    Console:
+       |      name: Console
+       |      target: SYSTEM_OUT
+       |      PatternLayout:
+       |        pattern: "$consolePattern"
+       |
+       |    RollingFile:
+       |      - name: File
+       |        fileName: "$${fileHelper:logDir}/ics205.log"
+       |        filePattern: "$${fileHelper:logDir}/ics205-%d{yyyy-MM-dd}-%i.log.gz"
+       |        PatternLayout:
+       |          pattern: "$filePattern"
+       |        Policies:
+       |          SizeBasedTriggeringPolicy:
+       |            size: "10MB"
+       |          TimeBasedTriggeringPolicy:
+       |            interval: 1
+       |        DefaultRolloverStrategy:
+       |          max: 10
+       |
+       |      - name: AccessLog
+       |        fileName: "$${fileHelper:logDir}/access.log"
+       |        filePattern: "$${fileHelper:logDir}/access-%d{yyyy-MM-dd}-%i.log.gz"
+       |        PatternLayout:
+       |          pattern: "$accessPattern"
+       |        Policies:
+       |          SizeBasedTriggeringPolicy:
+       |            size: "10MB"
+       |          TimeBasedTriggeringPolicy:
+       |            interval: 1
+       |        DefaultRolloverStrategy:
+       |          max: 10
+       |
+       |  Loggers:
+       |    Root:
+       |      level: INFO
+       |      AppenderRef:
+       |        - ref: Console
+       |        - ref: File
+       |
+       |    Logger:
+       |$loggersYaml
+       |""".stripMargin
+
+  /**
    * Initializes or reconfigures Log4j2 logging.
    * If an explicit configuration file is provided via system property or environment variable,
    * that configuration file is used. Otherwise, the programmatic Scala configuration is applied.

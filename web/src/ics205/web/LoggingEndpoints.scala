@@ -21,8 +21,8 @@ package ics205.web
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.Permission
-import ics205.util.{LazyLoggingDiscoverer, LoggingStore}
-import ics205.web.admin.LoggingPage
+import ics205.util.{LazyLoggingDiscoverer, LoggingConfig, LoggingStore}
+import ics205.web.admin.{LoggingPage, LoggingYamlPage}
 import ics205.web.auth.AuthSecurity
 import io.circe.Codec
 import jakarta.inject.{Inject, Singleton}
@@ -158,10 +158,52 @@ class LoggingEndpoints @Inject()(
         }
       }
 
+  private val getLoggingYamlPageEndpoint: ServerEndpoint[Any, IO] =
+    security.authorizedEndpoint(Permission.Debug)
+      .get
+      .in("debug" / "logging" / "yaml")
+      .out(htmlBodyUtf8)
+      .serverLogicSuccess { user => _ =>
+        IO.blocking {
+          val configured = loggingStore.getAllConfigured()
+          val yaml = LoggingConfig.toYaml(configured)
+          LoggingYamlPage.render(Some(user), yaml)
+        }
+      }
+
+  private val getLoggingYamlFileEndpoint: ServerEndpoint[Any, IO] =
+    security.authorizedEndpoint(Permission.Debug)
+      .get
+      .in("debug" / "logging.yaml")
+      .out(header[String]("Content-Type").and(stringBody))
+      .serverLogicSuccess { _ => _ =>
+        IO.blocking {
+          val configured = loggingStore.getAllConfigured()
+          val yaml = LoggingConfig.toYaml(configured)
+          ("text/yaml; charset=utf-8", yaml)
+        }
+      }
+
+  private val apiGetLoggingYamlEndpoint: ServerEndpoint[Any, IO] =
+    security.authorizedEndpoint(Permission.Debug)
+      .get
+      .in("api" / "debug" / "logging" / "yaml")
+      .out(header[String]("Content-Type").and(stringBody))
+      .serverLogicSuccess { _ => _ =>
+        IO.blocking {
+          val configured = loggingStore.getAllConfigured()
+          val yaml = LoggingConfig.toYaml(configured)
+          ("text/yaml; charset=utf-8", yaml)
+        }
+      }
+
   override val endpoints: List[ServerEndpoint[Any, IO]] =
     List(
       getLoggingEndpoint,
       postLoggingEndpoint,
+      getLoggingYamlPageEndpoint,
+      getLoggingYamlFileEndpoint,
       apiGetLoggingEndpoint,
-      apiSetLevelEndpoint
+      apiSetLevelEndpoint,
+      apiGetLoggingYamlEndpoint
     )

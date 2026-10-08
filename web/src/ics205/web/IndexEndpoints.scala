@@ -23,6 +23,7 @@ import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, Permis
 import ics205.log.Ics205ActivityLogger
 import ics205.model.{Ics205, Ics205Event, Ics205Metadata, OperationalPeriod}
 import ics205.store.{Ics205Store, SessionStore, UserStore}
+import ics205.util.Ids
 import ics205.web.auth.AuthSecurity
 import io.circe.syntax.*
 import jakarta.inject.{Inject, Singleton}
@@ -105,6 +106,9 @@ class IndexEndpoints @Inject() (
               case Some(currentEvent) =>
                 if !currentEvent.canView(user) && user.role != Role.Admin then
                   (StatusCode.Forbidden, None, "You do not have permission to view this event.")
+                else if eventQueryOpt.exists(_ != currentEvent.id) then
+                  val savedParam = if saved.contains("1") then "&saved=1" else ""
+                  (StatusCode.SeeOther, Some(s"/?event=${encode(currentEvent.id)}$savedParam"), "")
                 else
                   (
                     StatusCode.Ok,
@@ -115,6 +119,7 @@ class IndexEndpoints @Inject() (
                       currentUser = Some(user),
                       metadata = Some(currentEvent.metadata),
                       currentEventName = Some(currentEvent.eventName),
+                      currentEventId = Some(currentEvent.id),
                       availableEvents = authorizedEvents.map(_.eventName)
                     )
                   )
@@ -129,13 +134,52 @@ class IndexEndpoints @Inject() (
     .out(statusCode.and(header[Option[String]]("Location")).and(htmlBodyUtf8))
     .serverLogicSuccess { user => (eventQueryOpt, data) =>
       IO.blocking {
-        val targetName = data.get("eventName").filter(_.nonEmpty)
+        val targetName = data.get("eventId").filter(_.nonEmpty)
+          .orElse(data.get("eventName").filter(_.nonEmpty))
           .orElse(eventQueryOpt.filter(_.nonEmpty))
         val (currentEventOpt, authorizedEvents) = resolveEvent(targetName, user)
 
         currentEventOpt match
           case None =>
-            (StatusCode.SeeOther, Some("/events"), "")
+            val eventName = targetName.getOrElse(data.getOrElse("incidentName", "Default Event")).trim
+            val effectiveName = if eventName.isEmpty then "Default Event" else eventName
+            Ics205Form.decode(data, Ics205(incidentName = effectiveName, operationalPeriod = OperationalPeriod(), channels = Seq.empty)) match
+              case Left(message) =>
+                (StatusCode.SeeOther, Some("/events"), "")
+              case Right(plan) =>
+                try
+                  val newEvent = Ics205Event(
+                    id = Ids.generateId(),
+                    ics205 = plan,
+                    metadata = Ics205Metadata()
+                  )
+                  store.save(newEvent, user)
+                  sessionStore.save(user.session.copy(currentIcs205 = Some(newEvent.id)))
+                  Ics205ActivityLogger.logUpdate(
+                    username = user.user.username,
+                    eventName = newEvent.eventName,
+                    incidentName = Option(plan.incidentName).filter(_.nonEmpty),
+                    channelCount = Some(plan.channels.size),
+                    action = Some("save")
+                  )
+                  val redirectUrl = s"/?saved=1&event=${encode(newEvent.id)}"
+                  (StatusCode.SeeOther, Some(redirectUrl), "")
+                catch
+                  case _: java.io.IOException =>
+                    (
+                      StatusCode.InternalServerError,
+                      None,
+                      Ics205Editor.render(
+                        plan = plan,
+                        submitted = Some(data),
+                        error = Some("The plan could not be saved. Check that the data directory is writable and try again."),
+                        currentUser = Some(user),
+                        metadata = Some(Ics205Metadata()),
+                        currentEventName = Some(effectiveName),
+                        currentEventId = Some(effectiveName),
+                        availableEvents = authorizedEvents.map(_.eventName)
+                      )
+                    )
           case Some(currentEvent) =>
             if !currentEvent.canEdit(user) && user.role != Role.Admin then
               (
@@ -147,6 +191,7 @@ class IndexEndpoints @Inject() (
                   currentUser = Some(user),
                   metadata = Some(currentEvent.metadata),
                   currentEventName = Some(currentEvent.eventName),
+                  currentEventId = Some(currentEvent.id),
                   availableEvents = authorizedEvents.map(_.eventName)
                 )
               )
@@ -163,6 +208,7 @@ class IndexEndpoints @Inject() (
                       currentUser = Some(user),
                       metadata = Some(currentEvent.metadata),
                       currentEventName = Some(currentEvent.eventName),
+                      currentEventId = Some(currentEvent.id),
                       availableEvents = authorizedEvents.map(_.eventName)
                     )
                   )
@@ -177,7 +223,7 @@ class IndexEndpoints @Inject() (
                       channelCount = Some(plan.channels.size),
                       action = Some("save")
                     )
-                    val redirectUrl = s"/?saved=1&event=${encode(currentEvent.eventName)}"
+                    val redirectUrl = s"/?saved=1&event=${encode(currentEvent.id)}"
                     (StatusCode.SeeOther, Some(redirectUrl), "")
                   catch
                     case _: java.io.IOException =>
@@ -191,6 +237,7 @@ class IndexEndpoints @Inject() (
                           currentUser = Some(user),
                           metadata = Some(currentEvent.metadata),
                           currentEventName = Some(currentEvent.eventName),
+                          currentEventId = Some(currentEvent.id),
                           availableEvents = authorizedEvents.map(_.eventName)
                         )
                       )
@@ -205,7 +252,8 @@ class IndexEndpoints @Inject() (
     .out(statusCode.and(header[Option[String]]("Location")).and(htmlBodyUtf8))
     .serverLogicSuccess { user => (eventQueryOpt, data) =>
       IO.blocking {
-        val targetName = data.get("eventName").filter(_.nonEmpty)
+        val targetName = data.get("eventId").filter(_.nonEmpty)
+          .orElse(data.get("eventName").filter(_.nonEmpty))
           .orElse(eventQueryOpt.filter(_.nonEmpty))
         val (currentEventOpt, _) = resolveEvent(targetName, user)
 
@@ -226,6 +274,7 @@ class IndexEndpoints @Inject() (
                     currentUser = Some(user),
                     metadata = Some(currentEvent.metadata),
                     currentEventName = Some(currentEvent.eventName),
+                    currentEventId = Some(currentEvent.id),
                     availableEvents = authorizedEvents.map(_.eventName)
                   )
                 )
@@ -272,7 +321,7 @@ class IndexEndpoints @Inject() (
       IO.blocking {
         val allEvents = store.listEvents()
         val visibleEvents = if user.role == Role.Admin then allEvents else allEvents.filter(_.canView(user))
-        val currentEventName = user.session.currentIcs205.flatMap(store.getEvent).map(_.eventName).orElse(user.session.currentIcs205)
+        val currentEventName = user.session.currentIcs205.flatMap(store.findByName).map(_.eventName).orElse(user.session.currentIcs205)
         val html = EventsPage.render(
           currentUser = user,
           events = visibleEvents,
@@ -294,7 +343,7 @@ class IndexEndpoints @Inject() (
       IO.blocking {
         nameOpt match
           case Some(name) =>
-            store.getEvent(name) match
+            store.findByName(name) match
               case Some(ev) if ev.canView(user) || user.role == Role.Admin =>
                 sessionStore.save(user.session.copy(currentIcs205 = Some(ev.id)))
                 val target = returnUrlOpt.getOrElse("/")
@@ -325,7 +374,7 @@ class IndexEndpoints @Inject() (
             (StatusCode.SeeOther, "/events?err=Event+name+cannot+be+empty", "")
           else
             val newEvent = Ics205Event(
-              id = eventName,
+              id = Ids.generateId(),
               ics205 = Ics205(incidentName = incidentName, operationalPeriod = OperationalPeriod(), channels = Seq.empty),
               metadata = Ics205Metadata()
             )
@@ -338,7 +387,7 @@ class IndexEndpoints @Inject() (
               channelCount = Some(newEvent.ics205.channels.size),
               action = Some("create")
             )
-            (StatusCode.SeeOther, s"/?event=${encode(newEvent.eventName)}&saved=1", "")
+            (StatusCode.SeeOther, s"/?event=${encode(newEvent.id)}&saved=1", "")
       }
     }
 
@@ -352,7 +401,7 @@ class IndexEndpoints @Inject() (
     .serverLogicSuccess { user => (nameOpt, msg, err) =>
       IO.blocking {
         val targetName = nameOpt.filter(_.nonEmpty).orElse(user.session.currentIcs205).getOrElse("")
-        store.getEvent(targetName) match
+        store.findByName(targetName) match
           case None =>
             (StatusCode.SeeOther, Some("/events?err=Event+not+found"), "")
           case Some(ev) =>
@@ -380,20 +429,21 @@ class IndexEndpoints @Inject() (
     .out(statusCode.and(header[String]("Location")).and(htmlBodyUtf8))
     .serverLogicSuccess { user => formData =>
       IO.blocking {
-        val origName = formData.get("originalEventName").filter(_.nonEmpty)
+        val origTarget = formData.get("eventId").filter(_.nonEmpty)
+          .orElse(formData.get("originalEventName").filter(_.nonEmpty))
           .orElse(formData.get("eventName").filter(_.nonEmpty))
           .getOrElse("").trim
-        val newName = formData.getOrElse("newEventName", origName).trim
+        val newName = formData.getOrElse("newEventName", origTarget).trim
         val incidentName = formData.getOrElse("incidentName", "").trim
 
-        store.getEvent(origName) match
+        store.findByName(origTarget) match
           case None =>
             (StatusCode.SeeOther, "/events?err=Event+not+found", "")
           case Some(ev) =>
             if user.role != Role.Admin && !ev.canEdit(user) then
               (StatusCode.Forbidden, "/events", "You do not have permission to edit metadata for this event.")
             else if newName.isEmpty then
-              (StatusCode.SeeOther, s"/events/metadata?name=${encode(origName)}&err=Event+name+cannot+be+empty", "")
+              (StatusCode.SeeOther, s"/events/metadata?name=${encode(ev.id)}&err=Event+name+cannot+be+empty", "")
             else
               val allUsers = userStore.all()
               val newPermissions = allUsers.flatMap { u =>
@@ -404,21 +454,21 @@ class IndexEndpoints @Inject() (
                 }
               }.toMap
 
-              val updatedPlan = ev.ics205.copy(incidentName = incidentName)
+              val updatedPlan = ev.ics205.copy(incidentName = if incidentName.nonEmpty then incidentName else newName)
               val updatedMetadata = ev.metadata.copy(
                 permissions = newPermissions,
                 lastEditedBy = Some(user.user.id),
                 savedAt = Instant.now()
               )
-              val finalEvent = if !newName.equalsIgnoreCase(origName) then
-                store.deleteEvent(origName, user)
+              val finalEvent = if !newName.equalsIgnoreCase(origTarget) && ev.id.equalsIgnoreCase(origTarget) then
+                store.deleteEvent(origTarget, user)
                 ev.copy(id = newName, ics205 = updatedPlan, metadata = updatedMetadata)
               else
                 ev.copy(ics205 = updatedPlan, metadata = updatedMetadata)
 
               store.save(finalEvent, user)
-              if !newName.equalsIgnoreCase(origName) && user.session.currentIcs205.contains(origName) then
-                sessionStore.save(user.session.copy(currentIcs205 = Some(newName)))
+              if !newName.equalsIgnoreCase(origTarget) && user.session.currentIcs205.contains(origTarget) then
+                sessionStore.save(user.session.copy(currentIcs205 = Some(finalEvent.id)))
 
               Ics205ActivityLogger.logUpdate(
                 username = user.user.username,
@@ -428,7 +478,7 @@ class IndexEndpoints @Inject() (
                 action = Some("metadata")
               )
 
-              (StatusCode.SeeOther, s"/events/metadata?name=${encode(newName)}&msg=Metadata+updated+successfully", "")
+              (StatusCode.SeeOther, s"/events/metadata?name=${encode(finalEvent.id)}&msg=Metadata+updated+successfully", "")
       }
     }
 
@@ -445,7 +495,7 @@ class IndexEndpoints @Inject() (
     .serverLogicSuccess { user => nameOpt =>
       IO.blocking {
         val targetName = nameOpt.filter(_.nonEmpty).orElse(user.session.currentIcs205).getOrElse("")
-        store.getEvent(targetName) match
+        store.findByName(targetName) match
           case None =>
             (StatusCode.SeeOther, Some("/events?err=Event+not+found"), "text/plain", None, "no-store", "")
           case Some(ev) =>
@@ -490,13 +540,7 @@ class IndexEndpoints @Inject() (
                 (StatusCode.SeeOther, s"/events?err=${encode(s"Failed to parse event JSON: $err")}", "")
               case Right(parsedEvent) =>
                 val baseName = parsedEvent.eventName
-                val finalName = if store.getEvent(baseName).isDefined || store.listEvents().exists(_.eventName.equalsIgnoreCase(baseName)) then
-                  var counter = 1
-                  while store.getEvent(s"$baseName ($counter)").isDefined || store.listEvents().exists(_.eventName.equalsIgnoreCase(s"$baseName ($counter)")) do
-                    counter += 1
-                  s"$baseName ($counter)"
-                else
-                  baseName
+                val finalName = store.uniqueEventName(baseName)
                 val toSave = parsedEvent.copy(id = finalName)
                 store.save(toSave, user)
                 sessionStore.save(user.session.copy(currentIcs205 = Some(toSave.id)))
@@ -518,7 +562,10 @@ class IndexEndpoints @Inject() (
     .out(statusCode.and(header[String]("Location")).and(htmlBodyUtf8))
     .serverLogicSuccess { user => formData =>
       IO.blocking {
-        store.getEvent(formData.getOrElse("eventName", "").trim) match
+        val target = formData.get("eventId").filter(_.nonEmpty)
+          .orElse(formData.get("eventName").filter(_.nonEmpty))
+          .getOrElse("").trim
+        store.findByName(target) match
           case None => (StatusCode.SeeOther, "/events?err=Event+not+found", "")
           case Some(ev) if user.role != Role.Admin && !ev.canEdit(user) =>
             (StatusCode.Forbidden, "/events", "You do not have permission to duplicate this event.")
@@ -526,11 +573,12 @@ class IndexEndpoints @Inject() (
             val newName = formData.getOrElse("newEventName", "").trim
             if newName.isEmpty then
               (StatusCode.SeeOther, "/events?err=Event+name+cannot+be+empty", "")
-            else if store.getEvent(newName).isDefined || store.listEvents().exists(_.eventName.equalsIgnoreCase(newName)) then
+            else if store.findByName(newName).isDefined then
               (StatusCode.SeeOther, s"/events?err=Event+'${encode(newName)}'+already+exists", "")
             else
               val duplicate = ev.copy(
-                id = newName,
+                id = Ids.generateId(),
+                ics205 = ev.ics205.copy(incidentName = newName),
                 metadata = ev.metadata.copy(lastEditedBy = Some(user.user.id), savedAt = Instant.now())
               )
               store.save(duplicate, user)
@@ -542,7 +590,7 @@ class IndexEndpoints @Inject() (
                 channelCount = Some(duplicate.ics205.channels.size),
                 action = Some("duplicate")
               )
-              (StatusCode.SeeOther, s"/?event=${encode(duplicate.eventName)}", "")
+              (StatusCode.SeeOther, s"/?event=${encode(duplicate.id)}", "")
       }
     }
 
@@ -556,19 +604,22 @@ class IndexEndpoints @Inject() (
         if user.role != Role.Admin then
           (StatusCode.Forbidden, "/events", "Only administrators can delete events.")
         else
-          val eventName = formData.getOrElse("eventName", "").trim
-          if eventName.isEmpty then
+          val target = formData.get("eventId").filter(_.nonEmpty)
+            .orElse(formData.get("eventName").filter(_.nonEmpty))
+            .getOrElse("").trim
+          val displayName = formData.get("eventName").filter(_.nonEmpty).getOrElse(target)
+          if target.isEmpty then
             (StatusCode.SeeOther, "/events?err=Cannot+delete+unnamed+event", "")
           else
-            if store.deleteEvent(eventName, user) then
-              if user.session.currentIcs205.contains(eventName) then
+            if store.deleteEvent(target, user) then
+              if user.session.currentIcs205.contains(target) then
                 sessionStore.save(user.session.copy(currentIcs205 = None))
               Ics205ActivityLogger.logUpdate(
                 username = user.user.username,
-                eventName = eventName,
+                eventName = displayName,
                 action = Some("delete")
               )
-              (StatusCode.SeeOther, s"/events?msg=Event+'${encode(eventName)}'+deleted+successfully", "")
+              (StatusCode.SeeOther, s"/events?msg=Event+'${encode(displayName)}'+deleted+successfully", "")
             else
               (StatusCode.SeeOther, "/events?err=Event+not+found", "")
       }

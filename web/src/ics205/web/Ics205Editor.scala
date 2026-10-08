@@ -28,12 +28,14 @@ private[web] object Ics205Editor:
              currentUser: Option[AuthenticatedUser] = None,
              metadata: Option[Ics205Metadata] = None,
              currentEventName: Option[String] = None,
+             currentEventId: Option[String] = None,
              availableEvents: Seq[String] = Seq.empty,
              message: Option[String] = None): String =
     val canEdit = currentUser.exists(u => metadata.map(_.canEdit(u)).getOrElse(u.hasPermission(Permission.EditPlans)))
     val values = submitted.getOrElse(Ics205Form.fields(plan))
     val count = values.get("rowCount").flatMap(_.toIntOption).filter(n => n >= 0 && n <= 1000).getOrElse(0)
-    val formAction = currentEventName.filter(_.nonEmpty).map(n => s"/?event=${java.net.URLEncoder.encode(n, "UTF-8")}").getOrElse("/")
+    val effectiveEventId = currentEventId.orElse(currentEventName)
+    val formAction = effectiveEventId.filter(_.nonEmpty).map(id => s"/?event=${java.net.URLEncoder.encode(id, "UTF-8")}").getOrElse("/")
     val successMessage = message.orElse(if saved then Some("Plan saved.") else None)
     def field(key: String, caption: String, kind: String = "text"): Frag =
       label(caption, input(name := key, attr("aria-label") := caption, tpe := kind,
@@ -57,6 +59,7 @@ private[web] object Ics205Editor:
           availableEvents = availableEvents
         ),
         form(id := "plan-form", method := "post", action := formAction, attr("data-unsaved") := (canEdit && submitted.isDefined).toString)(
+          input(tpe := "hidden", name := "eventId", value := currentEventId.getOrElse("")),
           input(tpe := "hidden", name := "eventName", value := currentEventName.getOrElse("")),
           div(cls := "toolbar")(
             button(tpe := "submit", cls := "btn btn-primary", if !canEdit then disabled else ())("Save plan"),
@@ -282,8 +285,9 @@ private[web] object Ics205Editor:
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
+          const eventIdInput = document.querySelector('[name=eventId]');
           const eventNameInput = document.querySelector('[name=eventName]');
-          const currentEventName = eventNameInput ? eventNameInput.value : '';
+          const currentEventName = (eventNameInput && eventNameInput.value) ? eventNameInput.value : (eventIdInput ? eventIdInput.value : '');
           fetch('/export/log', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -600,8 +604,9 @@ private[web] object Ics205Editor:
               refresh();
               changed();
               status.textContent = 'Unsaved changes (imported ' + file.name + ')';
+              const eventIdInput = form.querySelector('[name=eventId]');
               const eventNameInput = form.querySelector('[name=eventName]');
-              const currentEventName = eventNameInput ? eventNameInput.value : '';
+              const currentEventName = (eventNameInput && eventNameInput.value) ? eventNameInput.value : (eventIdInput ? eventIdInput.value : '');
               fetch('/import/log', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
