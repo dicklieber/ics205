@@ -34,6 +34,21 @@ object core extends ScalaModule with BuildInfo with ScoverageModule:
   def scoverageVersion = "2.3.0"
   def versionFile = Task.Source(moduleDir / os.up / "version.txt")
   def buildInfoPackageName = "ics205"
+  // Task.Input is re-evaluated on every build, so the timestamp is always fresh.
+  def buildTime = Task.Input { java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString }
+  // e.g. "Ubuntu 24.04.1 LTS", "Debian GNU/Linux 12 (bookworm)", "Mac OS X 15.1", "Windows 11 10.0".
+  // Linux reports only "Linux" + kernel version via os.name, so prefer the distro's PRETTY_NAME.
+  def buildOs = Task.Input {
+    val osRelease = os.Path("/etc/os-release")
+    val distro =
+      if os.exists(osRelease) then
+        os.read.lines(osRelease).collectFirst {
+          case line if line.startsWith("PRETTY_NAME=") =>
+            line.stripPrefix("PRETTY_NAME=").stripPrefix("\"").stripSuffix("\"")
+        }
+      else None
+    distro.getOrElse(s"${System.getProperty("os.name")} ${System.getProperty("os.version")}")
+  }
   def buildInfoMembers = Task {
     Seq(
       BuildInfo.Value("name", "ICS-205"),
@@ -41,7 +56,9 @@ object core extends ScalaModule with BuildInfo with ScoverageModule:
       BuildInfo.Value("productName", "ics205"),
       BuildInfo.Value("version", os.read(versionFile().path).trim),
       BuildInfo.Value("scalaVersion", scalaVersion()),
-      BuildInfo.Value("millVersion", mill.constants.BuildInfo.millVersion)
+      BuildInfo.Value("millVersion", mill.constants.BuildInfo.millVersion),
+      BuildInfo.Value("buildTime", buildTime()),
+      BuildInfo.Value("buildOs", buildOs())
     )
   }
   def mvnDeps = Seq(

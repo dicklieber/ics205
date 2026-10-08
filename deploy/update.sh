@@ -9,17 +9,16 @@
 # Examples:
 #   ./deploy/update.sh ics-server.local
 #   ./deploy/update.sh ubuntu@192.168.1.100 -p 2222
-#   ./deploy/update.sh --build admin@production.server
+#   ./deploy/update.sh --version 0.0.1 admin@production.server
 #
 
 set -euo pipefail
 
-# Determine repository root directory
+# Determine script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-# Default settings
-DEFAULT_JAR_PATH="${REPO_ROOT}/out/web/assembly.dest/out.jar"
+# Release settings
+GITHUB_REPO="dlieber/ics205"
 DEFAULT_SERVICE_PATH="${SCRIPT_DIR}/ics205.service"
 DEFAULT_LOG4J_PATH=""
 REMOTE_USER="ics205"
@@ -35,11 +34,11 @@ SERVICE_NAME="ics205.service"
 TARGET_HOST=""
 SSH_PORT=""
 SSH_KEY=""
-JAR_PATH="${DEFAULT_JAR_PATH}"
+VERSION=""
+JAR_PATH=""
 SERVICE_PATH="${DEFAULT_SERVICE_PATH}"
 LOG4J_PATH="${DEFAULT_LOG4J_PATH}"
 UPDATE_SERVICE=false
-DO_BUILD=false
 RESTART_SERVICE=true
 
 print_usage() {
@@ -52,8 +51,7 @@ Arguments:
   [user@]hostname         Remote target SSH host (e.g. ubuntu@192.168.1.50)
 
 Options:
-  -b, --build             Build the fat JAR (./mill web.assembly) before deploying
-  -j, --jar <path>        Custom local JAR path (default: out/web/assembly.dest/out.jar)
+  -v, --version <ver>     Install a specific release (e.g. 0.0.1); default: latest
   -s, --sync-service      Also update /etc/systemd/system/ics205.service and daemon-reload
   -l, --log-config <path> Custom log4j2.yaml path (default: web/resources/log4j2.yaml)
   -p, --port <port>       SSH port on the remote host (default: 22)
@@ -71,12 +69,8 @@ while [[ $# -gt 0 ]]; do
       print_usage
       exit 0
       ;;
-    -b|--build)
-      DO_BUILD=true
-      shift
-      ;;
-    -j|--jar)
-      JAR_PATH="$2"
+    -v|--version)
+      VERSION="$2"
       shift 2
       ;;
     -s|--sync-service)
@@ -123,25 +117,50 @@ if [[ -z "${TARGET_HOST}" ]]; then
   exit 1
 fi
 
-# Build fat JAR if requested or if missing and in repo root
-if [[ "${DO_BUILD}" == true ]] || [[ ! -f "${JAR_PATH}" ]]; then
-  if [[ ! -f "${JAR_PATH}" ]]; then
-    echo "Assembly fat JAR not found at: ${JAR_PATH}"
+# Download the published release JAR and verify its SHA-256 checksum.
+command -v curl >/dev/null 2>&1 || {
+  echo "Error: curl is required." >&2
+  exit 1
+}
+
+DOWNLOAD_DIR="$(mktemp -d)"
+cleanup_download() {
+  rm -rf "${DOWNLOAD_DIR:-}"
+}
+trap cleanup_download EXIT
+
+if [[ -n "${VERSION}" ]]; then
+  VERSION="${VERSION#v}"
+  if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Error: --version must be X.Y.Z (for example 0.0.1)." >&2
+    exit 1
   fi
-  echo "Building fat JAR with Mill (./mill web.assembly)..."
-  (cd "${REPO_ROOT}" && ./mill web.assembly)
+  RELEASE_TAG="v${VERSION}"
+else
+  echo "--> Resolving latest GitHub release..."
+  LATEST_URL="$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/${GITHUB_REPO}/releases/latest")"
+  RELEASE_TAG="${LATEST_URL##*/}"
+  if [[ ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Error: Could not determine latest release tag from ${LATEST_URL}" >&2
+    exit 1
+  fi
+  VERSION="${RELEASE_TAG#v}"
 fi
 
-if [[ ! -f "${JAR_PATH}" ]]; then
-  echo "Error: Assembly fat JAR not found at ${JAR_PATH}" >&2
-  echo "Run './mill web.assembly' or pass --build flag." >&2
-  exit 1
-fi
+ASSET_NAME="ics205-${VERSION}.jar"
+CHECKSUM_NAME="${ASSET_NAME}.sha256"
+RELEASE_BASE="https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}"
+JAR_PATH="${DOWNLOAD_DIR}/${ASSET_NAME}"
 
-if [[ "${UPDATE_SERVICE}" == true ]] && [[ ! -f "${SERVICE_PATH}" ]]; then
-  echo "Error: Systemd service unit not found at ${SERVICE_PATH}" >&2
-  exit 1
-fi
+echo "--> Downloading ${ASSET_NAME} from GitHub Release ${RELEASE_TAG}..."
+curl -fL --retry 3 -o "${JAR_PATH}" "${RELEASE_BASE}/${ASSET_NAME}"
+curl -fL --retry 3 -o "${DOWNLOAD_DIR}/${CHECKSUM_NAME}" "${RELEASE_BASE}/${CHECKSUM_NAME}"
+
+echo "--> Verifying SHA-256 checksum..."
+(
+  cd "${DOWNLOAD_DIR}"
+  shasum -a 256 -c "${CHECKSUM_NAME}"
+)
 
 # Configure SSH and SCP command options
 SSH_OPTS=()
@@ -158,8 +177,8 @@ fi
 echo "=================================================="
 echo "ICS-205 Remote Update"
 echo "Target Host:       ${TARGET_HOST}"
-echo "Local JAR:         ${JAR_PATH}"
-echo "Remote Target:     ${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
+echo "Release:           ${RELEASE_TAG}\necho "Release JAR:       ${ASSET_NAME}"
+echo "Release:           ${RELEASE_TAG}"\necho "Release JAR:       ${ASSET_NAME}"\necho "Remote Target:     ${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
 echo "Sync Service Unit: ${UPDATE_SERVICE}"
 echo "Restart Service:   ${RESTART_SERVICE}"
 echo "=================================================="
@@ -245,7 +264,7 @@ fi
 if [ "${RESTART_SERVICE}" = "true" ]; then
   echo "Restarting ${SERVICE_NAME}..."
   sudo systemctl restart "${SERVICE_NAME}"
-  
+
   sleep 2
   if sudo systemctl is-active --quiet "${SERVICE_NAME}"; then
     echo "Service ${SERVICE_NAME} restarted and active!"
@@ -259,6 +278,7 @@ fi
 REMOTESCRIPT
 
 cleanup() {
+  cleanup_download
   rm -f "${LOCAL_REMOTE_SCRIPT:-}"
   if [[ -n "${REMOTE_TMP:-}" ]]; then
     ssh "${SSH_OPTS[@]}" "${TARGET_HOST}" "rm -rf '${REMOTE_TMP}'" >/dev/null 2>&1 || true

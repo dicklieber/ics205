@@ -161,6 +161,8 @@ class NavigationBarTests extends munit.FunSuite:
       assert(html.contains(s"<dt>version</dt><dd>${BuildInfo.version}</dd>"))
       assert(html.contains(s"<dt>scalaVersion</dt><dd>${BuildInfo.scalaVersion}</dd>"))
       assert(html.contains(s"<dt>millVersion</dt><dd>${BuildInfo.millVersion}</dd>"))
+      assert(html.contains(s"<dt>buildTime</dt><dd>${BuildInfo.buildTime}</dd>"))
+      assert(html.contains(s"<dt>buildOs</dt><dd>${BuildInfo.buildOs}</dd>"))
       assert(html.contains("<dt>running for</dt>"))
 
       // ics205.util.FileHelper.directory

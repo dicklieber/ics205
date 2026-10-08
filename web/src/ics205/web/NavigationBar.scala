@@ -291,6 +291,8 @@ object NavigationBar:
       "version" -> BuildInfo.version,
       "scalaVersion" -> BuildInfo.scalaVersion,
       "millVersion" -> BuildInfo.millVersion,
+      "buildTime" -> BuildInfo.buildTime,
+      "buildOs" -> BuildInfo.buildOs,
       "running for" -> DurationFormat(startTime)
     )
 
