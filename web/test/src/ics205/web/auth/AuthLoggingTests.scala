@@ -22,7 +22,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import ics205.auth.*
 import ics205.store.{InMemJsonSessionStore, SessionStore, UserStore}
-import ics205.util.FileHelper
+import ics205.util.{FileHelper, LoggingConfig}
 import ics205.web.admin.UserAdminEndpoints
 import org.apache.logging.log4j.core.appender.AbstractAppender
 import org.apache.logging.log4j.core.config.Property
@@ -45,7 +45,7 @@ class AuthLoggingTests extends munit.FunSuite:
     test: (UserStore, SessionStore, PasswordService, AuthenticationService, AuthEndpoints, UserAdminEndpoints, org.http4s.HttpApp[IO], ListBuffer[LogEvent]) => Unit
   ): Unit =
     val tempDir = os.temp.dir()
-    val ctx = LogManager.getContext(false).asInstanceOf[LoggerContext]
+    val ctx = LoggingConfig.init(tempDir)
     val config = ctx.getConfiguration
     val appender = new TestLogAppender()
     appender.start()
