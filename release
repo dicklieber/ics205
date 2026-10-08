@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_NAME="ics205"
+VERSION_FILE="version"
+ASSEMBLY_TASK="web.assembly"
+ASSEMBLY_JAR="out/web/assembly.dest/out.jar"
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+cleanup_files() {
+  rm -f "${RELEASE_JAR:-}" "${CHECKSUM_FILE:-}"
+}
+trap cleanup_files EXIT
+
+# Always operate from the directory containing this script.
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+[[ -x ./mill ]] || die "Cannot find executable ./mill."
+[[ -f "$VERSION_FILE" ]] || die "Cannot find $VERSION_FILE."
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "Not in a Git repository."
+
+command -v gh >/dev/null 2>&1 || die "GitHub CLI (gh) is not installed."
+gh auth status >/dev/null 2>&1 || die "GitHub CLI is not authenticated. Run: gh auth login"
+
+# Releases must start from a completely clean checkout.
+[[ -z "$(git status --porcelain)" ]] || die "Git working tree is not clean."
+
+CURRENT_VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
+
+if [[ ! "$CURRENT_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)-SNAPSHOT$ ]]; then
+  die "$VERSION_FILE must contain X.Y.Z-SNAPSHOT; found '$CURRENT_VERSION'."
+fi
+
+MAJOR="${BASH_REMATCH[1]}"
+MINOR="${BASH_REMATCH[2]}"
+PATCH="${BASH_REMATCH[3]}"
+
+DEFAULT_RELEASE="${MAJOR}.${MINOR}.${PATCH}"
+DEFAULT_NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))-SNAPSHOT"
+
+read -r -p "Release version [$DEFAULT_RELEASE]: " RELEASE_VERSION
+RELEASE_VERSION="${RELEASE_VERSION:-$DEFAULT_RELEASE}"
+
+[[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+  die "Release version must be X.Y.Z."
+
+read -r -p "Next version [$DEFAULT_NEXT]: " NEXT_VERSION
+NEXT_VERSION="${NEXT_VERSION:-$DEFAULT_NEXT}"
+
+[[ "$NEXT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-SNAPSHOT$ ]] ||
+  die "Next version must be X.Y.Z-SNAPSHOT."
+
+TAG="v${RELEASE_VERSION}"
+RELEASE_JAR="${APP_NAME}-${RELEASE_VERSION}.jar"
+CHECKSUM_FILE="${RELEASE_JAR}.sha256"
+
+# Refuse to overwrite an existing release/tag.
+if git show-ref --verify --quiet "refs/tags/$TAG"; then
+  die "Local tag $TAG already exists."
+fi
+
+if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+  die "Remote tag $TAG already exists."
+fi
+
+if gh release view "$TAG" >/dev/null 2>&1; then
+  die "GitHub Release $TAG already exists."
+fi
+
+echo
+echo "Current version : $CURRENT_VERSION"
+echo "Release version : $RELEASE_VERSION"
+echo "Next version    : $NEXT_VERSION"
+echo "Tag             : $TAG"
+echo "Artifact        : $RELEASE_JAR"
+echo
+
+read -r -p "Release? [y/N] " ANSWER
+[[ "$ANSWER" =~ ^[Yy]$ ]] || {
+  echo "Release cancelled."
+  exit 0
+}
+
+# Set the non-SNAPSHOT release version before compiling so BuildInfo embeds it.
+printf '%s\n' "$RELEASE_VERSION" > "$VERSION_FILE"
+
+# From this point until the release commit, restore the version file if anything fails.
+release_committed=false
+restore_version_on_failure() {
+  status=$?
+  if [[ $status -ne 0 && "$release_committed" == false ]]; then
+    printf '%s\n' "$CURRENT_VERSION" > "$VERSION_FILE"
+  fi
+  cleanup_files
+  exit "$status"
+}
+trap restore_version_on_failure EXIT
+
+echo
+echo "Running tests..."
+./mill __.test
+
+echo
+echo "Building assembly..."
+./mill "$ASSEMBLY_TASK"
+
+[[ -f "$ASSEMBLY_JAR" ]] || die "Assembly JAR not found at $ASSEMBLY_JAR."
+
+cp "$ASSEMBLY_JAR" "$RELEASE_JAR"
+shasum -a 256 "$RELEASE_JAR" > "$CHECKSUM_FILE"
+
+# Commit exactly the version that produced the release binary.
+git add "$VERSION_FILE"
+git commit -m "Release $RELEASE_VERSION"
+release_committed=true
+
+git tag -a "$TAG" -m "Release $RELEASE_VERSION"
+
+echo
+echo "Pushing release commit and tag..."
+git push origin HEAD
+git push origin "$TAG"
+
+echo
+echo "Creating GitHub Release..."
+gh release create "$TAG" \
+  "$RELEASE_JAR" \
+  "$CHECKSUM_FILE" \
+  --title "$RELEASE_VERSION" \
+  --generate-notes
+
+# Start the next development cycle.
+printf '%s\n' "$NEXT_VERSION" > "$VERSION_FILE"
+git add "$VERSION_FILE"
+git commit -m "Prepare for $NEXT_VERSION"
+git push origin HEAD
+
+# Normal completion: only remove temporary local release artifacts.
+trap cleanup_files EXIT
+
+echo
+echo "Released $RELEASE_VERSION successfully."
+echo "GitHub artifact: $RELEASE_JAR"
+echo "Development version: $NEXT_VERSION"
