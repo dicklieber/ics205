@@ -37,6 +37,10 @@ case class AuthenticatedUser(user: User,
   def hasPermission(permission: Permission): Boolean = user.role.hasPermission(permission)
 
 object AuthenticatedUser:
+  def apply(user: User): AuthenticatedUser =
+    val s = Session(userId = user.id, createdAt = Instant.now(), expiresAt = Instant.now().plusSeconds(3600))
+    AuthenticatedUser(user, s)
+
   def apply(user: String, session: Role): AuthenticatedUser =
     val u = User(username = user, passwordHash = "", role = session)
     val s = Session(userId = u.id, createdAt = Instant.now(), expiresAt = Instant.now().plusSeconds(3600))

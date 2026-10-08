@@ -142,9 +142,10 @@ object LoggingConfig extends LazyLogging:
    * that configuration file is used. Otherwise, the programmatic Scala configuration is applied.
    *
    * @param logDir the directory where log files should be written (defaults to FileHelper.logDirectory)
+   * @param fileHelper the FileHelper used to load persisted logger configuration
    * @return the active LoggerContext
    */
-  def init(logDir: os.Path = FileHelper.logDirectory): LoggerContext =
+  def init(logDir: os.Path = FileHelper.logDirectory, fileHelper: FileHelper = new FileHelper()): LoggerContext =
     val explicitProp = sys.props.get("log4j.configurationFile").orElse(sys.env.get("LOG4J_CONFIGURATION_FILE"))
     explicitProp match
       case Some(customConfig) =>
@@ -154,5 +155,7 @@ object LoggingConfig extends LazyLogging:
         val config = createConfiguration(logDir)
         Configurator.reconfigure(config)
         logger.info(s"Initialized programmatic Scala logging configuration in directory $logDir")
+
+    new LoggingStore(fileHelper).applyPersisted()
 
     LogManager.getContext(false).asInstanceOf[LoggerContext]

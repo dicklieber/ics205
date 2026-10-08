@@ -16,21 +16,27 @@
  *
  */
 
-package ics205.auth
+package ics205.util
 
-import ics205.model.Ics205Metadata
+class LazyLoggingDiscovererTests extends munit.FunSuite:
 
-object AuthorizationService:
-  def authorize(user: AuthenticatedUser, permission: Permission): Either[AuthError, AuthenticatedUser] =
-    if user.hasPermission(permission) then Right(user)
-    else Left(Forbidden(s"User '${user.username}' lacks permission '$permission'"))
+  test("discovers classes and objects implementing LazyLogging using ClassGraph"):
+    val discovered = LazyLoggingDiscoverer.discoverLazyLoggers(Seq("ics205"))
+    assert(discovered.nonEmpty, "Discovered loggers should not be empty")
 
-  def authorizeEvent(user: AuthenticatedUser, metadata: Ics205Metadata, permission: Permission): Either[AuthError, AuthenticatedUser] =
-    if user.user.role == Role.Admin then Right(user)
-    else
-      val hasEventPerm = permission match
-        case Permission.EditPlans => metadata.canEdit(user.user)
-        case Permission.ViewPlans => metadata.canView(user.user)
-        case _ => user.hasPermission(permission)
-      if hasEventPerm then Right(user)
-      else Left(Forbidden(s"User '${user.username}' lacks permission '$permission' for this event"))
+    // FileHelper extends LazyLogging
+    assert(
+      discovered.contains("ics205.util.FileHelper"),
+      s"Expected 'ics205.util.FileHelper' in discovered: $discovered"
+    )
+
+    // LoggingConfig$ or LoggingConfig implements LazyLogging
+    assert(
+      discovered.exists(_.contains("LoggingConfig")),
+      s"Expected LoggingConfig in discovered: $discovered"
+    )
+
+  test("discovered loggers are sorted and distinct"):
+    val discovered = LazyLoggingDiscoverer.discoverLazyLoggers(Seq("ics205"))
+    assertEquals(discovered, discovered.distinct)
+    assertEquals(discovered, discovered.sorted)

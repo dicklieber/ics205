@@ -48,7 +48,8 @@ class AuthenticationServiceTests extends munit.FunSuite:
       assertEquals(session.userId, "user-1")
 
       val authenticated = authService.authenticateSession(session.id)
-      assertEquals(authenticated, Right(AuthenticatedUser("operator", Role.Editor)))
+      assertEquals(authenticated.map(_.username), Right("operator"))
+      assertEquals(authenticated.map(_.role), Right(Role.Editor))
     }
 
   test("failed login with unknown username or wrong password returns None without leaking details"):
@@ -95,13 +96,11 @@ class AuthenticationServiceTests extends munit.FunSuite:
       userStore.add(user)
 
       val session = authService.authenticate("operator", "secret123").get
-      assertEquals(authService.authenticateSession(session.id), Right(AuthenticatedUser("operator",
-        Role.User)))
+      assertEquals(authService.authenticateSession(session.id).map(_.role), Right(Role.User))
 
       // Change user role in UserStore
       userStore.save(user.copy(role = Role.Admin))
-      assertEquals(authService.authenticateSession(session.id), Right(AuthenticatedUser("operator",
-        Role.Admin)))
+      assertEquals(authService.authenticateSession(session.id).map(_.role), Right(Role.Admin))
     }
 
   test("disabling a user invalidates access immediately for existing sessions"):

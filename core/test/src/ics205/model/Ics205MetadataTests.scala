@@ -30,10 +30,10 @@ class Ics205MetadataTests extends munit.FunSuite:
   private val regularUser = User("user", "hash", Role.User, enabled = true, id = "u-user")
   private val viewerUser = User("viewer", "hash", Role.Viewer, enabled = true, id = "u-viewer")
 
-  private val authAdmin = AuthenticatedUser(adminUser.username, adminUser.role)
-  private val authEditor = AuthenticatedUser(editorUser.username, editorUser.role)
-  private val authUser = AuthenticatedUser(regularUser.username, regularUser.role)
-  private val authViewer = AuthenticatedUser(viewerUser.username, viewerUser.role)
+  private val authAdmin = AuthenticatedUser(adminUser)
+  private val authEditor = AuthenticatedUser(editorUser)
+  private val authUser = AuthenticatedUser(regularUser)
+  private val authViewer = AuthenticatedUser(viewerUser)
 
   private val basePlan = Ics205(
     incidentName = "Test Drill",
