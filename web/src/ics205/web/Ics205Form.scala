@@ -19,7 +19,7 @@
 package ics205.web
 
 import ics205.model.*
-import java.time.LocalDateTime
+import java.time.{LocalDate, LocalDateTime, LocalTime}
 import scala.util.Try
 
 /** The same field names are used by the HTML form and its server-side validation. */
@@ -28,8 +28,10 @@ private[web] object Ics205Form:
     Map(
       "incidentName" -> plan.incidentName,
       "prepared" -> plan.prepared.toString,
-      "from" -> plan.operationalPeriod.from.fold("")(_.toString),
-      "to" -> plan.operationalPeriod.to.fold("")(_.toString),
+      "fromDate" -> plan.operationalPeriod.from.fold("")(_.toLocalDate.toString),
+      "fromTime" -> plan.operationalPeriod.from.fold("")(_.toLocalTime.toString),
+      "toDate" -> plan.operationalPeriod.to.fold("")(_.toLocalDate.toString),
+      "toTime" -> plan.operationalPeriod.to.fold("")(_.toLocalTime.toString),
       "specialInstructions" -> plan.specialInstructions,
       "preparedBy" -> plan.preparedBy.fold("")(_.name),
       "callsign" -> plan.preparedBy.flatMap(_.callsign).getOrElse(""),
@@ -58,11 +60,17 @@ private[web] object Ics205Form:
       Try(value).getOrElse(fail(s"$label is invalid."))
     def date(key: String, label: String): Option[LocalDateTime] =
       optional(key).map(value => parse(label)(LocalDateTime.parse(value)))
+    /** Combines a date input with a 24-hour HH:mm[:ss] text input. */
+    def dateTime(key: String, label: String): Option[LocalDateTime] =
+      (optional(s"${key}Date"), optional(s"${key}Time")) match
+        case (None, None) => None
+        case (Some(d), Some(t)) => Some(parse(label)(LocalDateTime.of(LocalDate.parse(d), LocalTime.parse(t))))
+        case _ => fail(s"$label needs both a date and a 24-hour time.")
     Try {
       val count = parse("Channel count")(text("rowCount").toInt)
       if count < 0 || count > 1000 then fail("Channel count must be between 0 and 1000.")
-      val from = date("from", "Operational period start")
-      val to = date("to", "Operational period end")
+      val from = dateTime("from", "Operational period start")
+      val to = dateTime("to", "Operational period end")
       if from.exists(start => to.exists(_.isBefore(start))) then
         fail("Operational period end must be at or after its start.")
       val channels = (0 until count).map { index =>

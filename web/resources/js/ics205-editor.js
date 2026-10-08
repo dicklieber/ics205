@@ -210,17 +210,16 @@
             preparedInput.value = plan.prepared || '';
           }
 
-          const fromInput = form.querySelector('[name=from]');
-          if (fromInput) {
-            const fromVal = plan.operationalPeriod?.from || plan.from || '';
-            fromInput.value = fromVal;
-          }
-
-          const toInput = form.querySelector('[name=to]');
-          if (toInput) {
-            const toVal = plan.operationalPeriod?.to || plan.to || '';
-            toInput.value = toVal;
-          }
+          // Operational period is split into a date input and a 24-hour HH:MM text input.
+          const setDateTime = (key, value) => {
+            const [date, time] = (value || '').split('T');
+            const dateInput = form.querySelector(`[name=${key}Date]`);
+            const timeInput = form.querySelector(`[name=${key}Time]`);
+            if (dateInput) dateInput.value = date || '';
+            if (timeInput) timeInput.value = time ? time.replace(/^(\d\d:\d\d)(:00(\.0+)?)?$/, '$1') : '';
+          };
+          setDateTime('from', plan.operationalPeriod?.from || plan.from);
+          setDateTime('to', plan.operationalPeriod?.to || plan.to);
 
           const specialInstructionsTextarea = form.querySelector('[name=specialInstructions]');
           if (specialInstructionsTextarea && plan.specialInstructions !== undefined) {

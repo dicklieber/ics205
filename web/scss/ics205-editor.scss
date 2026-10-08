@@ -86,6 +86,16 @@ textarea {
   font-size: 9pt;
 }
 
+.date-time {
+  display: flex;
+  gap: 4px;
+
+  .time-24 {
+    flex: 0 0 8ch;
+    text-align: center;
+  }
+}
+
 .table-scroll {
   @include mix.table-scroll-container;
 }

@@ -3,8 +3,13 @@
     const planForm = document.getElementById('plan-form');
     const incidentName = planForm ? (planForm.querySelector('[name=incidentName]')?.value || '') : '';
     const prepared = planForm ? (planForm.querySelector('[name=prepared]')?.value || new Date().toISOString().slice(0, 19)) : new Date().toISOString().slice(0, 19);
-    const from = planForm ? (planForm.querySelector('[name=from]')?.value || null) : null;
-    const to = planForm ? (planForm.querySelector('[name=to]')?.value || null) : null;
+    const dateTime = key => {
+      const date = planForm?.querySelector(`[name=${key}Date]`)?.value;
+      const time = planForm?.querySelector(`[name=${key}Time]`)?.value;
+      return date && time ? `${date}T${time}` : null;
+    };
+    const from = dateTime('from');
+    const to = dateTime('to');
     const specialInstructions = planForm ? (planForm.querySelector('[name=specialInstructions]')?.value || '') : '';
     const preparedByName = planForm ? (planForm.querySelector('[name=preparedBy]')?.value || '') : '';
     const callsign = planForm ? (planForm.querySelector('[name=callsign]')?.value || null) : null;

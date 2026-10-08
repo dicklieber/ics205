@@ -42,7 +42,8 @@ class Ics205FormTests extends munit.FunSuite:
       "row.0.rx" -> "oops", "row.0.offset" -> "-999",
       "row.0.ctcssMode" -> "Unknown", "row.1.ctcssFrequency" -> "XYZ",
       "row.0.ctcssFrequency" -> "-1", "row.0.mode" -> "Unknown",
-      "row.0.id" -> "b", "prepared" -> "bad", "to" -> prepared.minusDays(1).toString
+      "row.0.id" -> "b", "prepared" -> "bad", "toDate" -> prepared.minusDays(1).toLocalDate.toString,
+      "toTime" -> "1:30 PM", "toTime" -> "24:00", "toTime" -> ""
     ).foreach { (key, value) =>
       assert(Ics205Form.decode(fields.updated(key, value), base).isLeft, s"$key=$value")
     }

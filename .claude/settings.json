@@ -10,7 +10,17 @@
       "Bash(./mill core.test.testOnly *)",
       "Bash(./mill web.test.testOnly *)",
       "mcp__idea__search_regex",
-      "mcp__idea__get_run_configurations"
+      "mcp__idea__search_text",
+      "mcp__idea__search_symbol",
+      "mcp__idea__search_file",
+      "mcp__idea__read_file",
+      "mcp__idea__list_directory_tree",
+      "mcp__idea__get_symbol_info",
+      "mcp__idea__get_file_problems",
+      "mcp__idea__lint_files",
+      "mcp__idea__build_project",
+      "mcp__idea__get_run_configurations",
+      "mcp__idea__execute_run_configuration"
     ]
   }
 }

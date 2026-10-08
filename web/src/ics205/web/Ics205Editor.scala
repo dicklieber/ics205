@@ -43,6 +43,17 @@ private[web] object Ics205Editor:
         if kind == "datetime-local" then step := "any" else cls := "",
         if !canEdit then readonly else cls := ""
       ))
+    // Browsers render datetime-local/time in the locale's 12/24-hour style, so time is a 24-hour text field.
+    def dateTimeField(key: String, caption: String): Frag =
+      label(caption, div(cls := "date-time")(
+        input(name := s"${key}Date", attr("aria-label") := s"$caption date", tpe := "date",
+          value := values.getOrElse(s"${key}Date", ""), if !canEdit then readonly else cls := ""),
+        input(name := s"${key}Time", attr("aria-label") := s"$caption time (24-hour)", tpe := "text",
+          cls := "time-24", value := values.getOrElse(s"${key}Time", ""),
+          placeholder := "HH:MM", attr("inputmode") := "numeric", maxlength := 8,
+          pattern := """([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?""", title := "24-hour time, HH:MM",
+          if !canEdit then readonly else cls := "")
+      ))
     doctype("html")(html(lang := "en")(
       head(
         meta(charset := "utf-8"), meta(name := "viewport", content := "width=device-width, initial-scale=1"),
@@ -78,7 +89,7 @@ private[web] object Ics205Editor:
                 div(cls := "field")(strong("1. Incident Name:"), field("incidentName", "Incident name")),
                 div(cls := "field")(strong("2. Date/Time Prepared:"), field("prepared", "Prepared", "datetime-local")),
                 div(cls := "field")(strong("3. Operational Period:"),
-                  field("from", "From", "datetime-local"), field("to", "To", "datetime-local"))
+                  dateTimeField("from", "From"), dateTimeField("to", "To"))
               ),
               div(cls := "section-label")(strong("4. Basic Radio Channel Use:")),
               div(cls := "table-scroll")(
