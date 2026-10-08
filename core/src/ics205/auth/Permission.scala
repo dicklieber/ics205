@@ -20,7 +20,7 @@ package ics205.auth
 
 import io.circe.{Codec, Decoder, Encoder}
 
-enum Permission:
+enum Permission derives Codec.AsObject:
   case ViewUsers
   case EditUsers
   case Debug
@@ -39,43 +39,39 @@ object Permission:
   given io.circe.KeyEncoder[Permission] = io.circe.KeyEncoder.encodeKeyString.contramap(_.toString)
   given io.circe.KeyDecoder[Permission] = io.circe.KeyDecoder.instance(fromString)
 
-enum RolePermissions(val permissions: Set[Permission]):
-  case Admin extends RolePermissions(Set(
+enum Role(val permissions: Set[Permission]):
+  case Admin extends Role(Set(
     Permission.ViewUsers,
     Permission.EditUsers,
     Permission.Debug,
     Permission.ViewPlans,
     Permission.EditPlans
   ))
-  case Editor extends RolePermissions(Set(
+  case Editor extends Role(Set(
     Permission.ViewPlans,
     Permission.EditPlans
   ))
-  case User extends RolePermissions(Set(
+  case User extends Role(Set(
     Permission.ViewPlans
   ))
-  case Viewer extends RolePermissions(Set(
+  case Viewer extends Role(Set(
     Permission.ViewPlans
   ))
 
   def hasPermission(permission: Permission): Boolean =
     permissions.contains(permission)
 
-object RolePermissions:
-  def fromString(name: String): Option[RolePermissions] =
+object Role:
+  def fromString(name: String): Option[Role] =
     values.find(_.toString.equalsIgnoreCase(name.trim))
 
-  def hasPermission(role: RolePermissions, permission: Permission): Boolean =
+  def hasPermission(role: Role, permission: Permission): Boolean =
     role.hasPermission(permission)
 
   def hasPermission(roleName: String, permission: Permission): Boolean =
     fromString(roleName).exists(_.hasPermission(permission))
 
-
-  given Codec[RolePermissions] = Codec.from(
+  given Codec[Role] = Codec.from(
     Decoder.decodeString.emap(str => fromString(str).toRight(s"Unknown role: $str")),
     Encoder.encodeString.contramap(_.toString.toLowerCase)
   )
-
-type Role = RolePermissions
-val Role: RolePermissions.type = RolePermissions

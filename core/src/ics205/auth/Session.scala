@@ -18,16 +18,19 @@
 
 package ics205.auth
 
+import ics205.model.{EventId, PlanId}
 import ics205.util.Ids
 import ics205.util.Ids.Id
 import io.circe.Codec
 import io.circe.derivation.{Configuration, ConfiguredCodec}
+
 import java.time.Instant
 
 type SessionId = Id
 
 case class Session(
   userId: UserId,
+  currentIcs205:Option[EventId] = None,
   createdAt: Instant,
   expiresAt: Instant,
   id: SessionId = Ids.generateId()

@@ -54,7 +54,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
   test("GET /admin/users without session cookie when users exist returns 401 Unauthorized"):
     withContext { (_, userStore, _, passwordService, _, _, _, app) =>
       val hash = passwordService.hash("password")
-      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/admin/users"))
       val res = app.run(req).unsafeRunSync()
       assertEquals(res.status, Status.Unauthorized)
@@ -75,7 +75,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
 
   test("POST /admin/users/create when no users exist creates initial admin user and redirects to /login"):
     withContext { (tempDir, userStore, _, passwordService, _, _, _, app) =>
-      assert(!os.exists(tempDir / "users.json"))
+      assert(!os.exists(tempDir / "admin" / "users.json"))
       val form = UrlForm(
         "username" -> "initialadmin",
         "password" -> "adminpass123",
@@ -89,9 +89,9 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       val location = res.headers.get(CIString("Location")).map(_.head.value)
       assertEquals(location, Some("/login?msg=User+%27initialadmin%27+created+successfully.+Please+log+in."))
 
-      assert(os.exists(tempDir / "users.json"))
+      assert(os.exists(tempDir / "admin" / "users.json"))
       val created = userStore.findByUsername("initialadmin").get
-      assertEquals(created.role, RolePermissions.Admin)
+      assertEquals(created.role, Role.Admin)
       assertEquals(created.enabled, true)
       assert(passwordService.verify("adminpass123", created.passwordHash))
     }
@@ -99,7 +99,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
   test("GET /admin/users with user lacking EditUsers permission returns 403 Forbidden"):
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
-      userStore.add(User("viewer1", hash, RolePermissions.Viewer, enabled = true, id = "u1"))
+      userStore.add(User("viewer1", hash, Role.Viewer, enabled = true, id = "u1"))
       val session = authService.authenticate("viewer1", "password").get
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/admin/users"))
@@ -111,8 +111,8 @@ class UserAdminEndpointsTests extends munit.FunSuite:
   test("GET /admin/users with user having EditUsers permission returns 200 OK and renders HTML"):
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
-      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
-      userStore.add(User("bob", hash, RolePermissions.User, enabled = true, id = "u-bob"))
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("bob", hash, Role.User, enabled = true, id = "u-bob"))
       val session = authService.authenticate("admin", "password").get
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/admin/users"))
@@ -139,8 +139,8 @@ class UserAdminEndpointsTests extends munit.FunSuite:
   test("GET /admin/users?edit=<id> renders edit form with user details"):
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
-      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
-      userStore.add(User("targetuser", hash, RolePermissions.Editor, enabled = true, id = "u-target"))
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("targetuser", hash, Role.Editor, enabled = true, id = "u-target"))
       val session = authService.authenticate("admin", "password").get
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/admin/users?edit=u-target"))
@@ -163,7 +163,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
   test("POST /admin/users/create creates a new user and hashes password"):
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("adminpass")
-      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
       val session = authService.authenticate("admin", "adminpass").get
 
       ics205.util.Ids.useSeqentialStartingAt(100)
@@ -188,7 +188,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
         assert(created.isDefined)
         assertEquals(created.get.id, "100")
         assertEquals(created.get.username, "newuser")
-        assertEquals(created.get.role, RolePermissions.Editor)
+        assertEquals(created.get.role, Role.Editor)
         assertEquals(created.get.enabled, true)
         assert(passwordService.verify("secret123", created.get.passwordHash))
       finally
@@ -198,7 +198,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
   test("POST /admin/users/create rejects empty username or password"):
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("adminpass")
-      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
       val session = authService.authenticate("admin", "adminpass").get
 
       val formNoUser = UrlForm("username" -> "", "password" -> "secret123")
@@ -237,8 +237,8 @@ class UserAdminEndpointsTests extends munit.FunSuite:
   test("POST /admin/users/edit rejects short or mismatched passwords when updated"):
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("originalpass")
-      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
-      userStore.add(User("alice", hash, RolePermissions.User, enabled = true, id = "u-edit"))
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("alice", hash, Role.User, enabled = true, id = "u-edit"))
       val session = authService.authenticate("admin", "originalpass").get
 
       val editFormShort = UrlForm(
@@ -275,8 +275,8 @@ class UserAdminEndpointsTests extends munit.FunSuite:
   test("POST /admin/users/edit updates user roles, enabled state, and optionally password, revoking active sessions"):
     withContext { (_, userStore, sessionStore, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("originalpass")
-      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
-      userStore.add(User("alice", hash, RolePermissions.User, enabled = true, id = "u-edit"))
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("alice", hash, Role.User, enabled = true, id = "u-edit"))
       val adminSession = authService.authenticate("admin", "originalpass").get
       val aliceSession1 = authService.authenticate("alice", "originalpass").get
 
@@ -298,13 +298,13 @@ class UserAdminEndpointsTests extends munit.FunSuite:
 
       val u1 = userStore.findById("u-edit").get
       assertEquals(u1.username, "alice_updated")
-      assertEquals(u1.role, RolePermissions.Editor)
+      assertEquals(u1.role, Role.Editor)
       assertEquals(u1.enabled, false)
       assertEquals(u1.passwordHash, hash) // Hash preserved
       assertEquals(sessionStore.find(aliceSession1.id), None) // Alice session revoked
 
       // Create new session for alice (after re-enabling)
-      userStore.update(u1.copy(enabled = true))
+      userStore.save(u1.copy(enabled = true))
       val aliceSession2 = authService.authenticate("alice_updated", "originalpass").get
       assert(sessionStore.find(aliceSession2.id).isDefined)
 
@@ -324,7 +324,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       assertEquals(res2.status, Status.SeeOther)
 
       val u2 = userStore.findById("u-edit").get
-      assertEquals(u2.role, RolePermissions.Admin)
+      assertEquals(u2.role, Role.Admin)
       assertEquals(u2.enabled, true)
       assert(passwordService.verify("newsecret456", u2.passwordHash))
       assertEquals(sessionStore.find(aliceSession2.id), None) // Alice session revoked
@@ -333,8 +333,8 @@ class UserAdminEndpointsTests extends munit.FunSuite:
   test("POST /admin/users/delete deletes the specified user and revokes active sessions"):
     withContext { (_, userStore, sessionStore, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
-      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
-      userStore.add(User("delete_me", hash, RolePermissions.User, enabled = true, id = "u-del"))
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("delete_me", hash, Role.User, enabled = true, id = "u-del"))
       val session = authService.authenticate("admin", "password").get
       val delSession = authService.authenticate("delete_me", "password").get
 

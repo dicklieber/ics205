@@ -23,6 +23,7 @@ import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.{AuthConfig, AuthenticationService}
 import ics205.log.Ics205ActivityLogger
 import ics205.store.Ics205Store
+import ics205.web.auth.AuthSecurity
 import io.circe.Codec
 import io.circe.derivation.{Configuration, ConfiguredCodec}
 import jakarta.inject.{Inject, Singleton}
@@ -67,56 +68,45 @@ object ActivityLogResponse:
 @Singleton
 class ActivityEndpoints @Inject()(
   store: Ics205Store,
-  authService: AuthenticationService,
-  config: AuthConfig
+  security: AuthSecurity
 ) extends ApiEndpoints with LazyLogging:
 
-  private val logImportEndpoint: ServerEndpoint[Any, IO] = endpoint.post
+  def this(store: Ics205Store, authService: AuthenticationService, config: AuthConfig) =
+    this(store, new AuthSecurity(authService, config))
+
+  private val logImportEndpoint: ServerEndpoint[Any, IO] = security.secureEndpoint
+    .post
     .in("import" / "log")
-    .in(cookie[Option[String]](config.cookieName))
     .in(jsonBody[ImportLogRequest])
     .out(statusCode.and(jsonBody[ActivityLogResponse]))
-    .errorOut(statusCode.and(jsonBody[ActivityLogResponse]))
-    .serverLogic { (sessionIdOpt, req) =>
+    .serverLogicSuccess { user => req =>
       IO.blocking {
-        sessionIdOpt.flatMap(id => authService.authenticateSession(id).toOption) match
-          case None =>
-            Left((StatusCode.Unauthorized, ActivityLogResponse("error", "Authentication required")))
-          case Some(user) =>
-            val evName = if req.eventName.trim.nonEmpty then req.eventName.trim else store.currentEventName.getOrElse("ics205")
-            Ics205ActivityLogger.logImport(
-              username = user.username,
-              eventName = evName,
-              incidentName = req.incidentName,
-              channelCount = req.channelCount,
-              fileName = req.fileName,
-              format = req.format.orElse(Some("json"))
-            )
-            Right((StatusCode.Ok, ActivityLogResponse("ok", "Import activity logged")))
+        Ics205ActivityLogger.logImport(
+          username = user.user.username,
+          eventName = req.eventName,
+          incidentName = req.incidentName,
+          channelCount = req.channelCount,
+          fileName = req.fileName
+        )
+        (StatusCode.Ok, ActivityLogResponse("ok", "Import logged successfully"))
       }
     }
 
-  private val logExportEndpoint: ServerEndpoint[Any, IO] = endpoint.post
+  private val logExportEndpoint: ServerEndpoint[Any, IO] = security.secureEndpoint
+    .post
     .in("export" / "log")
-    .in(cookie[Option[String]](config.cookieName))
     .in(jsonBody[ExportLogRequest])
     .out(statusCode.and(jsonBody[ActivityLogResponse]))
-    .errorOut(statusCode.and(jsonBody[ActivityLogResponse]))
-    .serverLogic { (sessionIdOpt, req) =>
+    .serverLogicSuccess { user => req =>
       IO.blocking {
-        sessionIdOpt.flatMap(id => authService.authenticateSession(id).toOption) match
-          case None =>
-            Left((StatusCode.Unauthorized, ActivityLogResponse("error", "Authentication required")))
-          case Some(user) =>
-            val evName = if req.eventName.trim.nonEmpty then req.eventName.trim else store.currentEventName.getOrElse("ics205")
-            Ics205ActivityLogger.logExport(
-              username = user.username,
-              eventName = evName,
-              format = req.format.getOrElse("json"),
-              incidentName = req.incidentName,
-              channelCount = req.channelCount
-            )
-            Right((StatusCode.Ok, ActivityLogResponse("ok", "Export activity logged")))
+        Ics205ActivityLogger.logExport(
+          username = user.user.username,
+          eventName = req.eventName,
+          format = req.format.getOrElse("json"),
+          incidentName = req.incidentName,
+          channelCount = req.channelCount
+        )
+        (StatusCode.Ok, ActivityLogResponse("ok", "Export logged successfully"))
       }
     }
 

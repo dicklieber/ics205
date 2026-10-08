@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./mill __.compile)",
+      "Bash(./mill core.compile)",
+      "Bash(./mill web.compile)",
+      "Bash(./mill __.test)",
+      "Bash(./mill core.test)",
+      "Bash(./mill web.test)",
+      "Bash(./mill core.test.testOnly *)",
+      "Bash(./mill web.test.testOnly *)",
+      "mcp__idea__search_regex",
+      "mcp__idea__get_run_configurations"
+    ]
+  }
+}

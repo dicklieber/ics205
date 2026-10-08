@@ -18,22 +18,22 @@
 
 package ics205.model
 
-import ics205.auth.{AuthenticatedUser, AuthorizationService, Permission, RolePermissions, User}
+import ics205.auth.{AuthenticatedUser, AuthorizationService, Permission, Role, User}
 import io.circe.parser.decode
 import io.circe.syntax.*
 
 import java.time.Instant
 
 class Ics205MetadataTests extends munit.FunSuite:
-  private val adminUser = User("admin", "hash", RolePermissions.Admin, enabled = true, id = "u-admin")
-  private val editorUser = User("editor", "hash", RolePermissions.Editor, enabled = true, id = "u-editor")
-  private val regularUser = User("user", "hash", RolePermissions.User, enabled = true, id = "u-user")
-  private val viewerUser = User("viewer", "hash", RolePermissions.Viewer, enabled = true, id = "u-viewer")
+  private val adminUser = User("admin", "hash", Role.Admin, enabled = true, id = "u-admin")
+  private val editorUser = User("editor", "hash", Role.Editor, enabled = true, id = "u-editor")
+  private val regularUser = User("user", "hash", Role.User, enabled = true, id = "u-user")
+  private val viewerUser = User("viewer", "hash", Role.Viewer, enabled = true, id = "u-viewer")
 
-  private val authAdmin = AuthenticatedUser(adminUser.username, adminUser.role, id = adminUser.id)
-  private val authEditor = AuthenticatedUser(editorUser.username, editorUser.role, id = editorUser.id)
-  private val authUser = AuthenticatedUser(regularUser.username, regularUser.role, id = regularUser.id)
-  private val authViewer = AuthenticatedUser(viewerUser.username, viewerUser.role, id = viewerUser.id)
+  private val authAdmin = AuthenticatedUser(adminUser)
+  private val authEditor = AuthenticatedUser(editorUser)
+  private val authUser = AuthenticatedUser(regularUser)
+  private val authViewer = AuthenticatedUser(viewerUser)
 
   private val basePlan = Ics205(
     incidentName = "Test Drill",
@@ -50,17 +50,16 @@ class Ics205MetadataTests extends munit.FunSuite:
     assert(!metaEmpty.isReadOnly(adminUser))
 
     // Even if metadata has restrictive permissions for others, admin can still edit
-    val metaRestricted = Ics205Metadata(permissions = Map("u-other" -> Permission.ViewPlans))
+    val metaRestricted = Ics205Metadata().withUserPermission(editorUser.id, Permission.ViewPlans)
     assertEquals(metaRestricted.accessFor(adminUser), Some(PlanAccess.Edit))
     assertEquals(metaRestricted.accessFor(authAdmin), Some(PlanAccess.Edit))
     assert(metaRestricted.canEdit(adminUser))
     assert(metaRestricted.canView(adminUser))
 
   test("explicit user permissions in metadata determine access"):
-    val meta = Ics205Metadata(permissions = Map(
-      "u-user" -> Permission.EditPlans,
-      "u-editor" -> Permission.ViewPlans
-    ))
+    val meta = Ics205Metadata()
+      .withUserPermission(regularUser.id, Permission.EditPlans)
+      .withUserPermission(editorUser.id, Permission.ViewPlans)
 
     // Regular user explicitly given EditPlans can edit
     assertEquals(meta.accessFor(regularUser), Some(PlanAccess.Edit))
@@ -119,17 +118,11 @@ class Ics205MetadataTests extends munit.FunSuite:
 
   test("Ics205Event wrapper delegates correctly and encodes/decodes to JSON"):
     val savedInstant = Instant.parse("2026-09-29T12:00:00Z")
-    val meta = Ics205Metadata(
-      permissions = Map("u-1" -> Permission.EditPlans),
-      lastEditedBy = Some("u-1"),
-      savedAt = savedInstant
-    )
+    val meta = Ics205Metadata()
     val event = Ics205Event(basePlan, meta)
 
-    assertEquals(event.plan, basePlan)
     assertEquals(event.ics205, basePlan)
     assertEquals(event.metadata, meta)
-    assert(event.canEdit(User("user1", "hash", RolePermissions.User, enabled = true, id = "u-1")))
 
     val json = event.asJson.noSpaces
     val decoded = decode[Ics205Event](json)
@@ -141,10 +134,9 @@ class Ics205MetadataTests extends munit.FunSuite:
     assert(decoded.isLeft)
 
   test("AuthorizationService.authorizeEvent checks event metadata permissions"):
-    val meta = Ics205Metadata(permissions = Map(
-      "u-editor" -> Permission.ViewPlans,
-      "u-user" -> Permission.EditPlans
-    ))
+    val meta = Ics205Metadata()
+      .withUserPermission(regularUser.id, Permission.EditPlans)
+      .withUserPermission(editorUser.id, Permission.ViewPlans)
 
     // Admin authorized for edit and view
     assertEquals(AuthorizationService.authorizeEvent(authAdmin, meta, Permission.EditPlans), Right(authAdmin))

@@ -24,6 +24,7 @@ import ics205.auth.Permission
 import ics205.store.{Ics205Store, SessionStore, UserStore}
 import ics205.util.{FileHelper, UtcFormatter}
 import ics205.web.auth.AuthSecurity
+import ics205.web.util.RequestUtils
 import jakarta.inject.{Inject, Singleton}
 import sttp.model.StatusCode
 import sttp.tapir.*
@@ -54,11 +55,12 @@ class DebugEndpoints @Inject()(
       .out(statusCode.and(header[Option[String]]("Location")).and(stringBody))
       .serverLogicSuccess { currentUser => (returnUrlOpt, refererOpt) =>
         IO.blocking {
-          logger.info(s"User '${currentUser.username}' requested reloading all files.")
+          logger.info(s"User '${currentUser.user}' requested reloading all files.")
           store.reload()
           userStore.reload()
           sessionStore.reload()
-          val target = returnUrlOpt.orElse(refererOpt).getOrElse("/")
+          val target = returnUrlOpt.flatMap(RequestUtils.localRedirect)
+            .orElse(refererOpt.flatMap(RequestUtils.refererPath)).getOrElse("/")
           (StatusCode.SeeOther, Some(target), "Files reloaded successfully.")
         }
       }
@@ -72,19 +74,20 @@ class DebugEndpoints @Inject()(
       .out(statusCode.and(header[Option[String]]("Location")).and(stringBody))
       .serverLogicSuccess { currentUser => (returnUrlOpt, refererOpt) =>
         IO.blocking {
-          logger.info(s"User '${currentUser.username}' requested reloading all files via POST.")
+          logger.info(s"User '${currentUser.user}' requested reloading all files via POST.")
           store.reload()
           userStore.reload()
           sessionStore.reload()
-          val target = returnUrlOpt.orElse(refererOpt).getOrElse("/")
+          val target = returnUrlOpt.flatMap(RequestUtils.localRedirect)
+            .orElse(refererOpt.flatMap(RequestUtils.refererPath)).getOrElse("/")
           (StatusCode.SeeOther, Some(target), "Files reloaded successfully.")
         }
       }
 
-  private val downloadDirectoryZipEndpoint: ServerEndpoint[Any, IO] =
+  private def downloadZipEndpoint(path: String): ServerEndpoint[Any, IO] =
     security.authorizedEndpoint(Permission.Debug)
       .get
-      .in("debug" / "download-directory")
+      .in("debug" / path)
       .out(statusCode
         .and(header[String]("Content-Type"))
         .and(header[Option[String]]("Content-Disposition"))
@@ -92,7 +95,7 @@ class DebugEndpoints @Inject()(
         .and(byteArrayBody))
       .serverLogicSuccess { currentUser => _ =>
         IO.blocking {
-          logger.info(s"User '${currentUser.username}' requested downloading zip of FileHelper.directory (${fileHelper.directory}).")
+          logger.info(s"User '${currentUser.user}' requested downloading zip of FileHelper.directory (${fileHelper.directory}).")
           val zipBytes = fileHelper.zipDirectory()
           val zipFileName = s"ics205-${UtcFormatter.format()}.zip"
           (
@@ -105,34 +108,32 @@ class DebugEndpoints @Inject()(
         }
       }
 
+  private val downloadDirectoryZipEndpoint: ServerEndpoint[Any, IO] =
+    downloadZipEndpoint("download-directory.zip")
+
+  private val downloadDirectoryLegacyEndpoint: ServerEndpoint[Any, IO] =
+    downloadZipEndpoint("download-directory")
+
   private val downloadDataZipEndpoint: ServerEndpoint[Any, IO] =
-    security.authorizedEndpoint(Permission.Debug)
-      .get
-      .in("debug" / "download-data")
-      .out(statusCode
-        .and(header[String]("Content-Type"))
-        .and(header[Option[String]]("Content-Disposition"))
-        .and(header[String]("Cache-Control"))
-        .and(byteArrayBody))
-      .serverLogicSuccess { currentUser => _ =>
-        IO.blocking {
-          logger.info(s"User '${currentUser.username}' requested downloading zip of FileHelper.directory (${fileHelper.directory}).")
-          val zipBytes = fileHelper.zipDirectory()
-          val zipFileName = s"ics205-${UtcFormatter.format()}.zip"
-          (
-            StatusCode.Ok,
-            "application/zip",
-            Some(s"""attachment; filename="$zipFileName""""),
-            "no-store",
-            zipBytes
-          )
-        }
-      }
+    downloadZipEndpoint("download-data.zip")
+
+  private val downloadDataLegacyEndpoint: ServerEndpoint[Any, IO] =
+    downloadZipEndpoint("download-data")
+
+  private val downloadAllDataZipEndpoint: ServerEndpoint[Any, IO] =
+    downloadZipEndpoint("download-all-data.zip")
+
+  private val downloadAllDataLegacyEndpoint: ServerEndpoint[Any, IO] =
+    downloadZipEndpoint("download-all-data")
 
   override val endpoints: List[ServerEndpoint[Any, IO]] =
     List(
       reloadFilesGetEndpoint,
       reloadFilesPostEndpoint,
       downloadDirectoryZipEndpoint,
-      downloadDataZipEndpoint
+      downloadDirectoryLegacyEndpoint,
+      downloadDataZipEndpoint,
+      downloadDataLegacyEndpoint,
+      downloadAllDataZipEndpoint,
+      downloadAllDataLegacyEndpoint
     )

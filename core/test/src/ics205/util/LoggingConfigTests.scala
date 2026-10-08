@@ -18,40 +18,63 @@
 
 package ics205.util
 
+import org.apache.logging.log4j.Level
+import org.apache.logging.log4j.core.LoggerContext
+import org.apache.logging.log4j.core.appender.RollingFileAppender
+
 class LoggingConfigTests extends munit.FunSuite:
 
-  test("findExternalConfig finds log4j2.yaml file in directory"):
+  test("createConfiguration generates configuration with expected name, appenders and loggers"):
     val tempDir = os.temp.dir()
     try
-      assertEquals(LoggingConfig.findExternalConfig(tempDir), None)
+      val config = LoggingConfig.createConfiguration(tempDir)
+      assertEquals(config.getName, "ICS205")
 
-      val yamlFile = tempDir / "log4j2.yaml"
-      os.write(yamlFile, "Configuration:\n  name: Test\n")
-      assertEquals(LoggingConfig.findExternalConfig(tempDir), Some(yamlFile))
+      // Appenders
+      val appenders = config.getAppenders
+      assert(appenders.containsKey("Console"), "Console appender should be present")
+      assert(appenders.containsKey("File"), "File appender should be present")
+      assert(appenders.containsKey("AccessLog"), "AccessLog appender should be present")
+
+      // File Appender paths
+      val fileAppender = appenders.get("File").asInstanceOf[RollingFileAppender]
+      assertEquals(fileAppender.getFileName, (tempDir / "ics205.log").toString)
+
+      // AccessLog Appender paths
+      val accessAppender = appenders.get("AccessLog").asInstanceOf[RollingFileAppender]
+      assertEquals(accessAppender.getFileName, (tempDir / "access.log").toString)
+
+      // Loggers
+      val loggers = config.getLoggers
+      assert(loggers.containsKey("ics205.exporter.RadioExportDefinitions"))
+      assertEquals(loggers.get("ics205.exporter.RadioExportDefinitions").getLevel, Level.DEBUG)
+
+      assert(loggers.containsKey("ics205.web.HttpAccessLog"))
+      val accessLogger = loggers.get("ics205.web.HttpAccessLog")
+      assertEquals(accessLogger.getLevel, Level.INFO)
+      assertEquals(accessLogger.isAdditive, false)
+      assert(accessLogger.getAppenders.containsKey("AccessLog"))
+
+      // Root Logger
+      val rootLogger = config.getRootLogger
+      assertEquals(rootLogger.getLevel, Level.INFO)
+      assert(rootLogger.getAppenders.containsKey("Console"))
+      assert(rootLogger.getAppenders.containsKey("File"))
     finally
       os.remove.all(tempDir)
 
-  test("ensureConfigFile returns existing file and does not overwrite it"):
-    val tempDir = os.temp.dir()
-    try
-      val yamlFile = tempDir / "log4j2.yaml"
-      val originalContent = "Configuration:\n  name: CustomConfig\n"
-      os.write(yamlFile, originalContent)
-
-      val result = LoggingConfig.ensureConfigFile(tempDir)
-      assertEquals(result, Some(yamlFile))
-      assertEquals(os.read(yamlFile), originalContent)
-    finally
-      os.remove.all(tempDir)
-
-  test("init returns None if no external config file exists and no resource/property is available"):
+  test("init programmatically initializes Log4j2"):
     val tempDir = os.temp.dir()
     try
       val oldProp = sys.props.get("log4j.configurationFile")
       sys.props.remove("log4j.configurationFile")
       try
-        val result = LoggingConfig.init(tempDir)
-        assertEquals(result, None)
+        val ctx = LoggingConfig.init(tempDir)
+        assert(ctx != null)
+        val activeConfig = ctx.getConfiguration
+        val fileAppender = activeConfig.getAppender[RollingFileAppender]("File")
+        assert(fileAppender != null)
+        assertEquals(fileAppender.getFileName, (tempDir / "ics205.log").toString)
       finally
         oldProp.foreach(p => sys.props("log4j.configurationFile") = p)
     finally
@@ -60,16 +83,12 @@ class LoggingConfigTests extends munit.FunSuite:
   test("init respects explicit log4j.configurationFile system property"):
     val tempDir = os.temp.dir()
     try
-      val yamlFile = tempDir / "log4j2.yaml"
-      os.write(yamlFile, "Configuration:\n  name: Test\n")
-
-      val explicitPath = "/custom/path/log4j2.yaml"
+      val explicitUri = (tempDir / "custom.xml").toNIO.toUri.toString
       val oldProp = sys.props.get("log4j.configurationFile")
-      sys.props("log4j.configurationFile") = explicitPath
+      sys.props("log4j.configurationFile") = explicitUri
       try
-        val result = LoggingConfig.init(tempDir)
-        assertEquals(result, None)
-        assertEquals(sys.props("log4j.configurationFile"), explicitPath)
+        val ctx = LoggingConfig.init(tempDir)
+        assert(ctx != null)
       finally
         oldProp match
           case Some(p) => sys.props("log4j.configurationFile") = p
@@ -77,33 +96,16 @@ class LoggingConfigTests extends munit.FunSuite:
     finally
       os.remove.all(tempDir)
 
-  test("init loads external config when present and sets system property"):
-    val tempDir = os.temp.dir()
-    try
-      val yamlFile = tempDir / "log4j2.yaml"
-      os.write(yamlFile, """Configuration:
-                           |  name: ICS205External
-                           |  monitorInterval: 30
-                           |  Appenders:
-                           |    Console:
-                           |      name: Console
-                           |      target: SYSTEM_OUT
-                           |  Loggers:
-                           |    Root:
-                           |      level: debug
-                           |      AppenderRef:
-                           |        - ref: Console
-                           |""".stripMargin)
+  test("toYaml renders Log4j2 configuration structure and handles configured dynamic loggers"):
+    val yamlWithoutDynamic = LoggingConfig.toYaml()
+    assert(yamlWithoutDynamic.contains("Configuration:"))
+    assert(yamlWithoutDynamic.contains("name: ICS205"))
+    assert(yamlWithoutDynamic.contains("Console:"))
+    assert(yamlWithoutDynamic.contains("RollingFile:"))
+    assert(yamlWithoutDynamic.contains("ics205.exporter.RadioExportDefinitions"))
+    assert(yamlWithoutDynamic.contains("ics205.web.HttpAccessLog"))
+    assert(yamlWithoutDynamic.contains("AccessLog"))
 
-      val oldProp = sys.props.get("log4j.configurationFile")
-      sys.props.remove("log4j.configurationFile")
-      try
-        val result = LoggingConfig.init(tempDir)
-        assertEquals(result, Some(yamlFile))
-        assertEquals(sys.props("log4j.configurationFile"), yamlFile.toString)
-      finally
-        oldProp match
-          case Some(p) => sys.props("log4j.configurationFile") = p
-          case None => sys.props.remove("log4j.configurationFile")
-    finally
-      os.remove.all(tempDir)
+    val yamlWithDynamic = LoggingConfig.toYaml(Map("ics205.test.CustomLogger" -> "DEBUG"))
+    assert(yamlWithDynamic.contains("name: ics205.test.CustomLogger"))
+    assert(yamlWithDynamic.contains("level: DEBUG"))

@@ -19,24 +19,16 @@
 package ics205.web
 
 import ics205.BuildInfo
-import ics205.auth.{AuthenticatedUser, RolePermissions}
+import ics205.auth.{AuthenticatedUser, Role}
 import ics205.util.FileHelper
 
 import java.time.Instant
 
 class NavigationBarTests extends munit.FunSuite:
 
-  val adminUser = AuthenticatedUser(
-    username = "adminUser",
-    role = RolePermissions.Admin,
-    id = "u-admin"
-  )
+  val adminUser = AuthenticatedUser(user = "adminUser", session = Role.Admin)
 
-  val viewerUser = AuthenticatedUser(
-    username = "viewerUser",
-    role = RolePermissions.Viewer,
-    id = "u-viewer"
-  )
+  val viewerUser = AuthenticatedUser(user = "viewerUser", session = Role.Viewer)
 
   test("NavigationBar renders brand, main links, and unauthenticated state"):
     val html = NavigationBar.render(activePage = NavigationBar.ActivePage.Plan, currentUser = None).render
@@ -71,20 +63,26 @@ class NavigationBarTests extends munit.FunSuite:
     val html = NavigationBar.render(activePage = NavigationBar.ActivePage.None, currentUser = Some(adminUser)).render
     assert(html.contains("navbarDropdownDebug"))
     assert(html.contains("Debug"))
+    assert(html.contains("Logging Configuration"))
+    assert(html.contains("href=\"/debug/logging\""))
+    assert(html.contains("Logging Configuration (YAML)"))
+    assert(html.contains("href=\"/debug/logging/yaml\""))
     assert(html.contains("Reload Files"))
     assert(html.contains("href=\"/debug/reload-files\""))
     assert(html.contains("Download Data Directory"))
-    assert(html.contains("href=\"/debug/download-directory\""))
+    assert(html.contains("href=\"/debug/download-directory.zip\""))
     assert(html.contains("href=\"/docs\""))
     assert(html.contains("API Documentation"))
 
   test("NavigationBar hides Debug menu when user lacks Debug permission"):
     val html = NavigationBar.render(activePage = NavigationBar.ActivePage.Radio, currentUser = Some(viewerUser)).render
     assert(!html.contains("navbarDropdownDebug"))
+    assert(!html.contains("Logging Configuration (YAML)"))
+    assert(!html.contains("href=\"/debug/logging/yaml\""))
     assert(!html.contains("Reload Files"))
     assert(!html.contains("href=\"/debug/reload-files\""))
     assert(!html.contains("Download Data Directory"))
-    assert(!html.contains("href=\"/debug/download-directory\""))
+    assert(!html.contains("href=\"/debug/download-directory.zip\""))
     assert(!html.contains("href=\"/docs\""))
 
   test("NavigationBar hides User Management when user lacks EditUsers permission"):
@@ -169,7 +167,7 @@ class NavigationBarTests extends munit.FunSuite:
       assert(html.contains("<dt>ics205.util.FileHelper.directory</dt>"))
       assert(html.contains(tempDir.toString))
       assert(html.contains("Download ZIP"))
-      assert(html.contains("href=\"/debug/download-directory\""))
+      assert(html.contains("href=\"/debug/download-directory.zip\""))
 
       // Viewer user does not see Download ZIP in About dialog
       val viewerHtml = NavigationBar.render(

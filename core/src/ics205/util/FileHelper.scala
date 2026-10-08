@@ -22,31 +22,17 @@ import com.typesafe.scalalogging.LazyLogging
 import ics205.BuildInfo
 import io.circe.parser.*
 import io.circe.syntax.*
-import io.circe.{Decoder, Encoder, Printer}
+import io.circe.{Codec, Decoder, Encoder, Printer}
 
 import java.nio.file.NoSuchFileException
 import jakarta.inject.Inject
 
 object FileHelper:
   def appHome(appName: String = BuildInfo.appName, productName: String = BuildInfo.productName): os.Path =
-    val osName = System.getProperty("os.name", "").toLowerCase
-
-    if osName.contains("win") then
-      os.home / "AppData" / "Local" / appName
-    else if osName.contains("mac") then
-      os.home / "Library" / "Application Support" / appName
-    else
-      os.Path(s"/home/$productName/data")
+    os.home / s".$productName"
 
   def configHome(appName: String = BuildInfo.appName, productName: String = BuildInfo.productName): os.Path =
-    val osName = System.getProperty("os.name", "").toLowerCase
-
-    if osName.contains("win") then
-      os.home / "AppData" / "Local" / appName / "config"
-    else if osName.contains("mac") then
-      os.home / "Library" / "Application Support" / appName / "config"
-    else
-      os.Path(s"/home/$productName/config")
+    os.home / s".$productName" / "config"
 
   def isTestExecution: Boolean =
     sys.props.get("ics205.test").contains("true") ||
@@ -140,10 +126,7 @@ class FileHelper(customDir: Option[os.Path] = None, customConfigDir: Option[os.P
 
   /** One application-owned directory tree for all ICS-205 files.
     *
-    * Platform conventions used here:
-    *   - Windows: %LOCALAPPDATA%\ICS-205
-    *   - macOS:   ~/Library/Application Support/ICS-205
-    *   - Linux:   /home/ics205/data
+    * Always stored in ~/.ics205 in the user's home directory.
     *
     * In test execution, an isolated directory is used so unit tests never touch
     * the production directory.
@@ -158,14 +141,13 @@ class FileHelper(customDir: Option[os.Path] = None, customConfigDir: Option[os.P
     dir
   logger.info(s"Data directory: $directory, Config directory: $configDirectory")
 
-  def loadOrDefault[T: Decoder](fileName: String)(default: => T): T =
-
-    val path = directory / fileName
+  def loadOrDefault[T: Decoder](locus: Locus, file: String)(default: => T): T =
+    val path = directory / locus.toString / file
     try
       val sJson: String = os.read(path)
       val r: T = parse(sJson).flatMap(_.as[T]).fold(
         err =>
-          logger.error(s"Failed to parse/decode JSON: $fileName", err)
+          logger.error("Failed to parse/decode JSON", err, "File" -> file)
           default
         ,
         identity
@@ -173,20 +155,20 @@ class FileHelper(customDir: Option[os.Path] = None, customConfigDir: Option[os.P
       r
     catch
       case _: NoSuchFileException =>
-        logger.debug(s"File not found, using default: $fileName")
+        logger.debug("File not found, using default", "File" -> file)
         default
       case e: Exception =>
-        logger.error(s"Failed to read file: $fileName", e)
+        logger.error("Failed to read file", e, "File" -> file)
         default
 
-  def save[T: Encoder](fileName: String, value: T): Unit =
-    val path = directory / fileName
+  def save[T: Encoder](locus: Locus, file: String, value: T): Unit =
+    val path = directory / locus.toString / file
     val json = value.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true))
     os.write.over(path, json, createFolders = true)
 
-  def remove(fileName: String): Unit =
-    val path = directory / fileName
-    os.remove(path)
+  def remove(locus: Locus, fileName: String): Unit =
+    val path = directory / locus.toString / fileName
+    if os.exists(path) then os.remove(path)
 
   /**
    * Creates a ZIP archive of all files and directories inside the given directory (defaulting to this instance's [[directory]]).
@@ -196,3 +178,6 @@ class FileHelper(customDir: Option[os.Path] = None, customConfigDir: Option[os.P
    */
   def zipDirectory(dir: os.Path = directory): Array[Byte] =
     FileHelper.zipDirectory(dir)
+
+enum Locus derives Codec.AsObject:
+  case events, admin, config, log

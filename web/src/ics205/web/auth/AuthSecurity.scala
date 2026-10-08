@@ -103,8 +103,8 @@ class AuthSecurity @Inject()(
           IO.pure {
             for
               user <- authService.authenticateSession(sessionId)
-              authorized <- AuthorizationService.authorize(user, permission)
-            yield authorized
+              _ <- AuthorizationService.authorize(user, permission)
+            yield user
           }.map(_.left.map(e => (StatusCode(e.status), e.message)))
         case None =>
           IO.pure(Left((StatusCode.Unauthorized, "Authentication required: missing session cookie")))

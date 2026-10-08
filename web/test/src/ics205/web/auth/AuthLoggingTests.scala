@@ -22,7 +22,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import ics205.auth.*
 import ics205.store.{InMemJsonSessionStore, SessionStore, UserStore}
-import ics205.util.FileHelper
+import ics205.util.{FileHelper, LoggingConfig}
 import ics205.web.admin.UserAdminEndpoints
 import org.apache.logging.log4j.core.appender.AbstractAppender
 import org.apache.logging.log4j.core.config.Property
@@ -45,7 +45,7 @@ class AuthLoggingTests extends munit.FunSuite:
     test: (UserStore, SessionStore, PasswordService, AuthenticationService, AuthEndpoints, UserAdminEndpoints, org.http4s.HttpApp[IO], ListBuffer[LogEvent]) => Unit
   ): Unit =
     val tempDir = os.temp.dir()
-    val ctx = LogManager.getContext(false).asInstanceOf[LoggerContext]
+    val ctx = LoggingConfig.init(tempDir)
     val config = ctx.getConfiguration
     val appender = new TestLogAppender()
     appender.start()
@@ -74,7 +74,7 @@ class AuthLoggingTests extends munit.FunSuite:
   test("Login success is logged at INFO level with username, role, and source IP"):
     withContext { (userStore, sessionStore, passwordService, _, _, _, app, events) =>
       val hash = passwordService.hash("validpassword123")
-      userStore.add(User("alice", hash, RolePermissions.Admin, enabled = true, id = "u-alice"))
+      userStore.add(User("alice", hash, Role.Admin, enabled = true, id = "u-alice"))
       events.clear()
 
       // Form login with X-Forwarded-For IP
@@ -99,8 +99,8 @@ class AuthLoggingTests extends munit.FunSuite:
   test("Login error is logged at INFO level with source IP and failure reason without exposing password"):
     withContext { (userStore, sessionStore, passwordService, _, _, _, app, events) =>
       val hash = passwordService.hash("validpassword123")
-      userStore.add(User("alice", hash, RolePermissions.Admin, enabled = true, id = "u-alice"))
-      userStore.add(User("disabled_bob", hash, RolePermissions.User, enabled = false, id = "u-bob"))
+      userStore.add(User("alice", hash, Role.Admin, enabled = true, id = "u-alice"))
+      userStore.add(User("disabled_bob", hash, Role.User, enabled = false, id = "u-bob"))
       events.clear()
 
       val sensitiveSecret = "secret_plaintext_pass_999"
@@ -205,8 +205,8 @@ class AuthLoggingTests extends munit.FunSuite:
   test("Remove user is logged at INFO level"):
     withContext { (userStore, sessionStore, passwordService, _, _, _, app, events) =>
       val hash = passwordService.hash("password123")
-      userStore.add(User("admin1", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
-      userStore.add(User("targetuser", hash, RolePermissions.User, enabled = true, id = "u-target"))
+      userStore.add(User("admin1", hash, Role.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("targetuser", hash, Role.User, enabled = true, id = "u-target"))
       val session = sessionStore.create("u-admin")
       events.clear()
 
@@ -229,7 +229,7 @@ class AuthLoggingTests extends munit.FunSuite:
   test("User changes own password is logged at INFO level"):
     withContext { (userStore, sessionStore, passwordService, _, _, _, app, events) =>
       val hash = passwordService.hash("oldpassword123")
-      userStore.add(User("charlie", hash, RolePermissions.User, enabled = true, id = "u-charlie"))
+      userStore.add(User("charlie", hash, Role.User, enabled = true, id = "u-charlie"))
       val session = sessionStore.create("u-charlie")
       events.clear()
 
@@ -253,8 +253,8 @@ class AuthLoggingTests extends munit.FunSuite:
   test("Admin changes user record logs changed fields including password changed flag without revealing password"):
     withContext { (userStore, sessionStore, passwordService, _, _, _, app, events) =>
       val hash = passwordService.hash("originalpass123")
-      userStore.add(User("admin1", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
-      userStore.add(User("member1", hash, RolePermissions.User, enabled = true, id = "u-member"))
+      userStore.add(User("admin1", hash, Role.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("member1", hash, Role.User, enabled = true, id = "u-member"))
       val session = sessionStore.create("u-admin")
       events.clear()
 

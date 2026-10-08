@@ -18,62 +18,54 @@
 
 package ics205.model
 
-import ics205.auth.{AuthenticatedUser, Permission, RolePermissions, User, UserId}
+import ics205.auth.{AuthenticatedUser, Permission, Role, User, UserId}
+import ics205.util.{Ids, UtcFormatter}
+import ics205.util.Ids.Id
 import io.circe.{Codec, Decoder, Encoder, HCursor, Json, JsonObject}
 import io.circe.syntax.*
+import Ics205Event.extension
 
-case class Ics205Event(
-  eventName: String,
-  ics205: Ics205,
-  metadata: Ics205Metadata = Ics205Metadata()
-) derives Codec.AsObject:
-  def plan: Ics205 = ics205
+import java.time.Instant
+import scala.collection.immutable.TreeSeqMap.OrderBy
 
-  def permissionFor(user: User): Option[Permission] =
-    metadata.permissionFor(user)
+case class Ics205Event(id: EventId = Ids.generateId(),
+                       ics205: Ics205,
+                       metadata: Ics205Metadata = Ics205Metadata()) derives Codec.AsObject:
+  val fileName: String = s"$id.$extension"
 
-  def permissionFor(user: AuthenticatedUser): Option[Permission] =
-    metadata.permissionFor(user)
+  def bakFileName: String = s"$id-$UtcFormatter().$extension"
 
-  def permissionFor(userId: UserId): Option[Permission] =
-    metadata.permissionFor(userId)
+  def eventName: String = if ics205.incidentName.nonEmpty then ics205.incidentName else id
 
-  def accessFor(user: User): Option[PlanAccess] =
-    metadata.accessFor(user)
+  def canView(user: AuthenticatedUser): Boolean = metadata.canView(user)
 
-  def accessFor(user: AuthenticatedUser): Option[PlanAccess] =
-    metadata.accessFor(user)
+  def canView(user: User): Boolean = metadata.canView(user)
 
-  def accessFor(userId: UserId, role: RolePermissions): Option[PlanAccess] =
-    metadata.accessFor(userId, role)
+  def canEdit(user: AuthenticatedUser): Boolean = metadata.canEdit(user)
 
-  def canEdit(user: User): Boolean =
-    metadata.canEdit(user)
+  def canEdit(user: User): Boolean = metadata.canEdit(user)
 
-  def canEdit(user: AuthenticatedUser): Boolean =
-    metadata.canEdit(user)
+  def accessFor(user: AuthenticatedUser): Option[PlanAccess] = metadata.accessFor(user)
 
-  def canView(user: User): Boolean =
-    metadata.canView(user)
+  def accessFor(user: User): Option[PlanAccess] = metadata.accessFor(user)
 
-  def canView(user: AuthenticatedUser): Boolean =
-    metadata.canView(user)
+  def update(authenticatedUser: AuthenticatedUser): Ics205Event =
+    copy(metadata = metadata.withLastEditedBy(authenticatedUser.user.id).withSavedAt(Instant.now()))
 
-  def isReadOnly(user: User): Boolean =
-    metadata.isReadOnly(user)
-
-  def isReadOnly(user: AuthenticatedUser): Boolean =
-    metadata.isReadOnly(user)
-
-  def isEdit(user: User): Boolean =
-    metadata.isEdit(user)
-
-  def isEdit(user: AuthenticatedUser): Boolean =
-    metadata.isEdit(user)
 
 object Ics205Event:
-  def apply(ics205: Ics205, metadata: Ics205Metadata): Ics205Event =
-    Ics205Event(ics205.incidentName, ics205, metadata)
+  val extension: String = "ics205"
 
-  def apply(ics205: Ics205): Ics205Event =
-    Ics205Event(ics205.incidentName, ics205, Ics205Metadata())
+  given Ordering[Ics205Event] = Ordering.by(_.ics205.incidentName)
+
+  def apply(id: EventId,
+            ics205: Ics205,
+            metadata: Ics205Metadata): Ics205Event = new Ics205Event(id, ics205, metadata)
+
+  def apply(id: EventId,
+            ics205: Ics205): Ics205Event = new Ics205Event(id, ics205, Ics205Metadata())
+
+  def apply(ics205: Ics205,
+            metadata: Ics205Metadata): Ics205Event = new Ics205Event(Ids.generateId(), ics205, metadata)
+
+  def apply(ics205: Ics205): Ics205Event = new Ics205Event(Ids.generateId(), ics205, Ics205Metadata())

@@ -6,8 +6,10 @@ import ics205.auth.*
 import ics205.model.*
 import ics205.store.{Ics205Store, InMemJsonSessionStore, UserStore}
 import ics205.util.FileHelper
+import io.circe.parser.decode
+import io.circe.syntax.*
 import org.http4s.multipart.{Multipart, Part}
-import org.http4s.{Method, Request, Status, Uri, UrlForm}
+import org.http4s.{EntityEncoder, Method, Request, Status, Uri, UrlForm}
 import org.typelevel.ci.CIString
 import sttp.tapir.server.http4s.Http4sServerInterpreter
 
@@ -24,7 +26,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val passwordService = new ScalaPassPasswordService
       val authService = new AuthenticationService(userStore, passwordService, sessionStore)
       val config = AuthConfig()
-      val endpoints = new IndexEndpoints(store, authService, userStore, config)
+      val endpoints = new IndexEndpoints(store, authService, userStore, config, sessionStore)
       val routes = Http4sServerInterpreter[IO]().toRoutes(endpoints.endpoints)
 
       test(tempDir, store, userStore, sessionStore, authService, routes)
@@ -35,18 +37,17 @@ class EventsEndpointsTests extends munit.FunSuite:
     withTestContext { (_, _, _, _, _, routes) =>
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/events"))
       val res = routes.orNotFound.run(req).unsafeRunSync()
-      assertEquals(res.status, Status.SeeOther)
-      assertEquals(res.headers.get(org.typelevel.ci.CIString("Location")).map(_.head.value), Some("/login"))
+      assertEquals(res.status, Status.Unauthorized)
     }
 
   test("GET /events lists visible events for authenticated user"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
       val session = sessionStore.create(admin.id)
 
-      store.saveEvent(Ics205Event("Field Day", Ics205(incidentName = "Field Day 2026", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
-      store.saveEvent(Ics205Event("Marathon", Ics205(incidentName = "City Marathon", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Event("Field Day", Ics205(incidentName = "Field Day 2026", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Event("Marathon", Ics205(incidentName = "City Marathon", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/events"))
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}"))
@@ -62,10 +63,10 @@ class EventsEndpointsTests extends munit.FunSuite:
       assert(body.contains("/?event=Field+Day"))
     }
 
-  test("POST /events/create creates new event and sets cookie"):
+  test("POST /events/create creates new event and sets current event in session"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
       val session = sessionStore.create(admin.id)
 
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/events/create"))
@@ -74,21 +75,20 @@ class EventsEndpointsTests extends munit.FunSuite:
 
       val res = routes.orNotFound.run(req).unsafeRunSync()
       assertEquals(res.status, Status.SeeOther)
-      val setCookie = res.headers.get(org.typelevel.ci.CIString("Set-Cookie")).map(_.head.value).getOrElse("")
-      assert(setCookie.contains("ics205_event=Winter+Drill"))
-
-      val created = store.getEvent("Winter Drill")
+      val created = store.findByName("Winter Drill")
       assert(created.isDefined)
+      assertEquals(sessionStore.get(session.id).flatMap(_.currentIcs205), Some(created.get.id))
       assertEquals(created.get.ics205.incidentName, "Winter Drill 2026")
+      assertEquals(res.headers.get(org.typelevel.ci.CIString("Location")).map(_.head.value), Some(s"/?event=${java.net.URLEncoder.encode(created.get.id, "UTF-8")}&saved=1"))
     }
 
-  test("GET /events/select selects active event and sets cookie"):
+  test("GET /events/select selects active event and sets current event in session"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
       val session = sessionStore.create(admin.id)
 
-      store.saveEvent(Ics205Event("Campout", Ics205(incidentName = "Scout Campout", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Event("Campout", Ics205(incidentName = "Scout Campout", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/events/select?name=Campout&returnUrl=/radio"))
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}"))
@@ -96,19 +96,17 @@ class EventsEndpointsTests extends munit.FunSuite:
       val res = routes.orNotFound.run(req).unsafeRunSync()
       assertEquals(res.status, Status.SeeOther)
       assertEquals(res.headers.get(org.typelevel.ci.CIString("Location")).map(_.head.value), Some("/radio"))
-      val setCookie = res.headers.get(org.typelevel.ci.CIString("Set-Cookie")).map(_.head.value).getOrElse("")
-      assert(setCookie.contains("ics205_event=Campout"))
-      assertEquals(store.currentEventName, Some("Campout"))
+      assertEquals(sessionStore.get(session.id).flatMap(_.currentIcs205), Some("Campout"))
     }
 
   test("GET and POST /events/metadata manages event permissions"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
-      val operator = userStore.add(User("operator", passwordService.hash("pass"), RolePermissions.Viewer, enabled = true, id = "u-op")).toOption.get
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
+      val operator = userStore.add(User("operator", passwordService.hash("pass"), Role.Viewer, enabled = true, id = "u-op")).toOption.get
       val session = sessionStore.create(admin.id)
 
-      store.saveEvent(Ics205Event("Airshow", Ics205(incidentName = "Annual Airshow", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Event("Airshow", Ics205(incidentName = "Annual Airshow", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
 
       // GET metadata
       val getReq = Request[IO](Method.GET, Uri.unsafeFromString("/events/metadata?name=Airshow"))
@@ -140,10 +138,10 @@ class EventsEndpointsTests extends munit.FunSuite:
   test("POST /events/metadata renames event and updates incident name"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
       val session = sessionStore.create(admin.id)
 
-      store.saveEvent(Ics205Event("OldEvent", Ics205(incidentName = "Old Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Event("OldEvent", Ics205(incidentName = "Old Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
 
       val postReq = Request[IO](Method.POST, Uri.unsafeFromString("/events/metadata"))
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}"))
@@ -168,7 +166,7 @@ class EventsEndpointsTests extends munit.FunSuite:
   test("Event authorization isolates permissions across multiple events"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val userViewer = userStore.add(User("viewerUser", passwordService.hash("pass"), RolePermissions.Viewer, enabled = true, id = "u-v")).toOption.get
+      val userViewer = userStore.add(User("viewerUser", passwordService.hash("pass"), Role.Viewer, enabled = true, id = "u-v")).toOption.get
       val session = sessionStore.create(userViewer.id)
 
       // Event 1 has explicit EditPlans for viewerUser
@@ -176,10 +174,10 @@ class EventsEndpointsTests extends munit.FunSuite:
         Ics205Metadata(permissions = Map(userViewer.id -> Permission.EditPlans)))
       // Event 2 has explicit ViewPlans for other users only
       val event2 = Ics205Event("RestrictedEvent", Ics205(incidentName = "Restricted Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty),
-        Ics205Metadata(permissions = Map("other-user" -> Permission.EditPlans)))
+        Ics205Metadata(permissions = Map("other-user" -> Permission.ViewPlans)))
 
-      store.saveEvent(event1)
-      store.saveEvent(event2)
+      store.save(event1)
+      store.save(event2)
 
       // User can view and edit AllowedEvent
       val req1 = Request[IO](Method.GET, Uri.unsafeFromString("/?event=AllowedEvent"))
@@ -200,10 +198,10 @@ class EventsEndpointsTests extends munit.FunSuite:
   test("POST /events/delete deletes event for Admin"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
       val session = sessionStore.create(admin.id)
 
-      store.saveEvent(Ics205Event("ToDelete", Ics205(incidentName = "To Delete", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Event("ToDelete", Ics205(incidentName = "To Delete", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
       assert(store.getEvent("ToDelete").isDefined)
 
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/events/delete"))
@@ -218,7 +216,7 @@ class EventsEndpointsTests extends munit.FunSuite:
   test("When no events exist, navigating to / and /radio redirects to /events"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
       val session = sessionStore.create(admin.id)
 
       assertEquals(store.events().size, 0)
@@ -247,12 +245,12 @@ class EventsEndpointsTests extends munit.FunSuite:
   test("GET /events/export exports Ics205Event as JSON attachment"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
       val session = sessionStore.create(admin.id)
 
       val plan = Ics205(incidentName = "Wildfire Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
       val event = Ics205Event("Wildfire 2026", plan)
-      store.saveEvent(event)
+      store.save(event)
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/events/export?name=Wildfire+2026"))
         .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
@@ -262,7 +260,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val disposition = res.headers.get(CIString("Content-Disposition")).map(_.head.value).getOrElse("")
       assert(disposition.contains("attachment; filename=\"Wildfire 2026.json\""))
       val body = res.as[String].unsafeRunSync()
-      val decoded = Ics205Json.eventFromJson(body)
+      val decoded = decode[Ics205Event](body)
       assert(decoded.isRight)
       assertEquals(decoded.toOption.get.eventName, "Wildfire 2026")
       assertEquals(decoded.toOption.get.ics205.incidentName, "Wildfire Incident")
@@ -271,15 +269,15 @@ class EventsEndpointsTests extends munit.FunSuite:
   test("POST /events/import imports Ics205Event JSON and adds suffix if event exists"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
       val session = sessionStore.create(admin.id)
 
       // Seed an existing event named "Winter Drill"
-      store.saveEvent(Ics205Event("Winter Drill", Ics205(incidentName = "Winter Drill Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Event("Winter Drill", Ics205(incidentName = "Winter Drill Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
 
       // Prepare an imported event JSON with the same name "Winter Drill"
       val importPayload = Ics205Event("Winter Drill", Ics205(incidentName = "Winter Drill Imported", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
-      val jsonBytes = Ics205Json.toJson(importPayload).getBytes(java.nio.charset.StandardCharsets.UTF_8)
+      val jsonBytes = importPayload.asJson.spaces2.getBytes(java.nio.charset.StandardCharsets.UTF_8)
 
       val multipart = Multipart[IO](Vector(
         Part.formData[IO]("file", new String(jsonBytes, java.nio.charset.StandardCharsets.UTF_8), org.http4s.headers.`Content-Disposition`("form-data", Map(CIString("name") -> "file", CIString("filename") -> "drill.json")))
@@ -287,13 +285,12 @@ class EventsEndpointsTests extends munit.FunSuite:
 
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/events/import"))
         .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
-        .withEntity(multipart)
+        .withEntity(multipart)(using EntityEncoder.multipartEncoder[IO])
         .putHeaders(multipart.headers.headers.map(h => org.http4s.Header.Raw(h.name, h.value)))
 
       val res = routes.orNotFound.run(req).unsafeRunSync()
       assertEquals(res.status, Status.SeeOther)
-      val setCookie = res.headers.get(CIString("Set-Cookie")).map(_.head.value).getOrElse("")
-      assert(setCookie.contains("ics205_event=Winter+Drill+%281%29") || setCookie.contains("ics205_event=Winter+Drill+(1)"))
+      assertEquals(sessionStore.get(session.id).flatMap(_.currentIcs205), Some("Winter Drill (1)"))
 
       // Verify that both original and suffixed events exist in store
       assert(store.getEvent("Winter Drill").isDefined)
@@ -305,11 +302,11 @@ class EventsEndpointsTests extends munit.FunSuite:
   test("POST /events/import imports unwrapped Ics205 plan JSON"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
       val session = sessionStore.create(admin.id)
 
       val plan = Ics205(incidentName = "Marathon Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
-      val jsonBytes = Ics205Json.toJson(plan).getBytes(java.nio.charset.StandardCharsets.UTF_8)
+      val jsonBytes = Ics205Event(plan).asJson.spaces2.getBytes(java.nio.charset.StandardCharsets.UTF_8)
 
       val multipart = Multipart[IO](Vector(
         Part.formData[IO]("file", new String(jsonBytes, java.nio.charset.StandardCharsets.UTF_8), org.http4s.headers.`Content-Disposition`("form-data", Map(CIString("name") -> "file", CIString("filename") -> "marathon.json")))
@@ -317,7 +314,7 @@ class EventsEndpointsTests extends munit.FunSuite:
 
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/events/import"))
         .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
-        .withEntity(multipart)
+        .withEntity(multipart)(using EntityEncoder.multipartEncoder[IO])
         .putHeaders(multipart.headers.headers.map(h => org.http4s.Header.Raw(h.name, h.value)))
 
       val res = routes.orNotFound.run(req).unsafeRunSync()
@@ -331,17 +328,17 @@ class EventsEndpointsTests extends munit.FunSuite:
   test("POST /events/import rejects viewer without EditPlans permission"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val viewer = userStore.add(User("viewer", passwordService.hash("pass"), RolePermissions.Viewer, enabled = true, id = "u-view")).toOption.get
+      val viewer = userStore.add(User("viewer", passwordService.hash("pass"), Role.Viewer, enabled = true, id = "u-view")).toOption.get
       val session = sessionStore.create(viewer.id)
 
       val plan = Ics205(incidentName = "Forbidden Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
       val multipart = Multipart[IO](Vector(
-        Part.formData[IO]("file", Ics205Json.toJson(plan), org.http4s.headers.`Content-Disposition`("form-data", Map(CIString("name") -> "file", CIString("filename") -> "forbid.json")))
+        Part.formData[IO]("file", Ics205Event(plan).asJson.spaces2, org.http4s.headers.`Content-Disposition`("form-data", Map(CIString("name") -> "file", CIString("filename") -> "forbid.json")))
       ))
 
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/events/import"))
         .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
-        .withEntity(multipart)
+        .withEntity(multipart)(using EntityEncoder.multipartEncoder[IO])
         .putHeaders(multipart.headers.headers.map(h => org.http4s.Header.Raw(h.name, h.value)))
 
       val res = routes.orNotFound.run(req).unsafeRunSync()
@@ -351,12 +348,12 @@ class EventsEndpointsTests extends munit.FunSuite:
   test("Duplicate copies the plan and permissions, validates names, and requires edit access"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val admin = userStore.add(User("admin", passwordService.hash("pass"), RolePermissions.Admin, enabled = true, id = "u-admin")).toOption.get
-      val viewer = userStore.add(User("viewer", passwordService.hash("pass"), RolePermissions.Viewer, enabled = true, id = "u-view")).toOption.get
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
+      val viewer = userStore.add(User("viewer", passwordService.hash("pass"), Role.Viewer, enabled = true, id = "u-view")).toOption.get
       val adminSession = sessionStore.create(admin.id)
       val viewerSession = sessionStore.create(viewer.id)
-      store.saveEvent(Ics205Event("Original", Ics205(incidentName = "Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty),
-        Ics205Metadata(permissions = Map(viewer.id -> Permission.ViewPlans))))
+      store.save(Ics205Event("Original", Ics205(incidentName = "Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty),
+        Ics205Metadata()))
       val original = store.getEvent("Original").get
       def duplicate(name: String, sessionId: String) =
         routes.orNotFound.run(Request[IO](Method.POST, Uri.unsafeFromString("/events/duplicate"))
@@ -376,4 +373,88 @@ class EventsEndpointsTests extends munit.FunSuite:
       val blank = duplicate("   ", adminSession.id)
       assert(blank.headers.get(CIString("Location")).get.head.value.contains("err="))
       assertEquals(store.events().size, 2)
+    }
+
+  test("POST / saves plan to store for existing event"):
+    withTestContext { (_, store, userStore, sessionStore, _, routes) =>
+      val passwordService = new ScalaPassPasswordService
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
+      val session = sessionStore.create(admin.id)
+
+      val originalPlan = Ics205(incidentName = "Field Day Original", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
+      store.save(Ics205Event("Field Day", originalPlan))
+
+      val fields = Ics205Form.fields(originalPlan)
+        .updated("eventName", "Field Day")
+        .updated("incidentName", "Field Day Updated")
+        .updated("specialInstructions", "Check repeaters")
+
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/?event=Field+Day"))
+        .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        .withEntity(UrlForm(fields.toSeq*))
+
+      val res = routes.orNotFound.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+
+      val savedEvent = store.findByName("Field Day")
+      assert(savedEvent.isDefined)
+      assertEquals(savedEvent.get.ics205.incidentName, "Field Day Updated")
+      assertEquals(savedEvent.get.ics205.specialInstructions, "Check repeaters")
+      assertEquals(savedEvent.get.metadata.lastEditedBy, Some(admin.id))
+    }
+
+  test("POST / saves plan when event has different ID from event name"):
+    withTestContext { (_, store, userStore, sessionStore, _, routes) =>
+      val passwordService = new ScalaPassPasswordService
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
+      val session = sessionStore.create(admin.id)
+
+      val originalPlan = Ics205(incidentName = "Custom Event", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
+      val customEvent = Ics205Event(
+        id = "custom-uuid-12345",
+        ics205 = originalPlan,
+        metadata = Ics205Metadata()
+      )
+      store.save(customEvent)
+
+      val fields = Ics205Form.fields(originalPlan)
+        .updated("eventId", "custom-uuid-12345")
+        .updated("eventName", "Custom Event")
+        .updated("incidentName", "Custom Event Modified")
+
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/?event=custom-uuid-12345"))
+        .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        .withEntity(UrlForm(fields.toSeq*))
+
+      val res = routes.orNotFound.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.SeeOther)
+      assertEquals(res.headers.get(CIString("Location")).map(_.head.value), Some("/?saved=1&event=custom-uuid-12345"))
+
+      val savedEvent = store.getEvent("custom-uuid-12345")
+      assert(savedEvent.isDefined)
+      assertEquals(savedEvent.get.ics205.incidentName, "Custom Event Modified")
+    }
+
+  test("GET /?event=<id> renders editor referencing event by id"):
+    withTestContext { (_, store, userStore, sessionStore, _, routes) =>
+      val passwordService = new ScalaPassPasswordService
+      val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
+      val session = sessionStore.create(admin.id)
+
+      val plan = Ics205(incidentName = "Special Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
+      val event = Ics205Event(
+        id = "ev-drill-999",
+        ics205 = plan,
+        metadata = Ics205Metadata()
+      )
+      store.save(event)
+
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/?event=ev-drill-999"))
+        .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+
+      val res = routes.orNotFound.run(req).unsafeRunSync()
+      assertEquals(res.status, Status.Ok)
+      val html = res.as[String].unsafeRunSync()
+      assert(html.contains("action=\"/?event=ev-drill-999\""))
+      assert(html.contains("name=\"eventId\" value=\"ev-drill-999\""))
     }

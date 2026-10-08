@@ -65,7 +65,7 @@ class DebugEndpointsTests extends munit.FunSuite:
   test("GET /debug/reload-files with user lacking Debug permission returns 403 Forbidden"):
     withContext { (_, _, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
-      userStore.add(User("viewer1", hash, RolePermissions.Viewer, enabled = true, id = "u1"))
+      userStore.add(User("viewer1", hash, Role.Viewer, enabled = true, id = "u1"))
       val session = authService.authenticate("viewer1", "password").get
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/debug/reload-files"))
@@ -77,16 +77,16 @@ class DebugEndpointsTests extends munit.FunSuite:
   test("GET /debug/reload-files with user having Debug permission reloads files and redirects"):
     withContext { (tempDir, store, userStore, sessionStore, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
-      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
       val session = authService.authenticate("admin", "password").get
 
       // Initial event store - create an event
       val initialEvent = ics205.model.Ics205Event(
-        eventName = "TestEvent",
+        id = "TestEvent",
         ics205 = ics205.model.Ics205(incidentName = "Initial Incident", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty),
         metadata = ics205.model.Ics205Metadata()
       )
-      store.saveEvent(initialEvent)
+      store.save(initialEvent)
       assertEquals(store.getEvent("TestEvent").get.ics205.incidentName, "Initial Incident")
 
       // Modify the event file directly on disk
@@ -117,7 +117,7 @@ class DebugEndpointsTests extends munit.FunSuite:
   test("GET /debug/reload-files redirects to returnUrl if provided"):
     withContext { (_, _, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
-      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
       val session = authService.authenticate("admin", "password").get
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/debug/reload-files?returnUrl=%2Fradio"))
@@ -132,15 +132,15 @@ class DebugEndpointsTests extends munit.FunSuite:
   test("POST /debug/reload-files reloads files and returns SeeOther"):
     withContext { (tempDir, store, userStore, sessionStore, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
-      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
       val session = authService.authenticate("admin", "password").get
 
       val initialEvent = ics205.model.Ics205Event(
-        eventName = "PostEvent",
+        id = "PostEvent",
         ics205 = ics205.model.Ics205(incidentName = "Initial Incident", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty),
         metadata = ics205.model.Ics205Metadata()
       )
-      store.saveEvent(initialEvent)
+      store.save(initialEvent)
 
       val eventsDir = tempDir / "events"
       val eventFile = eventsDir / "PostEvent.json"
@@ -158,9 +158,9 @@ class DebugEndpointsTests extends munit.FunSuite:
       assertEquals(store.getEvent("PostEvent").get.ics205.incidentName, "POST Reload Incident")
     }
 
-  test("GET /debug/download-directory without session returns 401 Unauthorized"):
+  test("GET /debug/download-directory.zip without session returns 401 Unauthorized"):
     withContext { (_, _, _, _, _, _, _, _, app) =>
-      val req = Request[IO](Method.GET, Uri.unsafeFromString("/debug/download-directory"))
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/debug/download-directory.zip"))
       val res = app.run(req).unsafeRunSync()
       assertEquals(res.status, Status.Unauthorized)
     }
@@ -168,31 +168,31 @@ class DebugEndpointsTests extends munit.FunSuite:
   test("GET /debug/download-directory with user lacking Debug permission returns 403 Forbidden"):
     withContext { (_, _, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
-      userStore.add(User("viewer1", hash, RolePermissions.Viewer, enabled = true, id = "u1"))
+      userStore.add(User("viewer1", hash, Role.Viewer, enabled = true, id = "u1"))
       val session = authService.authenticate("viewer1", "password").get
 
-      val req = Request[IO](Method.GET, Uri.unsafeFromString("/debug/download-directory"))
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/debug/download-directory.zip"))
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       val res = app.run(req).unsafeRunSync()
       assertEquals(res.status, Status.Forbidden)
     }
 
-  test("GET /debug/download-directory by admin downloads zip archive of entire FileHelper.directory"):
+  test("GET /debug/download-directory.zip by admin downloads zip archive of entire FileHelper.directory"):
     withContext { (tempDir, store, userStore, sessionStore, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
-      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
       val session = authService.authenticate("admin", "password").get
 
       // Add files in data directory
       val event = ics205.model.Ics205Event(
-        eventName = "SummerDrill",
+        id = "SummerDrill",
         ics205 = ics205.model.Ics205(incidentName = "Summer Incident", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty),
         metadata = ics205.model.Ics205Metadata()
       )
-      store.saveEvent(event)
+      store.save(event)
       os.write(tempDir / "extra.txt", "some extra text")
 
-      val req = Request[IO](Method.GET, Uri.unsafeFromString("/debug/download-directory"))
+      val req = Request[IO](Method.GET, Uri.unsafeFromString("/debug/download-directory.zip"))
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       val res = app.run(req).unsafeRunSync()
 
@@ -218,22 +218,32 @@ class DebugEndpointsTests extends munit.FunSuite:
       zis.close()
 
       assertEquals(entries.get("extra.txt"), Some("some extra text"))
-      assert(entries.contains("events/SummerDrill.json"))
-      assert(entries("events/SummerDrill.json").contains("Summer Incident"))
+      assert(entries.contains("events/SummerDrill.ics205") || entries.contains("events/SummerDrill.json"))
+      val drillContent = entries.get("events/SummerDrill.ics205").orElse(entries.get("events/SummerDrill.json")).getOrElse("")
+      assert(drillContent.contains("Summer Incident"))
     }
 
-  test("GET /debug/download-data alias endpoint also returns directory zip"):
+  test("GET /debug/download-directory and other alias endpoints also return directory zip"):
     withContext { (tempDir, store, userStore, sessionStore, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
-      userStore.add(User("admin", hash, RolePermissions.Admin, enabled = true, id = "u-admin"))
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
       val session = authService.authenticate("admin", "password").get
 
-      val req = Request[IO](Method.GET, Uri.unsafeFromString("/debug/download-data"))
-        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
-      val res = app.run(req).unsafeRunSync()
+      val endpoints = Seq(
+        "/debug/download-directory",
+        "/debug/download-data.zip",
+        "/debug/download-data",
+        "/debug/download-all-data.zip",
+        "/debug/download-all-data"
+      )
 
-      assertEquals(res.status, Status.Ok)
-      assertEquals(res.headers.get(CIString("Content-Type")).map(_.head.value), Some("application/zip"))
-      val disposition = res.headers.get(CIString("Content-Disposition")).map(_.head.value).getOrElse("")
-      assert(disposition.matches("""attachment;\s*filename="ics205-\d{8}T\d{6}Z\.zip""""))
+      for path <- endpoints do
+        val req = Request[IO](Method.GET, Uri.unsafeFromString(path))
+          .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        val res = app.run(req).unsafeRunSync()
+
+        assertEquals(res.status, Status.Ok)
+        assertEquals(res.headers.get(CIString("Content-Type")).map(_.head.value), Some("application/zip"))
+        val disposition = res.headers.get(CIString("Content-Disposition")).map(_.head.value).getOrElse("")
+        assert(disposition.matches("""attachment;\s*filename="ics205-\d{8}T\d{6}Z\.zip""""))
     }

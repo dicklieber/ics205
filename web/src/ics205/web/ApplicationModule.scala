@@ -43,7 +43,7 @@ class ApplicationModule(
   override def configure(): Unit =
     val fileHelper = customFileHelper.getOrElse(new FileHelper())
     bind[FileHelper].toInstance(fileHelper)
-    LoggingConfig.init(fileHelper.configDirectory)
+    LoggingConfig.init(fileHelper.logDirectory)
 
     val authConfig = AuthConfig.fromConfig(fullConfig)
     bind[AuthConfig].toInstance(authConfig)

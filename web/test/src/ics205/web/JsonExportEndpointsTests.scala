@@ -21,9 +21,10 @@ package ics205.web
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import ics205.auth.*
-import ics205.model.{Frequency, Ics205, Ics205Channel, Ics205Json, OperationalPeriod, RadioMode, RxWithOffset}
+import ics205.model.{Frequency, Ics205, Ics205Channel, Ics205Event, OperationalPeriod, RadioMode, RxWithOffset}
 import ics205.store.{Ics205Store, InMemJsonSessionStore, SessionStore, UserStore}
 import ics205.util.FileHelper
+import io.circe.parser.decode
 import org.http4s.{Header, Method, Request, Status, Uri}
 import org.typelevel.ci.CIString
 import sttp.tapir.server.http4s.Http4sServerInterpreter
@@ -59,7 +60,7 @@ class JsonExportEndpointsTests extends munit.FunSuite:
         operationalPeriod = OperationalPeriod(),
         channels = Seq(sampleChannel)
       )
-      ics205Store.save(plan)
+      ics205Store.save(Ics205Event(plan))
 
       val jsonEndpoints = new JsonExportEndpoints(ics205Store, authService, config)
       val httpApp = Http4sServerInterpreter[IO]().toRoutes(jsonEndpoints.endpoints).orNotFound
@@ -68,27 +69,25 @@ class JsonExportEndpointsTests extends munit.FunSuite:
     finally
       os.remove.all(tempDir)
 
-  test("GET /export/json without session redirects to /login"):
+  test("GET /export/json without session returns 401 Unauthorized"):
     withContext { (_, _, _, _, _, app) =>
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/json"))
       val res = app.run(req).unsafeRunSync()
-      assertEquals(res.status, Status.SeeOther)
-      assertEquals(res.headers.get(CIString("Location")).map(_.head.value), Some("/login"))
+      assertEquals(res.status, Status.Unauthorized)
     }
 
-  test("GET /export/json with invalid session redirects to /login"):
+  test("GET /export/json with invalid session returns 401 Unauthorized"):
     withContext { (_, _, _, _, _, app) =>
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/json"))
         .putHeaders(Header.Raw(CIString("Cookie"), "session=invalid-session-id"))
       val res = app.run(req).unsafeRunSync()
-      assertEquals(res.status, Status.SeeOther)
-      assertEquals(res.headers.get(CIString("Location")).map(_.head.value), Some("/login"))
+      assertEquals(res.status, Status.Unauthorized)
     }
 
   test("GET /export/json with valid session downloads pretty JSON for current event"):
     withContext { (_, userStore, _, store, authService, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("testuser", passwordService.hash("password"), RolePermissions.User, enabled = true, id = "u1"))
+      userStore.add(User("testuser", passwordService.hash("password"), Role.User, enabled = true, id = "u1"))
       val session = authService.authenticate("testuser", "password").get
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/json"))
@@ -101,9 +100,9 @@ class JsonExportEndpointsTests extends munit.FunSuite:
       assertEquals(res.headers.get(CIString("Cache-Control")).map(_.head.value), Some("no-store"))
 
       val body = res.as[String].unsafeRunSync()
-      val decoded = Ics205Json.fromJson(body)
+      val decoded = decode[Ics205Event](body)
       assert(decoded.isRight)
-      assertEquals(decoded.toOption.get.incidentName, "Wildfire Incident")
-      assertEquals(decoded.toOption.get.channels.size, 1)
-      assertEquals(decoded.toOption.get.channels.head.name, "TAC1")
+      assertEquals(decoded.toOption.get.ics205.incidentName, "Wildfire Incident")
+      assertEquals(decoded.toOption.get.ics205.channels.size, 1)
+      assertEquals(decoded.toOption.get.ics205.channels.head.name, "TAC1")
     }

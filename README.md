@@ -151,7 +151,7 @@ exported under `ics205_http_transactions` with durations in seconds.
 
 ### User and Session Storage
 
-User and session databases are stored in the application data directory (resolved by `FileHelper`, e.g., `~/Library/Application Support/ICS-205` on macOS, `%LOCALAPPDATA%\ICS-205` on Windows, `~/.ics205` on Linux):
+User and session databases are stored in the application data directory (resolved by `FileHelper`, `~/.ics205` in the user's home directory):
 
 - **Users file**: `users.json` (configurable via `auth.userFileName` or `AuthConfig.userFileName`)
   ```json
@@ -280,8 +280,7 @@ The application deploys into the dedicated `ics205` system account's home direct
 │   └── ics205.jar          # Application JAR (owned by root:ics205, mode 640)
 ├── config/
 │   ├── ics205.conf         # Optional Typesafe Config file (owned by root:ics205, mode 640)
-│   ├── ics205.env          # Optional environment variables file (owned by ics205:ics205, mode 640)
-│   └── log4j2.yaml         # Logging configuration (owned by root:ics205, mode 640)
+│   └── ics205.env          # Optional environment variables file (owned by ics205:ics205, mode 640)
 ├── data/
 │   ├── ics205.json         # Persistent application data (owned by ics205:ics205, mode 750)
 │   ├── users.json
@@ -348,10 +347,6 @@ sudo chmod 750 /home/ics205/app /home/ics205/config /home/ics205/install
 sudo cp out/web/assembly.dest/out.jar /home/ics205/app/ics205.jar
 sudo chown root:ics205 /home/ics205/app/ics205.jar
 sudo chmod 640 /home/ics205/app/ics205.jar
-
-sudo cp web/resources/log4j2.yaml /home/ics205/config/log4j2.yaml
-sudo chown root:ics205 /home/ics205/config/log4j2.yaml
-sudo chmod 640 /home/ics205/config/log4j2.yaml
 ```
 
 ### 4. Systemd Service Configuration

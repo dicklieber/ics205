@@ -18,7 +18,7 @@
 
 package ics205.store
 
-import ics205.auth.{AuthConfig, RolePermissions, User}
+import ics205.auth.{AuthConfig, Role, User}
 import ics205.util.FileHelper
 
 class UserStoreTests extends munit.FunSuite:
@@ -32,7 +32,7 @@ class UserStoreTests extends munit.FunSuite:
   private val testUser = User(
     username = "admin",
     passwordHash = "hash123",
-    role = RolePermissions.Admin,
+    role = Role.Admin,
     enabled = true,
     id = "user-1"
   )
@@ -43,16 +43,16 @@ class UserStoreTests extends munit.FunSuite:
       assertEquals(store.all(), Seq.empty)
       assertEquals(store.findById("user-1"), None)
       assertEquals(store.findByUsername("admin"), None)
-      assert(!os.exists(dir / "users.json"))
+      assert(!os.exists(dir / "admin" / "users.json"))
     }
 
   test("add user persists to JSON and is findable case-insensitively"):
     withDirectory { dir =>
       val store = new UserStore(helper(dir))
-      assert(!os.exists(dir / "users.json"))
+      assert(!os.exists(dir / "admin" / "users.json"))
       val added = store.add(testUser)
       assertEquals(added, Right(testUser))
-      assert(os.exists(dir / "users.json"))
+      assert(os.exists(dir / "admin" / "users.json"))
       assertEquals(store.findById("user-1"), Some(testUser))
       assertEquals(store.findByUsername("admin"), Some(testUser))
       assertEquals(store.findByUsername("ADMIN"), Some(testUser))
@@ -69,10 +69,10 @@ class UserStoreTests extends munit.FunSuite:
       val store = new UserStore(helper(dir))
       assertEquals(store.add(testUser), Right(testUser))
 
-      val dupName = User("ADMIN", "hash2", RolePermissions.User, enabled = true, id = "user-2")
+      val dupName = User("ADMIN", "hash2", Role.User, enabled = true, id = "user-2")
       assert(store.add(dupName).isLeft)
 
-      val dupId = User("other", "hash3", RolePermissions.User, enabled = true, id = "user-1")
+      val dupId = User("other", "hash3", Role.User, enabled = true, id = "user-1")
       assert(store.add(dupId).isLeft)
     }
 
@@ -80,8 +80,8 @@ class UserStoreTests extends munit.FunSuite:
     withDirectory { dir =>
       val store = new UserStore(helper(dir))
       store.add(testUser)
-      val updated = testUser.copy(role = RolePermissions.Editor, enabled = false)
-      assertEquals(store.update(updated), Right(updated))
+      val updated = testUser.copy(role = Role.Editor, enabled = false)
+      assertEquals(store.save(updated), Right(updated))
       assertEquals(store.findById("user-1"), Some(updated))
 
       val freshStore = new UserStore(helper(dir))
@@ -102,7 +102,7 @@ class UserStoreTests extends munit.FunSuite:
 
   test("corrupted or malformed user JSON defaults gracefully to empty"):
     withDirectory { dir =>
-      os.write(dir / "users.json", "{ malformed json content }")
+      os.write(dir / "admin" / "users.json", "{ malformed json content }", createFolders = true)
       val store = new UserStore(helper(dir))
       assertEquals(store.all(), Seq.empty)
     }
@@ -121,10 +121,19 @@ class UserStoreTests extends munit.FunSuite:
           |    }
           |  ]
           |}""".stripMargin
-      os.write(dir / "users.json", legacyJson)
+      os.write(dir / "admin" / "users.json", legacyJson, createFolders = true)
       val store = new UserStore(helper(dir))
       val user = store.findById("legacy-1")
       assert(user.isDefined)
       assertEquals(user.get.username, "legacyuser")
-      assertEquals(user.get.role, RolePermissions.Editor)
+      assertEquals(user.get.role, Role.Editor)
+    }
+
+  test("all returns users sorted by username case-insensitively"):
+    withDirectory { dir =>
+      val store = new UserStore(helper(dir))
+      store.add(User("charlie", "hash", Role.User, enabled = true, id = "u-3"))
+      store.add(User("Alice", "hash", Role.User, enabled = true, id = "u-1"))
+      store.add(User("bob", "hash", Role.User, enabled = true, id = "u-2"))
+      assertEquals(store.all().map(_.username), Seq("Alice", "bob", "charlie"))
     }

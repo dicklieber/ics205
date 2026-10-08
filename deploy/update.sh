@@ -21,7 +21,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Default settings
 DEFAULT_JAR_PATH="${REPO_ROOT}/out/web/assembly.dest/out.jar"
 DEFAULT_SERVICE_PATH="${SCRIPT_DIR}/ics205.service"
-DEFAULT_LOG4J_PATH="${REPO_ROOT}/web/resources/log4j2.yaml"
+DEFAULT_LOG4J_PATH=""
 REMOTE_USER="ics205"
 REMOTE_GROUP="ics205"
 REMOTE_BASE_DIR="/home/${REMOTE_USER}"

@@ -35,6 +35,9 @@ class AssetEndpoints extends ApiEndpoints:
       ("css", "admin.css", "text/css; charset=utf-8"),
       ("css", "radio.css", "text/css; charset=utf-8"),
       ("css", "navbar.css", "text/css; charset=utf-8"),
+      ("js", "ics205-export.js", "text/javascript; charset=utf-8"),
+      ("js", "ics205-editor.js", "text/javascript; charset=utf-8"),
+      ("js", "ics205-remarks.js", "text/javascript; charset=utf-8"),
       ("icons", "trash.svg", "image/svg+xml"),
       ("icons", "copy.svg", "image/svg+xml")
     ).map { (directory, fileName, contentType) =>

@@ -18,139 +18,76 @@
 
 package ics205.model
 
-import ics205.auth.{AuthenticatedUser, Permission, RolePermissions, User, UserId}
-import io.circe.{Codec, Decoder, Encoder, HCursor, Json, JsonObject}
+import ics205.auth.*
+import io.circe.*
 import io.circe.syntax.*
 
 import java.time.Instant
 
-enum PlanAccess:
-  case ReadOnly
-  case Edit
+enum PlanAccess derives Codec.AsObject:
+  case Edit, ReadOnly
 
-type EventAccess = PlanAccess
-val EventAccess: PlanAccess.type = PlanAccess
-
+/**
+ * A user with this group can access the associated [[Ics205Event]].
+ * @param group a user defined group name.
+ */
 case class Ics205Metadata(
-  permissions: Map[UserId, Permission] = Map.empty,
-  lastEditedBy: Option[UserId] = None,
+  group: Option[String] = None,
+  permissions: Map[String, Permission] = Map.empty,
+  lastEditedBy: Option[String] = None,
   savedAt: Instant = Instant.now()
-):
-  def userPermissions: Map[UserId, Permission] = permissions
-  def lastEditedByUserId: Option[UserId] = lastEditedBy
-  def savedInstant: Instant = savedAt
+) derives Codec.AsObject:
 
-  def permissionFor(userId: UserId): Option[Permission] =
-    permissions.get(userId)
-
-  def permissionFor(user: User): Option[Permission] =
-    permissionFor(user.id, user.role)
-
-  def permissionFor(user: AuthenticatedUser): Option[Permission] =
-    permissionFor(user.id, user.role)
-
-  def permissionFor(userId: UserId, role: RolePermissions): Option[Permission] =
-    if role == RolePermissions.Admin then
-      Some(Permission.EditPlans)
-    else
-      permissions.get(userId).orElse {
-        if permissions.isEmpty then
-          if role.hasPermission(Permission.EditPlans) then Some(Permission.EditPlans)
-          else if role.hasPermission(Permission.ViewPlans) then Some(Permission.ViewPlans)
-          else None
-        else
-          None
-      }
-
-  def accessFor(user: User): Option[PlanAccess] =
-    permissionFor(user).flatMap {
-      case Permission.EditPlans => Some(PlanAccess.Edit)
-      case Permission.ViewPlans => Some(PlanAccess.ReadOnly)
-      case _ => None
-    }
-
-  def accessFor(user: AuthenticatedUser): Option[PlanAccess] =
-    permissionFor(user).flatMap {
-      case Permission.EditPlans => Some(PlanAccess.Edit)
-      case Permission.ViewPlans => Some(PlanAccess.ReadOnly)
-      case _ => None
-    }
-
-  def accessFor(userId: UserId, role: RolePermissions): Option[PlanAccess] =
-    permissionFor(userId, role).flatMap {
-      case Permission.EditPlans => Some(PlanAccess.Edit)
-      case Permission.ViewPlans => Some(PlanAccess.ReadOnly)
-      case _ => None
-    }
-
-  def canEdit(user: User): Boolean =
-    permissionFor(user).contains(Permission.EditPlans)
-
-  def canEdit(user: AuthenticatedUser): Boolean =
-    permissionFor(user).contains(Permission.EditPlans)
-
-  def canView(user: User): Boolean =
-    permissionFor(user).isDefined
-
-  def canView(user: AuthenticatedUser): Boolean =
-    permissionFor(user).isDefined
-
-  def isReadOnly(user: User): Boolean =
-    permissionFor(user).contains(Permission.ViewPlans)
-
-  def isReadOnly(user: AuthenticatedUser): Boolean =
-    permissionFor(user).contains(Permission.ViewPlans)
-
-  def isEdit(user: User): Boolean = canEdit(user)
-  def isEdit(user: AuthenticatedUser): Boolean = canEdit(user)
-
-  def withUserPermission(userId: UserId, permission: Option[Permission]): Ics205Metadata =
-    permission match
-      case Some(p) => copy(permissions = permissions + (userId -> p))
-      case None    => copy(permissions = permissions - userId)
-
-  def withUserPermission(userId: UserId, permission: Permission): Ics205Metadata =
+  def withUserPermission(userId: String, permission: Permission): Ics205Metadata =
     copy(permissions = permissions + (userId -> permission))
 
-  def withoutUserPermission(userId: UserId): Ics205Metadata =
+  def withUserPermission(userId: String, permissionOpt: Option[Permission]): Ics205Metadata =
+    permissionOpt match
+      case Some(perm) => withUserPermission(userId, perm)
+      case None => withoutUserPermission(userId)
+
+  def withoutUserPermission(userId: String): Ics205Metadata =
     copy(permissions = permissions - userId)
 
-  def withLastEditedBy(userId: UserId): Ics205Metadata =
+  def withLastEditedBy(userId: String): Ics205Metadata =
     copy(lastEditedBy = Some(userId))
 
   def withSavedAt(instant: Instant): Ics205Metadata =
     copy(savedAt = instant)
 
-object Ics205Metadata:
-  given Codec.AsObject[Ics205Metadata] = Codec.AsObject.from(
-    (c: HCursor) => {
-      for
-        perms <- c.downField("permissions").as[Option[Map[UserId, Permission]]].flatMap {
-          case Some(p) => Right(p)
-          case None => c.downField("userPermissions").as[Option[Map[UserId, Permission]]].map(_.getOrElse(Map.empty))
-        }
-        lastEdited <- c.downField("lastEditedBy").as[Option[UserId]].flatMap {
-          case Some(u) => Right(Some(u))
-          case None => c.downField("lastEditedByUserId").as[Option[UserId]]
-        }
-        saved <- c.downField("savedAt").as[Option[Instant]].flatMap {
-          case Some(s) => Right(s)
-          case None => c.downField("saved").as[Option[Instant]].map(_.getOrElse(Instant.now()))
-        }
-      yield Ics205Metadata(
-        permissions = perms,
-        lastEditedBy = lastEdited,
-        savedAt = saved
-      )
-    },
-    (m: Ics205Metadata) => {
-      val fields = scala.collection.mutable.ListBuffer[(String, Json)]()
-      if m.permissions.nonEmpty then
-        fields += ("permissions" -> m.permissions.asJson)
-      m.lastEditedBy.foreach { uid =>
-        fields += ("lastEditedBy" -> Json.fromString(uid))
-      }
-      fields += ("savedAt" -> m.savedAt.asJson)
-      JsonObject.fromIterable(fields)
-    }
-  )
+  def accessFor(user: User): Option[PlanAccess] =
+    if user.role == Role.Admin then Some(PlanAccess.Edit)
+    else permissions.get(user.id) match
+      case Some(Permission.EditPlans) => Some(PlanAccess.Edit)
+      case Some(Permission.ViewPlans) => Some(PlanAccess.ReadOnly)
+      case Some(_) => None
+      case None =>
+        if permissions.isEmpty then
+          if user.role.hasPermission(Permission.EditPlans) then Some(PlanAccess.Edit)
+          else if user.role.hasPermission(Permission.ViewPlans) then Some(PlanAccess.ReadOnly)
+          else None
+        else None
+
+  def accessFor(authUser: AuthenticatedUser): Option[PlanAccess] =
+    accessFor(authUser.user)
+
+  def canEdit(user: User): Boolean =
+    accessFor(user).contains(PlanAccess.Edit)
+
+  def canEdit(authUser: AuthenticatedUser): Boolean =
+    canEdit(authUser.user)
+
+  def canView(user: User): Boolean =
+    accessFor(user).isDefined
+
+  def canView(authUser: AuthenticatedUser): Boolean =
+    canView(authUser.user)
+
+  def isReadOnly(user: User): Boolean =
+    accessFor(user).contains(PlanAccess.ReadOnly)
+
+  def isReadOnly(authUser: AuthenticatedUser): Boolean =
+    isReadOnly(authUser.user)
+
+
+

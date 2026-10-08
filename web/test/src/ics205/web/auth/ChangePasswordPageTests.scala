@@ -18,15 +18,11 @@
 
 package ics205.web.auth
 
-import ics205.auth.{AuthenticatedUser, RolePermissions}
+import ics205.auth.{AuthenticatedUser, Role}
 
 class ChangePasswordPageTests extends munit.FunSuite:
 
-  val testUser = AuthenticatedUser(
-    username = "testuser",
-    role = RolePermissions.User,
-    id = "u-test"
-  )
+  val testUser = AuthenticatedUser(user = "testuser", session = Role.User)
 
   test("ChangePasswordPage renders change password form with all required fields"):
     val html = ChangePasswordPage.render(

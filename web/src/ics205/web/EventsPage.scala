@@ -18,7 +18,7 @@
 
 package ics205.web
 
-import ics205.auth.{AuthenticatedUser, RolePermissions}
+import ics205.auth.{AuthenticatedUser, Role}
 import ics205.model.{Ics205Event, PlanAccess}
 import scalatags.Text.all.*
 
@@ -41,7 +41,7 @@ object EventsPage:
   ): String =
     val sortedEvents = events.sortBy(ev => (ev.eventName.toLowerCase(java.util.Locale.ROOT), ev.eventName))
     val availableNames = sortedEvents.map(_.eventName)
-    val isAdmin = currentUser.role == RolePermissions.Admin
+    val isAdmin = currentUser.role == Role.Admin
 
     doctype("html")(
       html(lang := "en")(
@@ -106,7 +106,7 @@ object EventsPage:
 
                       tr(
                         td(
-                          a(href := s"/?event=${encode(ev.eventName)}")(strong(ev.eventName)),
+                          a(href := s"/?event=${encode(ev.id)}")(strong(ev.eventName)),
                           if isSelected then
                             span(cls := "badge badge-active", style := "margin-left: 8px;")("Current")
                           else
@@ -128,10 +128,10 @@ object EventsPage:
                         td(cls := "event-actions")(
                           select(cls := "event-action-select", attr("aria-label") := s"Actions for ${ev.eventName}")(
                             option(value := "")("Actions…"),
-                            option(value := s"/events/export?name=${encode(ev.eventName)}")("Export"),
+                            option(value := s"/events/export?name=${encode(ev.id)}")("Export"),
                             if canEdit || isAdmin then
                               Seq[Modifier](
-                                option(value := s"/events/metadata?name=${encode(ev.eventName)}")("Metadata"),
+                                option(value := s"/events/metadata?name=${encode(ev.id)}")("Metadata"),
                                 option(value := "duplicate")("Duplicate")
                               )
                             else Seq.empty[Modifier],
@@ -140,6 +140,7 @@ object EventsPage:
                           if canEdit || isAdmin then
                             form(method := "post", action := "/events/duplicate", hidden,
                               attr("data-duplicate-name") := duplicateName)(
+                              input(tpe := "hidden", name := "eventId", value := ev.id),
                               input(tpe := "hidden", name := "eventName", value := ev.eventName),
                               input(tpe := "hidden", name := "newEventName")
                             )
@@ -147,6 +148,7 @@ object EventsPage:
                           if isAdmin then
                             form(method := "post", action := "/events/delete", hidden,
                               attr("data-confirm") := s"Are you sure you want to delete event '${ev.eventName}'?")(
+                              input(tpe := "hidden", name := "eventId", value := ev.id),
                               input(tpe := "hidden", name := "eventName", value := ev.eventName)
                             )
                           else span()

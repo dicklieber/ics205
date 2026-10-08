@@ -38,19 +38,18 @@ class RadioEndpointsTests extends munit.FunSuite:
       val users = new UserStore(helper, config)
       val sessions = new InMemJsonSessionStore(helper, config)
       val auth = new AuthenticationService(users, new ScalaPassPasswordService(), sessions)
-      users.add(User("viewer", "unused", RolePermissions.User, enabled = true, id = "viewer"))
+      users.add(User("viewer", "unused", Role.User, enabled = true, id = "viewer"))
       val session = sessions.create("viewer")
       val app = Http4sServerInterpreter[IO]().toRoutes(
         new IndexEndpoints(store, auth, config).endpoints ++ new AssetEndpoints().endpoints).orNotFound
       val request = Request[IO](Method.GET, Uri.unsafeFromString("/radio"))
       Seq(request, request.putHeaders(Header.Raw(CIString("Cookie"), "session=invalid"))).foreach { req =>
         val response = app.run(req).unsafeRunSync()
-        assertEquals(response.status, Status.SeeOther)
-        assertEquals(response.headers.get(CIString("Location")).map(_.head.value), Some("/login"))
+        assertEquals(response.status, Status.Unauthorized)
       }
       val authenticated = request.putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       Seq("First incident", "Updated incident").foreach { incident =>
-        store.save(Ics205(incidentName = incident, operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+        store.save(ics205.model.Ics205Event(ics205.model.Ics205(incidentName = incident, operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
         val response = app.run(authenticated).unsafeRunSync()
         assertEquals(response.status, Status.Ok)
         val html = response.as[String].unsafeRunSync()

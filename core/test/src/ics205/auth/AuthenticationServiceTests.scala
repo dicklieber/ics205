@@ -39,7 +39,7 @@ class AuthenticationServiceTests extends munit.FunSuite:
   test("successful login creates valid session and authenticates session correctly"):
     withDirectory { (_, authService, userStore, _, passwordService) =>
       val hash = passwordService.hash("secret123")
-      val user = User("operator", hash, RolePermissions.Editor, enabled = true, id = "user-1")
+      val user = User("operator", hash, Role.Editor, enabled = true, id = "user-1")
       userStore.add(user)
 
       val maybeSession = authService.authenticate("operator", "secret123")
@@ -48,13 +48,14 @@ class AuthenticationServiceTests extends munit.FunSuite:
       assertEquals(session.userId, "user-1")
 
       val authenticated = authService.authenticateSession(session.id)
-      assertEquals(authenticated, Right(AuthenticatedUser("operator", RolePermissions.Editor, id = "user-1")))
+      assertEquals(authenticated.map(_.username), Right("operator"))
+      assertEquals(authenticated.map(_.role), Right(Role.Editor))
     }
 
   test("failed login with unknown username or wrong password returns None without leaking details"):
     withDirectory { (_, authService, userStore, _, passwordService) =>
       val hash = passwordService.hash("secret123")
-      val user = User("operator", hash, RolePermissions.User, enabled = true, id = "user-1")
+      val user = User("operator", hash, Role.User, enabled = true, id = "user-1")
       userStore.add(user)
 
       assertEquals(authService.authenticate("nonexistent", "secret123"), None)
@@ -64,7 +65,7 @@ class AuthenticationServiceTests extends munit.FunSuite:
   test("disabled user cannot authenticate via login"):
     withDirectory { (_, authService, userStore, _, passwordService) =>
       val hash = passwordService.hash("secret123")
-      val user = User("disabledUser", hash, RolePermissions.User, enabled = false, id = "user-1")
+      val user = User("disabledUser", hash, Role.User, enabled = false, id = "user-1")
       userStore.add(user)
 
       assertEquals(authService.authenticate("disabledUser", "secret123"), None)
@@ -73,7 +74,7 @@ class AuthenticationServiceTests extends munit.FunSuite:
   test("nonexistent or expired session fails to authenticate"):
     withDirectory { (dir, _, userStore, _, passwordService) =>
       val hash = passwordService.hash("secret123")
-      val user = User("operator", hash, RolePermissions.User, enabled = true, id = "user-1")
+      val user = User("operator", hash, Role.User, enabled = true, id = "user-1")
       userStore.add(user)
 
       val helper = new FileHelper(dir)
@@ -91,27 +92,27 @@ class AuthenticationServiceTests extends munit.FunSuite:
   test("role changes in UserStore take effect immediately for existing sessions"):
     withDirectory { (_, authService, userStore, _, passwordService) =>
       val hash = passwordService.hash("secret123")
-      val user = User("operator", hash, RolePermissions.User, enabled = true, id = "user-1")
+      val user = User("operator", hash, Role.User, enabled = true, id = "user-1")
       userStore.add(user)
 
       val session = authService.authenticate("operator", "secret123").get
-      assertEquals(authService.authenticateSession(session.id), Right(AuthenticatedUser("operator", RolePermissions.User, id = "user-1")))
+      assertEquals(authService.authenticateSession(session.id).map(_.role), Right(Role.User))
 
       // Change user role in UserStore
-      userStore.update(user.copy(role = RolePermissions.Admin))
-      assertEquals(authService.authenticateSession(session.id), Right(AuthenticatedUser("operator", RolePermissions.Admin, id = "user-1")))
+      userStore.save(user.copy(role = Role.Admin))
+      assertEquals(authService.authenticateSession(session.id).map(_.role), Right(Role.Admin))
     }
 
   test("disabling a user invalidates access immediately for existing sessions"):
     withDirectory { (_, authService, userStore, _, passwordService) =>
       val hash = passwordService.hash("secret123")
-      val user = User("operator", hash, RolePermissions.User, enabled = true, id = "user-1")
+      val user = User("operator", hash, Role.User, enabled = true, id = "user-1")
       userStore.add(user)
 
       val session = authService.authenticate("operator", "secret123").get
       assert(authService.authenticateSession(session.id).isRight)
 
       // Disable user in UserStore
-      userStore.update(user.copy(enabled = false))
+      userStore.save(user.copy(enabled = false))
       assert(authService.authenticateSession(session.id).isLeft)
     }

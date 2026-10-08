@@ -29,7 +29,7 @@ import java.time.Instant
 object NavigationBar:
 
   enum ActivePage:
-    case Plan, Radio, ExportRadio, Events, UserAdmin, ChangePassword, Login, None
+    case Plan, Radio, ExportRadio, Events, UserAdmin, ChangePassword, Login, Logging, LoggingYaml, None
 
   private val aboutDialogClick: String =
     "const d = document.getElementById('about-dialog');" +
@@ -74,6 +74,7 @@ object NavigationBar:
     val showDebug = currentUser.exists(_.hasPermission(Permission.Debug))
     val isExportActive = activePage == ActivePage.ExportRadio
     val isEventsActive = activePage == ActivePage.Events
+    val isDebugActive = activePage == ActivePage.Logging || activePage == ActivePage.LoggingYaml
 
     frag(
       nav(
@@ -182,7 +183,7 @@ object NavigationBar:
             if showDebug then
               li(cls := "nav-item dropdown")(
                 a(
-                  cls := "nav-link dropdown-toggle",
+                  cls := s"nav-link dropdown-toggle ${if isDebugActive then "active" else ""}".trim,
                   href := "#",
                   id := "navbarDropdownDebug",
                   attr("role") := "button",
@@ -194,6 +195,18 @@ object NavigationBar:
                 ul(cls := "dropdown-menu", attr("aria-labelledby") := "navbarDropdownDebug")(
                   li(
                     a(
+                      cls := s"dropdown-item ${if activePage == ActivePage.Logging then "active" else ""}".trim,
+                      href := "/debug/logging"
+                    )("Logging Configuration")
+                  ),
+                  li(
+                    a(
+                      cls := s"dropdown-item ${if activePage == ActivePage.LoggingYaml then "active" else ""}".trim,
+                      href := "/debug/logging/yaml"
+                    )("Logging Configuration (YAML)")
+                  ),
+                  li(
+                    a(
                       cls := "dropdown-item",
                       href := "/debug/reload-files"
                     )("Reload Files")
@@ -201,7 +214,7 @@ object NavigationBar:
                   li(
                     a(
                       cls := "dropdown-item",
-                      href := "/debug/download-directory"
+                      href := "/debug/download-directory.zip"
                     )("Download Data Directory")
                   ),
                   li(
@@ -232,7 +245,7 @@ object NavigationBar:
                   li(cls := "nav-item")(
                     span(cls := "navbar-text me-3")(
                       "Logged in as: ",
-                      strong(user.username)
+                      strong(user.user.username)
                     )
                   ),
                   li(cls := "nav-item")(
@@ -336,7 +349,7 @@ object NavigationBar:
                     frag(
                       " ",
                       a(
-                        href := "/debug/download-directory",
+                        href := "/debug/download-directory.zip",
                         cls := "btn btn-outline-secondary btn-sm ms-2",
                         style := "margin-left: 8px; font-size: 0.8rem; padding: 2px 6px;"
                       )("Download ZIP")

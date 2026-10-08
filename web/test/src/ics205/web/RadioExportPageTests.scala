@@ -18,17 +18,13 @@
 
 package ics205.web
 
-import ics205.auth.{AuthenticatedUser, RolePermissions, Session, User}
+import ics205.auth.{AuthenticatedUser, Role, Session, User}
 import ics205.model.{Frequency, Ics205, Ics205Channel, OperationalPeriod, RadioMode, RxWithOffset}
 import java.time.Instant
 
 class RadioExportPageTests extends munit.FunSuite:
 
-  val sampleUser = AuthenticatedUser(
-    username = "johndoe",
-    role = RolePermissions.Admin,
-    id = "u1"
-  )
+  val sampleUser = AuthenticatedUser(user = "johndoe", session = Role.Admin)
 
   val samplePlan = Ics205(
     incidentName = "Forest Fire 2026",

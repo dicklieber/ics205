@@ -20,7 +20,7 @@ package ics205.web.admin
 
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
-import ics205.auth.{AuthenticatedUser, PasswordService, Permission, RolePermissions, User}
+import ics205.auth.{AuthenticatedUser, PasswordService, Permission, Role, User}
 import ics205.store.{SessionStore, UserStore}
 import ics205.web.ApiEndpoints
 import ics205.web.auth.AuthSecurity
@@ -126,7 +126,7 @@ class UserAdminEndpoints @Inject()(
               val confirmPassword = formData.getOrElse("confirmPassword", formData.getOrElse("confirm_password", ""))
               val defaultRole = if isInitial then "admin" else "user"
               val roleInput = formData.getOrElse("role", formData.getOrElse("roles", defaultRole)).trim
-              val role = RolePermissions.fromString(roleInput).getOrElse(if isInitial then RolePermissions.Admin else RolePermissions.User)
+              val role = Role.fromString(roleInput).getOrElse(if isInitial then Role.Admin else Role.User)
               val enabled = formData.get("enabled").contains("true") || isInitial
 
               if username.isEmpty then
@@ -151,7 +151,7 @@ class UserAdminEndpoints @Inject()(
                       logger.info(s"Initial admin user '$username' (id: '${newUser.id}', role: ${newUser.role}, enabled: ${newUser.enabled}) created from IP $ip")
                       Right((StatusCode.SeeOther, s"/login?msg=${urlEncode(s"User '$username' created successfully. Please log in.")}"))
                     else
-                      val adminName = adminOpt.map(_.username).getOrElse("unknown")
+                      val adminName = adminOpt.map(_.user).getOrElse("unknown")
                       logger.info(s"Admin '$adminName' created user '$username' (id: '${newUser.id}', role: ${newUser.role}, enabled: ${newUser.enabled}) from IP $ip")
                       Right((StatusCode.SeeOther, s"/admin/users?msg=${urlEncode(s"User '$username' created successfully.")}"))
                   case Left(err) =>
@@ -174,7 +174,7 @@ class UserAdminEndpoints @Inject()(
           val password = formData.getOrElse("password", "")
           val confirmPassword = formData.getOrElse("confirmPassword", formData.getOrElse("confirm_password", ""))
           val roleInput = formData.getOrElse("role", formData.getOrElse("roles", "user")).trim
-          val role = RolePermissions.fromString(roleInput).getOrElse(RolePermissions.User)
+          val role = Role.fromString(roleInput).getOrElse(Role.User)
           val enabled = formData.get("enabled").contains("true")
 
           if id.isEmpty then
@@ -205,10 +205,10 @@ class UserAdminEndpoints @Inject()(
                   if passwordChanged then Some("password: changed") else None
                 ).flatten
 
-                userStore.update(updated) match
+                userStore.save(updated) match
                   case Right(_) =>
                     val changesSummary = if changedFields.nonEmpty then changedFields.mkString(", ") else "none"
-                    logger.info(s"Admin '${adminUser.username}' updated user '${existing.username}' (id: '$id') from IP $ip - changed fields: [$changesSummary]")
+                    logger.info(s"Admin '${adminUser.user}' updated user '${existing.username}' (id: '$id') from IP $ip - changed fields: [$changesSummary]")
                     if password.nonEmpty || existing.role != role || !enabled then
                       sessionStore.deleteAllForUser(existing.id)
                     (StatusCode.SeeOther, s"/admin/users?msg=${urlEncode(s"User '$username' updated successfully.")}")
@@ -233,7 +233,7 @@ class UserAdminEndpoints @Inject()(
             sessionStore.deleteAllForUser(id)
             userStore.delete(id)
             val username = userOpt.map(_.username).getOrElse(id)
-            logger.info(s"Admin '${adminUser.username}' deleted user '$username' (id: '$id') from IP $ip")
+            logger.info(s"Admin '${adminUser.user}' deleted user '$username' (id: '$id') from IP $ip")
             (StatusCode.SeeOther, s"/admin/users?msg=${urlEncode("User deleted successfully.")}")
           else
             (StatusCode.SeeOther, s"/admin/users?err=${urlEncode("User ID is missing.")}")
