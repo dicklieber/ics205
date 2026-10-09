@@ -106,7 +106,7 @@ echo; echo "Building..."
 
 # Verify the BuildInfo actually packaged in the jar is fresh.
 build_info_prop() {
-  unzip -p "$ARTIFACT" "$BUILD_INFO_ENTRY" | sed -n "s/^$1=//p" | tr -d '\\\r'
+  (unzip -p "$ARTIFACT" "$BUILD_INFO_ENTRY" 2>/dev/null || [[ $? -le 1 ]]) | sed -n "s/^$1=//p" | tr -d '\\\r'
 }
 EXPECTED_MILL_VERSION="$(tr -d '[:space:]' < .mill-version)"
 JAR_VERSION="$(build_info_prop version)"
