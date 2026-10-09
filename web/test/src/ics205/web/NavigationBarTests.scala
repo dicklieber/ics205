@@ -22,7 +22,7 @@ import ics205.BuildInfo
 import ics205.auth.{AuthenticatedUser, Role}
 import ics205.util.FileHelper
 
-import java.time.Instant
+import java.time.{Instant, ZoneId, ZoneOffset}
 
 class NavigationBarTests extends munit.FunSuite:
 
@@ -161,7 +161,7 @@ class NavigationBarTests extends munit.FunSuite:
       assert(html.contains(s"<dt>version</dt><dd>${BuildInfo.version}</dd>"))
       assert(html.contains(s"<dt>scalaVersion</dt><dd>${BuildInfo.scalaVersion}</dd>"))
       assert(html.contains(s"<dt>millVersion</dt><dd>${BuildInfo.millVersion}</dd>"))
-      assert(html.contains(s"<dt>buildTime</dt><dd>${BuildInfo.buildTime}</dd>"))
+      assert(html.contains(s"<dt>buildTime</dt><dd>${NavigationBar.formatBuildTime(BuildInfo.buildTime)}</dd>"))
       assert(html.contains(s"<dt>buildOs</dt><dd>${BuildInfo.buildOs}</dd>"))
       assert(html.contains("<dt>running for</dt>"))
 
@@ -198,3 +198,31 @@ class NavigationBarTests extends munit.FunSuite:
     assert(html.contains("<dt>running for</dt>"))
     assert(html.contains("id=\"about-running-for\""))
     assert(html.contains("2 min 5 sec</dd>"))
+
+  test("formatBuildTime formats in both Z and local timezone"):
+    val fixedInstant = Instant.parse("2026-10-09T13:03:00Z")
+    val chicagoZone = ZoneId.of("America/Chicago")
+    val formattedChicago = NavigationBar.formatBuildTime(fixedInstant, chicagoZone)
+    assertEquals(formattedChicago, "2026-10-09 13:03:00 Z / 2026-10-09 08:03:00 CDT")
+
+    val utcZone = ZoneOffset.UTC
+    val formattedUtc = NavigationBar.formatBuildTime(fixedInstant, utcZone)
+    assertEquals(formattedUtc, "2026-10-09 13:03:00 Z / 2026-10-09 13:03:00 Z")
+
+    val utcNamedZone = ZoneId.of("UTC")
+    val formattedUtcNamed = NavigationBar.formatBuildTime(fixedInstant, utcNamedZone)
+    assertEquals(formattedUtcNamed, "2026-10-09 13:03:00 Z / 2026-10-09 13:03:00 UTC")
+
+    val formattedFromString = NavigationBar.formatBuildTime("2026-10-09T13:03:00Z", chicagoZone)
+    assertEquals(formattedFromString, "2026-10-09 13:03:00 Z / 2026-10-09 08:03:00 CDT")
+
+    // Unparseable buildTime falls back to original string
+    assertEquals(NavigationBar.formatBuildTime("unknown", chicagoZone), "unknown")
+
+  test("aboutDialog uses provided zoneId to format buildTime"):
+    val fixedInstant = Instant.parse("2026-10-09T13:03:00Z")
+    val chicagoZone = ZoneId.of("America/Chicago")
+    val html = NavigationBar.aboutDialog(zoneId = chicagoZone).render
+    assert(html.contains("<dt>buildTime</dt>"))
+    val expected = NavigationBar.formatBuildTime(BuildInfo.buildTime, chicagoZone)
+    assert(html.contains(s"<dt>buildTime</dt><dd>$expected</dd>"))

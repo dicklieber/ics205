@@ -24,7 +24,8 @@ import ics205.util.{DurationFormat, FileHelper}
 import scalatags.Text.all.*
 import scalatags.Text.tags2.nav
 
-import java.time.Instant
+import java.time.{Instant, ZoneId, ZoneOffset}
+import java.time.format.DateTimeFormatter
 
 object NavigationBar:
 
@@ -68,7 +69,8 @@ object NavigationBar:
     currentEventName: Option[String] = None,
     availableEvents: Seq[String] = Seq.empty,
     fileHelper: FileHelper = new FileHelper(),
-    startTime: Instant = Instant.ofEpochMilli(java.lang.management.ManagementFactory.getRuntimeMXBean.getStartTime)
+    startTime: Instant = Instant.ofEpochMilli(java.lang.management.ManagementFactory.getRuntimeMXBean.getStartTime),
+    zoneId: ZoneId = ZoneId.systemDefault()
   ): Frag =
     val showUserAdmin = currentUser.exists(_.hasPermission(Permission.EditUsers))
     val showDebug = currentUser.exists(_.hasPermission(Permission.Debug))
@@ -275,13 +277,33 @@ object NavigationBar:
           )
         )
       ),
-      aboutDialog(fileHelper, startTime, currentUser)
+      aboutDialog(fileHelper, startTime, currentUser, zoneId)
     )
+
+  private val zBuildTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss 'Z'").withZone(ZoneOffset.UTC)
+  private val localBuildTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z")
+
+  def formatBuildTime(
+    buildTime: String = BuildInfo.buildTime,
+    zoneId: ZoneId = ZoneId.systemDefault()
+  ): String =
+    scala.util.Try(Instant.parse(buildTime)).map { instant =>
+      formatBuildTime(instant, zoneId)
+    }.getOrElse(buildTime)
+
+  def formatBuildTime(
+    instant: Instant,
+    zoneId: ZoneId
+  ): String =
+    val zFormatted = zBuildTimeFormatter.format(instant)
+    val localFormatted = localBuildTimeFormatter.withZone(zoneId).format(instant)
+    s"$zFormatted / $localFormatted"
 
   def aboutDialog(
     fileHelper: FileHelper = new FileHelper(),
     startTime: Instant = Instant.ofEpochMilli(java.lang.management.ManagementFactory.getRuntimeMXBean.getStartTime),
-    currentUser: Option[AuthenticatedUser] = None
+    currentUser: Option[AuthenticatedUser] = None,
+    zoneId: ZoneId = ZoneId.systemDefault()
   ): Frag =
     val initialUptime = java.time.Duration.between(startTime, Instant.now()).toMillis
     val buildInfoFields = Seq(
@@ -291,7 +313,7 @@ object NavigationBar:
       "version" -> BuildInfo.version,
       "scalaVersion" -> BuildInfo.scalaVersion,
       "millVersion" -> BuildInfo.millVersion,
-      "buildTime" -> BuildInfo.buildTime,
+      "buildTime" -> formatBuildTime(BuildInfo.buildTime, zoneId),
       "buildOs" -> BuildInfo.buildOs,
       "running for" -> DurationFormat(startTime)
     )

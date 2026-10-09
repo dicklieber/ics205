@@ -36,6 +36,9 @@ object core extends ScalaModule with BuildInfo with ScoverageModule:
   def buildInfoPackageName = "ics205"
   // Task.Input is re-evaluated on every build, so the timestamp is always fresh.
   def buildTime = Task.Input { java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString }
+  // A compile-time constant of the running Mill; wrap in Task.Input so a cached value
+  // from a previous Mill version is never reused after .mill-version changes.
+  def millVersion = Task.Input { mill.constants.BuildInfo.millVersion }
   // e.g. "Ubuntu 24.04.1 LTS", "Debian GNU/Linux 12 (bookworm)", "Mac OS X 15.1", "Windows 11 10.0".
   // Linux reports only "Linux" + kernel version via os.name, so prefer the distro's PRETTY_NAME.
   def buildOs = Task.Input {
@@ -56,7 +59,7 @@ object core extends ScalaModule with BuildInfo with ScoverageModule:
       BuildInfo.Value("productName", "ics205"),
       BuildInfo.Value("version", os.read(versionFile().path).trim),
       BuildInfo.Value("scalaVersion", scalaVersion()),
-      BuildInfo.Value("millVersion", mill.constants.BuildInfo.millVersion),
+      BuildInfo.Value("millVersion", millVersion()),
       BuildInfo.Value("buildTime", buildTime()),
       BuildInfo.Value("buildOs", buildOs())
     )
