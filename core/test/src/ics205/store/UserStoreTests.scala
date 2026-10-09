@@ -137,3 +137,17 @@ class UserStoreTests extends munit.FunSuite:
       store.add(User("bob", "hash", Role.User, enabled = true, id = "u-2"))
       assertEquals(store.all().map(_.username), Seq("Alice", "bob", "charlie"))
     }
+
+  test("persists and reloads user groups"):
+    withDirectory { dir =>
+      val store = new UserStore(helper(dir))
+      val userWithGroups = User("operator", "hash", Role.User, enabled = true, id = "u-op", groups = Set("Ares Operations", "North Team"))
+      store.add(userWithGroups)
+
+      val loaded = store.findById("u-op").get
+      assertEquals(loaded.groups, Set("Ares Operations", "North Team"))
+
+      val freshStore = new UserStore(helper(dir))
+      val reloaded = freshStore.findById("u-op").get
+      assertEquals(reloaded.groups, Set("Ares Operations", "North Team"))
+    }

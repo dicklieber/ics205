@@ -13,7 +13,7 @@ plans and exporting radio-programming data.
 
 Before setting up and running the project, ensure you have the following installed:
 
-- **Java Development Kit (JDK)**: JDK 17 or higher (JDK 17, 21, or newer LTS recommended). Ensure `JAVA_HOME` is set and `java` is available in your `PATH`.
+- **Java Development Kit (JDK)**: JDK 21 or higher. Ensure `JAVA_HOME` is set and `java` is available in your `PATH`.
 - **Git**: For cloning the repository and managing source control.
 - **Mill Build Tool**: The project includes the `./mill` wrapper script at the repository root, which automatically downloads and uses the required Mill version (configured in `.mill-version`). You do not need to install Mill globally.
 - **Scala 3**: All Scala 3 dependencies and the Scala 3.7.4 compiler are managed automatically by Mill — no separate Scala installation is necessary.

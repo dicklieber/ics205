@@ -18,33 +18,30 @@
 
 package ics205.web
 
-import ics205.auth.{AuthenticatedUser, Permission, Role, User}
+import ics205.auth.{AuthenticatedUser, Role, User}
 import ics205.model.Ics205Event
 import scalatags.Text.all.*
 
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-
 object EventMetadataPage:
-  private val instantFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-    .withZone(ZoneId.systemDefault())
 
   def render(
     currentUser: AuthenticatedUser,
     event: Ics205Event,
-    users: Seq[User],
+    users: Seq[User] = Seq.empty,
     availableEvents: Seq[String] = Seq.empty,
     message: Option[String] = None,
-    error: Option[String] = None
+    error: Option[String] = None,
+    knownGroups: Set[String] = Set("Default")
   ): String =
     val displayName = event.eventName
+    val groups = (knownGroups + event.group + "Default").toSeq.sorted
 
     doctype("html")(
       html(lang := "en")(
         head(
           meta(charset := "utf-8"),
           meta(name := "viewport", content := "width=device-width, initial-scale=1"),
-          scalatags.Text.tags2.title(s"ICS 205 — Metadata: $displayName"),
+          scalatags.Text.tags2.title(s"ICS 205 — Event Details: $displayName"),
           link(rel := "stylesheet", href := "/css/navbar.css"),
           link(rel := "stylesheet", href := "/css/admin.css")
         ),
@@ -58,7 +55,7 @@ object EventMetadataPage:
           div(cls := "admin-container")(
             div(cls := "admin-header")(
               div(
-                h1(s"Event Metadata: $displayName")
+                h1(s"Event Details: $displayName")
               ),
               div(cls := "nav-links")(
                 a(href := "/events")("← Back to Events")
@@ -102,71 +99,31 @@ object EventMetadataPage:
                   ),
                   p(cls := "form-help")("Incident name displayed on the ICS 205 plan and exports.")
                 ),
-                div(style := "display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #ebecf0;")(
-                  div(
-                    strong("Last Edited By: "),
-                    span(event.metadata.lastEditedBy.getOrElse("—"))
+                div(cls := "form-group")(
+                  label(attr("for") := "group")("Group"),
+                  select(
+                    id := "group",
+                    name := "group"
+                  )(
+                    groups.map { g =>
+                      option(
+                        value := g,
+                        if event.group.equalsIgnoreCase(g) then selected else cls := ""
+                      )(g)
+                    }
                   ),
-                  div(
-                    strong("Saved At: "),
-                    span(instantFormatter.format(event.metadata.savedAt))
-                  )
-                )
-              ),
-
-              div(cls := "card")(
-                h2("User Permissions for this Event"),
-                p(cls := "form-help")(
-                  "Assign custom permissions for specific users on this event. If 'Default / Inherit' is selected, the user's global role determines access."
+                  p(cls := "form-help")("Assign this event to a group.")
                 ),
-                table(cls := "users-table")(
-                  thead(
-                    tr(
-                      th("Username"),
-                      th("Global Role"),
-                      th("Event Access Permission")
-                    )
+                div(cls := "form-group", style := "margin-top: 6px;")(
+                  label(attr("for") := "newGroupName", style := "font-weight: normal; font-size: 9pt;")("Or create new group:"),
+                  input(
+                    tpe := "text",
+                    id := "newGroupName",
+                    name := "newGroupName",
+                    placeholder := "e.g. Field Operations"
                   ),
-                  tbody(
-                    if users.isEmpty then
-                      tr(td(colspan := 3, style := "text-align: center; color: #6b778c; padding: 20px;")("No users found."))
-                    else
-                      users.map { user =>
-                        val currentPerm = event.metadata.permissions.get(user.id)
-                        val isAdminUser = user.role == Role.Admin
-
-                        tr(
-                          td(
-                            strong(user.username),
-                            if !user.enabled then span(cls := "badge badge-disabled", style := "margin-left: 6px;")("Disabled") else span()
-                          ),
-                          td(
-                            span(cls := "badge badge-role")(user.role.toString)
-                          ),
-                          td(
-                            if isAdminUser then
-                              span(style := "color: #5e6c84; font-style: italic;")("Admin (Always has full Edit access)")
-                            else
-                              select(
-                                name := s"perm_${user.id}",
-                                cls := "form-select"
-                              )(
-                                option(
-                                  value := "default",
-                                  if currentPerm.isEmpty then selected else cls := ""
-                                )("Default / Inherit from Role"),
-                                option(
-                                  value := "view",
-                                  if currentPerm.contains(Permission.ViewPlans) then selected else cls := ""
-                                )("View Only (ViewPlans)"),
-                                option(
-                                  value := "edit",
-                                  if currentPerm.contains(Permission.EditPlans) then selected else cls := ""
-                                )("Can Edit (EditPlans)")
-                              )
-                          )
-                        )
-                      }
+                  p(cls := "form-help")(
+                    "New group names are automatically formatted to Capitalized Words (e.g. 'hello world' -> 'Hello World')."
                   )
                 ),
                 div(style := "margin-top: 24px; display: flex; gap: 12px; align-items: center;")(

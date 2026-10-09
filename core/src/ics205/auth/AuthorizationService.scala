@@ -18,19 +18,10 @@
 
 package ics205.auth
 
-import ics205.model.Ics205Metadata
-
 object AuthorizationService:
   def authorize(user: AuthenticatedUser, permission: Permission): Either[AuthError, AuthenticatedUser] =
     if user.hasPermission(permission) then Right(user)
     else Left(Forbidden(s"User '${user.username}' lacks permission '$permission'"))
 
-  def authorizeEvent(user: AuthenticatedUser, metadata: Ics205Metadata, permission: Permission): Either[AuthError, AuthenticatedUser] =
-    if user.user.role == Role.Admin then Right(user)
-    else
-      val hasEventPerm = permission match
-        case Permission.EditPlans => metadata.canEdit(user.user)
-        case Permission.ViewPlans => metadata.canView(user.user)
-        case _ => user.hasPermission(permission)
-      if hasEventPerm then Right(user)
-      else Left(Forbidden(s"User '${user.username}' lacks permission '$permission' for this event"))
+  def authorizeEvent(user: AuthenticatedUser, permission: Permission): Either[AuthError, AuthenticatedUser] =
+    authorize(user, permission)

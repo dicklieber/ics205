@@ -13,7 +13,7 @@ class EventsPageTests extends munit.FunSuite:
     val html = EventsPage.render(adminUser, Seq(event), fileModifiedAt = Map(event.id -> modified))
     assert(html.contains("<th>File Modified</th>"))
     assert(html.contains("<time datetime=\"2026-10-06T15:30:45Z\">2026-10-06 15:30:45 UTC</time>"))
-    assert(EventsPage.render(adminUser, Seq.empty).contains("colspan=\"6\""))
+    assert(EventsPage.render(adminUser, Seq.empty).contains("colspan=\"7\""))
 
   test("EventsPage does not use inline onsubmit for delete confirmation and uses data-confirm"):
     val maliciousEventName = "Test', (alert(document.domain), true) || '"

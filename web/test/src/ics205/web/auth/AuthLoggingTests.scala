@@ -61,7 +61,8 @@ class AuthLoggingTests extends munit.FunSuite:
       val authService = new AuthenticationService(userStore, passwordService, sessionStore)
       val security = new AuthSecurity(authService, authConfig)
       val authEndpoints = new AuthEndpoints(authService, sessionStore, security, authConfig, userStore, passwordService)
-      val adminEndpoints = new UserAdminEndpoints(userStore, sessionStore, passwordService, security)
+      val store = new ics205.store.Ics205Store(helper)
+      val adminEndpoints = new UserAdminEndpoints(userStore, sessionStore, passwordService, security, store)
       val httpApp = Http4sServerInterpreter[IO]().toRoutes(authEndpoints.endpoints ++ adminEndpoints.endpoints).orNotFound
 
       test(userStore, sessionStore, passwordService, authService, authEndpoints, adminEndpoints, httpApp, appender.events)

@@ -43,7 +43,8 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       val passwordService = new ScalaPassPasswordService()
       val authService = new AuthenticationService(userStore, passwordService, sessionStore)
       val security = new AuthSecurity(authService, config)
-      val adminEndpoints = new UserAdminEndpoints(userStore, sessionStore, passwordService, security)
+      val store = new ics205.store.Ics205Store(helper)
+      val adminEndpoints = new UserAdminEndpoints(userStore, sessionStore, passwordService, security, store)
 
       val allServerEndpoints: List[ServerEndpoint[Any, IO]] = adminEndpoints.endpoints
       val httpApp = Http4sServerInterpreter[IO]().toRoutes(allServerEndpoints).orNotFound
@@ -349,4 +350,46 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       assertEquals(res.status, Status.SeeOther)
       assert(userStore.findById("u-del").isEmpty)
       assertEquals(sessionStore.find(delSession.id), None)
+    }
+
+  test("POST /admin/users/create and /edit assign groups and correct capitalization to Caps words"):
+    withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
+      val hash = passwordService.hash("password")
+      userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
+      val session = authService.authenticate("admin", "password").get
+
+      val createForm = UrlForm(
+        "username" -> "bob",
+        "password" -> "password123",
+        "confirmPassword" -> "password123",
+        "role" -> "user",
+        "enabled" -> "true",
+        "group_Default" -> "true",
+        "newGroup" -> "hello world"
+      )
+      val req1 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+        .withEntity(createForm)
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val res1 = app.run(req1).unsafeRunSync()
+      assertEquals(res1.status, Status.SeeOther)
+
+      val createdBob = userStore.findByUsername("bob").get
+      assertEquals(createdBob.groups, Set("Default", "Hello World"))
+
+      val editForm = UrlForm(
+        "id" -> createdBob.id,
+        "username" -> "bob",
+        "role" -> "user",
+        "enabled" -> "true",
+        "group_Hello World" -> "true",
+        "newGroup" -> "ARES OPERATIONS"
+      )
+      val req2 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
+        .withEntity(editForm)
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+      val res2 = app.run(req2).unsafeRunSync()
+      assertEquals(res2.status, Status.SeeOther)
+
+      val updatedBob = userStore.findById(createdBob.id).get
+      assertEquals(updatedBob.groups, Set("Hello World", "Ares Operations"))
     }

@@ -21,7 +21,7 @@ package ics205.web
 import cats.effect.IO
 import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, Permission, Role}
 import ics205.log.Ics205ActivityLogger
-import ics205.model.{Ics205, Ics205Event, Ics205Metadata, OperationalPeriod}
+import ics205.model.{GroupHelper, Ics205, Ics205Event, OperationalPeriod}
 import ics205.store.{Ics205Store, SessionStore, UserStore}
 import ics205.util.Ids
 import ics205.web.auth.AuthSecurity
@@ -118,7 +118,6 @@ class IndexEndpoints @Inject() (
                       plan = currentEvent.ics205,
                       saved = saved.contains("1"),
                       currentUser = Some(user),
-                      metadata = Some(currentEvent.metadata),
                       currentEventName = Some(currentEvent.eventName),
                       currentEventId = Some(currentEvent.id),
                       availableEvents = authorizedEvents.map(_.eventName)
@@ -152,7 +151,7 @@ class IndexEndpoints @Inject() (
                   val newEvent = Ics205Event(
                     id = Ids.generateId(),
                     ics205 = plan,
-                    metadata = Ics205Metadata()
+                    group = "Default"
                   )
                   store.save(newEvent, user)
                   sessionStore.save(user.session.copy(currentIcs205 = Some(newEvent.id)))
@@ -175,7 +174,6 @@ class IndexEndpoints @Inject() (
                         submitted = Some(data),
                         error = Some("The plan could not be saved. Check that the data directory is writable and try again."),
                         currentUser = Some(user),
-                        metadata = Some(Ics205Metadata()),
                         currentEventName = Some(effectiveName),
                         currentEventId = Some(effectiveName),
                         availableEvents = authorizedEvents.map(_.eventName)
@@ -190,7 +188,6 @@ class IndexEndpoints @Inject() (
                   plan = currentEvent.ics205,
                   error = Some("You do not have permission to edit this plan."),
                   currentUser = Some(user),
-                  metadata = Some(currentEvent.metadata),
                   currentEventName = Some(currentEvent.eventName),
                   currentEventId = Some(currentEvent.id),
                   availableEvents = authorizedEvents.map(_.eventName)
@@ -207,7 +204,6 @@ class IndexEndpoints @Inject() (
                       submitted = Some(data),
                       error = Some(message),
                       currentUser = Some(user),
-                      metadata = Some(currentEvent.metadata),
                       currentEventName = Some(currentEvent.eventName),
                       currentEventId = Some(currentEvent.id),
                       availableEvents = authorizedEvents.map(_.eventName)
@@ -236,7 +232,6 @@ class IndexEndpoints @Inject() (
                           submitted = Some(data),
                           error = Some("The plan could not be saved. Check that the data directory is writable and try again."),
                           currentUser = Some(user),
-                          metadata = Some(currentEvent.metadata),
                           currentEventName = Some(currentEvent.eventName),
                           currentEventId = Some(currentEvent.id),
                           availableEvents = authorizedEvents.map(_.eventName)
@@ -273,7 +268,6 @@ class IndexEndpoints @Inject() (
                     submitted = Some(data),
                     error = Some(message),
                     currentUser = Some(user),
-                    metadata = Some(currentEvent.metadata),
                     currentEventName = Some(currentEvent.eventName),
                     currentEventId = Some(currentEvent.id),
                     availableEvents = authorizedEvents.map(_.eventName)
@@ -323,13 +317,16 @@ class IndexEndpoints @Inject() (
         val allEvents = store.listEvents()
         val visibleEvents = if user.role == Role.Admin then allEvents else allEvents.filter(_.canView(user))
         val currentEventName = user.session.currentIcs205.flatMap(store.findByName).map(_.eventName).orElse(user.session.currentIcs205)
+        val allUsers = userStore.all()
+        val knownGroups = GroupHelper.knownGroups(allEvents, allUsers)
         val html = EventsPage.render(
           currentUser = user,
           events = visibleEvents,
           currentEventName = currentEventName,
           message = msg,
           error = err,
-          fileModifiedAt = visibleEvents.flatMap(ev => store.fileModifiedAt(ev.id).map(ev.id -> _)).toMap
+          fileModifiedAt = visibleEvents.flatMap(ev => store.fileModifiedAt(ev.id).map(ev.id -> _)).toMap,
+          knownGroups = knownGroups
         )
         (StatusCode.Ok, None, html)
       }
@@ -370,6 +367,9 @@ class IndexEndpoints @Inject() (
         else
           val eventName = formData.getOrElse("eventName", "").trim
           val incidentName = formData.get("incidentName").map(_.trim).filter(_.nonEmpty).getOrElse(eventName)
+          val groupInput = formData.getOrElse("group", "Default")
+          val newGroupInput = formData.getOrElse("newGroupName", "").trim
+          val group = if newGroupInput.nonEmpty then GroupHelper.cleanGroupName(newGroupInput) else GroupHelper.cleanGroupName(groupInput)
 
           if eventName.isEmpty then
             (StatusCode.SeeOther, "/events?err=Event+name+cannot+be+empty", "")
@@ -377,7 +377,7 @@ class IndexEndpoints @Inject() (
             val newEvent = Ics205Event(
               id = Ids.generateId(),
               ics205 = Ics205(incidentName = incidentName, operationalPeriod = OperationalPeriod(), channels = Seq.empty),
-              metadata = Ics205Metadata()
+              group = group
             )
             store.save(newEvent, user)
             sessionStore.save(user.session.copy(currentIcs205 = Some(newEvent.id)))
@@ -410,14 +410,17 @@ class IndexEndpoints @Inject() (
               (StatusCode.Forbidden, None, "You do not have permission to edit metadata for this event.")
             else
               val allUsers = userStore.all()
-              val availableNames = store.listEvents().filter(e => user.role == Role.Admin || e.canView(user)).map(_.eventName)
+              val allEvents = store.listEvents()
+              val knownGroups = GroupHelper.knownGroups(allEvents, allUsers)
+              val availableNames = allEvents.filter(e => user.role == Role.Admin || e.canView(user)).map(_.eventName)
               val html = EventMetadataPage.render(
                 currentUser = user,
                 event = ev,
                 users = allUsers,
                 availableEvents = availableNames,
                 message = msg,
-                error = err
+                error = err,
+                knownGroups = knownGroups
               )
               (StatusCode.Ok, None, html)
       }
@@ -436,6 +439,9 @@ class IndexEndpoints @Inject() (
           .getOrElse("").trim
         val newName = formData.getOrElse("newEventName", origTarget).trim
         val incidentName = formData.getOrElse("incidentName", "").trim
+        val groupInput = formData.getOrElse("group", "Default")
+        val newGroupInput = formData.getOrElse("newGroupName", "").trim
+        val group = if newGroupInput.nonEmpty then GroupHelper.cleanGroupName(newGroupInput) else GroupHelper.cleanGroupName(groupInput)
 
         store.findByName(origTarget) match
           case None =>
@@ -446,26 +452,12 @@ class IndexEndpoints @Inject() (
             else if newName.isEmpty then
               (StatusCode.SeeOther, s"/events/metadata?name=${encode(ev.id)}&err=Event+name+cannot+be+empty", "")
             else
-              val allUsers = userStore.all()
-              val newPermissions = allUsers.flatMap { u =>
-                formData.get(s"perm_${u.id}").flatMap {
-                  case "edit" => Some(u.id -> Permission.EditPlans)
-                  case "view" => Some(u.id -> Permission.ViewPlans)
-                  case _ => None
-                }
-              }.toMap
-
               val updatedPlan = ev.ics205.copy(incidentName = if incidentName.nonEmpty then incidentName else newName)
-              val updatedMetadata = ev.metadata.copy(
-                permissions = newPermissions,
-                lastEditedBy = Some(user.user.id),
-                savedAt = Instant.now()
-              )
               val finalEvent = if !newName.equalsIgnoreCase(origTarget) && ev.id.equalsIgnoreCase(origTarget) then
                 store.deleteEvent(origTarget, user)
-                ev.copy(id = newName, ics205 = updatedPlan, metadata = updatedMetadata)
+                ev.copy(id = newName, ics205 = updatedPlan, group = group)
               else
-                ev.copy(ics205 = updatedPlan, metadata = updatedMetadata)
+                ev.copy(ics205 = updatedPlan, group = group)
 
               store.save(finalEvent, user)
               if !newName.equalsIgnoreCase(origTarget) && user.session.currentIcs205.contains(origTarget) then
@@ -478,7 +470,6 @@ class IndexEndpoints @Inject() (
                 channelCount = Some(finalEvent.ics205.channels.size),
                 action = Some("metadata")
               )
-
               (StatusCode.SeeOther, s"/events/metadata?name=${encode(finalEvent.id)}&msg=Metadata+updated+successfully", "")
       }
     }
@@ -580,7 +571,7 @@ class IndexEndpoints @Inject() (
               val duplicate = ev.copy(
                 id = Ids.generateId(),
                 ics205 = ev.ics205.copy(incidentName = newName),
-                metadata = ev.metadata.copy(lastEditedBy = Some(user.user.id), savedAt = Instant.now())
+                group = ev.group
               )
               store.save(duplicate, user)
               sessionStore.save(user.session.copy(currentIcs205 = Some(duplicate.id)))

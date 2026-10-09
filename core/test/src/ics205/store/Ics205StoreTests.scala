@@ -112,7 +112,7 @@ class Ics205StoreTests extends munit.FunSuite:
       assertEquals(new Ics205Store(helper(directory)).ics205(), store.ics205())
     }
 
-  test("save with AuthenticatedUser records lastEditedBy and savedAt in metadata"):
+  test("save with AuthenticatedUser saves the event to disk"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
       val u = User("user-123", "hash", Role.Admin, enabled = true, id = "user-123")
@@ -121,29 +121,22 @@ class Ics205StoreTests extends munit.FunSuite:
         Session(userId = u.id, createdAt = Instant.now(), expiresAt = Instant.now().plusSeconds(3600))
       )
       store.save(Ics205Event(plan), user)
-      assertEquals(store.metadata().lastEditedBy, Some("user-123"))
-      assert(store.metadata().savedAt.toEpochMilli > 0)
+      assertEquals(store.events().size, 1)
 
       val reloaded = new Ics205Store(helper(directory))
-      assertEquals(reloaded.metadata().lastEditedBy, Some("user-123"))
-      assertEquals(reloaded.metadata().savedAt, store.metadata().savedAt)
+      assertEquals(reloaded.events().size, 1)
+      assertEquals(reloaded.currentEvent().get.ics205.incidentName, "Test incident")
     }
 
-  test("setUserPermission and metadata updates persist correctly"):
+  test("saving event preserves group across reloads"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
-      store.save(Ics205Event(plan))
-      store.setUserPermission("user-1", ics205.auth.Permission.EditPlans)
-      store.setUserPermission("user-2", ics205.auth.Permission.ViewPlans)
-      assertEquals(store.metadata().permissions.get("user-1"), Some(ics205.auth.Permission.EditPlans))
-      assertEquals(store.metadata().permissions.get("user-2"), Some(ics205.auth.Permission.ViewPlans))
+      val event = Ics205Event("FieldOps", plan.copy(incidentName = "Field Ops Incident"), group = "Ares Ops")
+      store.save(event)
+      assertEquals(store.getEvent("FieldOps").get.group, "Ares Ops")
 
       val reloaded = new Ics205Store(helper(directory))
-      assertEquals(reloaded.metadata().permissions.get("user-1"), Some(ics205.auth.Permission.EditPlans))
-      assertEquals(reloaded.metadata().permissions.get("user-2"), Some(ics205.auth.Permission.ViewPlans))
-
-      store.removeUserPermission("user-1")
-      assertEquals(store.metadata().permissions.get("user-1"), None)
+      assertEquals(reloaded.getEvent("FieldOps").get.group, "Ares Ops")
     }
 
   test("legacy ics205.json in base directory is ignored and not read"):
@@ -205,7 +198,7 @@ class Ics205StoreTests extends munit.FunSuite:
     assertEquals(legacy.mapObject(_.add("remarks", Json.Null)).as[Ics205Channel], Right(expected))
     assert(!expected.asJson.hcursor.keys.get.toSet.contains("digital"))
 
-  test("event and ics205Event return full event and metadata"):
+  test("event and ics205Event return full event"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
       assertEquals(store.event(), None)
@@ -214,30 +207,6 @@ class Ics205StoreTests extends munit.FunSuite:
       store.save(event)
       assertEquals(store.event().get.ics205.incidentName, "Test incident")
       assertEquals(store.ics205Event().get.ics205.incidentName, "Test incident")
-    }
-
-  test("save with AuthenticatedUser updates metadata"):
-    withDirectory { directory =>
-      val store = new Ics205Store(helper(directory))
-      val userA = AuthenticatedUser("user-a", Role.Admin)
-      val userB = AuthenticatedUser("user-b", Role.Admin)
-      val event = Ics205Event(plan)
-      store.save(event, userA)
-      assertEquals(store.metadata().lastEditedBy, Some(userA.id))
-
-      store.save(event, userB)
-      assertEquals(store.metadata().lastEditedBy, Some(userB.id))
-    }
-
-  test("setUserPermission with Option[Permission] sets and clears permissions"):
-    withDirectory { directory =>
-      val store = new Ics205Store(helper(directory))
-      store.save(Ics205Event(plan))
-      store.setUserPermission("user-opt", Some(ics205.auth.Permission.EditUsers))
-      assertEquals(store.metadata().permissions.get("user-opt"), Some(ics205.auth.Permission.EditUsers))
-
-      store.setUserPermission("user-opt", None)
-      assertEquals(store.metadata().permissions.get("user-opt"), None)
     }
 
   test("Ics205Store supports multiple events, lookup by eventName, adding and deleting events"):
@@ -263,15 +232,9 @@ class Ics205StoreTests extends munit.FunSuite:
       assert(retrieved2.isDefined)
       assertEquals(retrieved2.get.ics205.incidentName, "City Marathon")
 
-      // Setting per-event user permission
-      store.setUserPermission("Field Day", "user-fd", ics205.auth.Permission.EditPlans)
-      assertEquals(store.getEvent("Field Day").get.metadata.permissions.get("user-fd"), Some(ics205.auth.Permission.EditPlans))
-      assertEquals(store.getEvent("Marathon").get.metadata.permissions.get("user-fd"), None)
-
       // Persistence across reloads
       val reloaded = new Ics205Store(helper(directory))
       assertEquals(reloaded.events().size, 2)
-      assertEquals(reloaded.getEvent("Field Day").get.metadata.permissions.get("user-fd"), Some(ics205.auth.Permission.EditPlans))
 
       // Delete event removes its file
       assert(store.deleteEvent("Field Day"))

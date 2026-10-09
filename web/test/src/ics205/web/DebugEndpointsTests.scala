@@ -83,8 +83,7 @@ class DebugEndpointsTests extends munit.FunSuite:
       // Initial event store - create an event
       val initialEvent = ics205.model.Ics205Event(
         id = "TestEvent",
-        ics205 = ics205.model.Ics205(incidentName = "Initial Incident", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty),
-        metadata = ics205.model.Ics205Metadata()
+        ics205 = ics205.model.Ics205(incidentName = "Initial Incident", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty)
       )
       store.save(initialEvent)
       assertEquals(store.getEvent("TestEvent").get.ics205.incidentName, "Initial Incident")
@@ -137,8 +136,7 @@ class DebugEndpointsTests extends munit.FunSuite:
 
       val initialEvent = ics205.model.Ics205Event(
         id = "PostEvent",
-        ics205 = ics205.model.Ics205(incidentName = "Initial Incident", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty),
-        metadata = ics205.model.Ics205Metadata()
+        ics205 = ics205.model.Ics205(incidentName = "Initial Incident", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty)
       )
       store.save(initialEvent)
 
@@ -186,8 +184,7 @@ class DebugEndpointsTests extends munit.FunSuite:
       // Add files in data directory
       val event = ics205.model.Ics205Event(
         id = "SummerDrill",
-        ics205 = ics205.model.Ics205(incidentName = "Summer Incident", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty),
-        metadata = ics205.model.Ics205Metadata()
+        ics205 = ics205.model.Ics205(incidentName = "Summer Incident", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty)
       )
       store.save(event)
       os.write(tempDir / "extra.txt", "some extra text")

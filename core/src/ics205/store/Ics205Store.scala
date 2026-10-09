@@ -18,11 +18,10 @@
 
 package ics205.store
 
-import ics205.model.EventId
 import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.{AuthenticatedUser, Permission, Unauthorized, UserId}
 import ics205.auth.Permission.EditPlans
-import ics205.model.{EventId, Ics205, Ics205Event, Ics205Metadata, OperationalPeriod}
+import ics205.model.{EventId, Ics205, Ics205Event, OperationalPeriod}
 import ics205.util.{FileHelper, UnauthorizedException, UtcFormatter}
 import ics205.util.Ids.generateId
 import io.circe.{Codec, Printer}
@@ -64,21 +63,20 @@ import scala.collection.concurrent.TrieMap
 
   def save(event: Ics205Event,
            authenticatedUser: AuthenticatedUser): Unit = synchronized { // add to in-memory store
-    val withUpdateMetadata = event.update(authenticatedUser)
-    allEvents.put(withUpdateMetadata.id, withUpdateMetadata)
+    allEvents.put(event.id, event)
     // then copy current file to the backup directory for this event
-    val path = eventsDirectory / withUpdateMetadata.fileName
+    val path = eventsDirectory / event.fileName
     if os.isFile(path) then
-      val bakDir = eventsDirectory / withUpdateMetadata.id / "bak"
+      val bakDir = eventsDirectory / event.id / "bak"
       os.makeDir.all(bakDir)
-      val bakFileName = withUpdateMetadata.bakFileName
+      val bakFileName = event.bakFileName
       val bakPath = bakDir / bakFileName
       os.copy(path, bakPath, replaceExisting = true, createFolders = true)
 
     // lastly write the file
     os.write
       .over(path,
-        withUpdateMetadata.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true)),
+        event.asJson.printWith(Printer.indented("  ").copy(dropNullValues = true)),
         createFolders = true)
   }
 
@@ -126,28 +124,6 @@ import scala.collection.concurrent.TrieMap
 
   def ics205(): Ics205 = currentEvent().map(_.ics205).getOrElse(Ics205(incidentName = "", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
 
-  def metadata(): Ics205Metadata = currentEvent().map(_.metadata).getOrElse(Ics205Metadata())
-
-  def setUserPermission(userId: String, perm: Permission): Unit = synchronized {
-    currentEvent().foreach { ev =>
-      val updated = ev.copy(metadata = ev.metadata.copy(permissions = ev.metadata.permissions + (userId -> perm)))
-      save(updated)
-    }
-  }
-
-  def setUserPermission(userId: String, perm: Option[Permission]): Unit = synchronized {
-    perm match
-      case Some(p) => setUserPermission(userId, p)
-      case None => removeUserPermission(userId)
-  }
-
-  def removeUserPermission(userId: String): Unit = synchronized {
-    currentEvent().foreach { ev =>
-      val updated = ev.copy(metadata = ev.metadata.copy(permissions = ev.metadata.permissions - userId))
-      save(updated)
-    }
-  }
-
 
   def getEvent(id: EventId): Option[Ics205Event] = synchronized {
     allEvents.get(id)
@@ -158,25 +134,6 @@ import scala.collection.concurrent.TrieMap
   }
 
   def setCurrentEvent(name: String): Unit = ()
-
-  def setUserPermission(eventName: String, userId: String, perm: Permission): Unit = synchronized {
-    getEvent(eventName).orElse(findByName(eventName)).foreach { ev =>
-      val updated = ev.copy(metadata = ev.metadata.copy(permissions = ev.metadata.permissions + (userId -> perm)))
-      save(updated)
-    }
-  }
-
-  def setUserPermission(eventName: String, userId: String, perm: Option[Permission]): Unit = perm match {
-    case Some(p) => setUserPermission(eventName, userId, p)
-    case None => removeUserPermission(eventName, userId)
-  }
-
-  def removeUserPermission(eventName: String, userId: String): Unit = synchronized {
-    getEvent(eventName).orElse(findByName(eventName)).foreach { ev =>
-      val updated = ev.copy(metadata = ev.metadata.copy(permissions = ev.metadata.permissions - userId))
-      save(updated)
-    }
-  }
 
   def uniqueEventName(name: String): String = synchronized {
     val cleanName = if name.matches(""".* \(\d+\)$""") then name.replaceFirst(""" \(\d+\)$""", "") else name
@@ -195,7 +152,7 @@ import scala.collection.concurrent.TrieMap
       uniqueEventName(baseName)
     else
       baseName
-    val toSave = event.copy(id = finalName, metadata = event.metadata.copy(lastEditedBy = userId, savedAt = Instant.now()))
+    val toSave = event.copy(id = finalName)
     save(toSave)
     toSave
   }

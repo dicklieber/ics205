@@ -20,8 +20,9 @@ package ics205.web.admin
 
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
-import ics205.auth.{AuthenticatedUser, PasswordService, Permission, Role, User}
-import ics205.store.{SessionStore, UserStore}
+import ics205.auth.{AuthenticatedUser, AuthenticationService, PasswordService, Permission, Role, User}
+import ics205.model.GroupHelper
+import ics205.store.{Ics205Store, SessionStore, UserStore}
 import ics205.web.ApiEndpoints
 import ics205.web.auth.AuthSecurity
 import ics205.web.util.RequestUtils
@@ -38,11 +39,24 @@ class UserAdminEndpoints @Inject()(
   userStore: UserStore,
   sessionStore: SessionStore,
   passwordService: PasswordService,
-  security: AuthSecurity
+  security: AuthSecurity,
+  store: Ics205Store
 ) extends ApiEndpoints with LazyLogging:
 
   private def urlEncode(s: String): String =
     URLEncoder.encode(s, StandardCharsets.UTF_8)
+
+  private def parseUserGroups(formData: Map[String, String], role: Role): Set[String] =
+    if role == Role.Admin then Set.empty
+    else
+      val selectedGroups = formData.collect {
+        case (k, v) if k.startsWith("group_") && (v == "true" || v == "1" || v == "on") =>
+          k.stripPrefix("group_")
+        case (k, v) if k == "groups" && v.nonEmpty =>
+          v
+      }.toSet
+      val newGroupOpt = formData.get("newGroup").map(GroupHelper.formatGroupName).filter(_.nonEmpty)
+      (selectedGroups ++ newGroupOpt).map(GroupHelper.formatGroupName).filter(_.nonEmpty)
 
   private val viewUsersEndpoint: ServerEndpoint[Any, IO] =
     endpoint.get
@@ -56,6 +70,8 @@ class UserAdminEndpoints @Inject()(
       .serverLogic[IO] { (sessionIdOpt, editId, msg, err) =>
         IO.blocking {
           val users = userStore.all()
+          val allEvents = store.listEvents()
+          val knownGroups = GroupHelper.knownGroups(allEvents, users)
           if users.isEmpty then
             Right(
               UserAdminPage.render(
@@ -63,7 +79,8 @@ class UserAdminEndpoints @Inject()(
                 users = users,
                 editingUserId = editId,
                 message = msg,
-                error = err
+                error = err,
+                knownGroups = knownGroups
               )
             )
           else
@@ -81,7 +98,8 @@ class UserAdminEndpoints @Inject()(
                         users = users,
                         editingUserId = editId,
                         message = msg,
-                        error = err
+                        error = err,
+                        knownGroups = knownGroups
                       )
                     )
                   case Left(e) =>
@@ -128,6 +146,7 @@ class UserAdminEndpoints @Inject()(
               val roleInput = formData.getOrElse("role", formData.getOrElse("roles", defaultRole)).trim
               val role = Role.fromString(roleInput).getOrElse(if isInitial then Role.Admin else Role.User)
               val enabled = formData.get("enabled").contains("true") || isInitial
+              val userGroups = parseUserGroups(formData, role)
 
               if username.isEmpty then
                 Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Username cannot be empty.")}"))
@@ -143,7 +162,8 @@ class UserAdminEndpoints @Inject()(
                   username = username,
                   passwordHash = passwordHash,
                   role = role,
-                  enabled = enabled
+                  enabled = enabled,
+                  groups = userGroups
                 )
                 userStore.add(newUser) match
                   case Right(_) =>
@@ -152,7 +172,7 @@ class UserAdminEndpoints @Inject()(
                       Right((StatusCode.SeeOther, s"/login?msg=${urlEncode(s"User '$username' created successfully. Please log in.")}"))
                     else
                       val adminName = adminOpt.map(_.user).getOrElse("unknown")
-                      logger.info(s"Admin '$adminName' created user '$username' (id: '${newUser.id}', role: ${newUser.role}, enabled: ${newUser.enabled}) from IP $ip")
+                      logger.info(s"Admin '$adminName' created user '$username' (id: '${newUser.id}', role: ${newUser.role}, groups: [${userGroups.mkString(",")}], enabled: ${newUser.enabled}) from IP $ip")
                       Right((StatusCode.SeeOther, s"/admin/users?msg=${urlEncode(s"User '$username' created successfully.")}"))
                   case Left(err) =>
                     Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode(err)}"))
@@ -176,6 +196,7 @@ class UserAdminEndpoints @Inject()(
           val roleInput = formData.getOrElse("role", formData.getOrElse("roles", "user")).trim
           val role = Role.fromString(roleInput).getOrElse(Role.User)
           val enabled = formData.get("enabled").contains("true")
+          val userGroups = parseUserGroups(formData, role)
 
           if id.isEmpty then
             (StatusCode.SeeOther, s"/admin/users?err=${urlEncode("User ID is missing.")}")
@@ -196,12 +217,14 @@ class UserAdminEndpoints @Inject()(
                   username = username,
                   passwordHash = passwordHash,
                   role = role,
-                  enabled = enabled
+                  enabled = enabled,
+                  groups = userGroups
                 )
                 val changedFields = List(
                   if existing.username != username then Some(s"username: '${existing.username}' -> '$username'") else None,
                   if existing.role != role then Some(s"role: ${existing.role} -> $role") else None,
                   if existing.enabled != enabled then Some(s"enabled: ${existing.enabled} -> $enabled") else None,
+                  if existing.groups != userGroups then Some(s"groups: [${existing.groups.mkString(",")}] -> [${userGroups.mkString(",")}]") else None,
                   if passwordChanged then Some("password: changed") else None
                 ).flatten
 

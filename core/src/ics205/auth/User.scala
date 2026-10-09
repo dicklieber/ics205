@@ -30,7 +30,8 @@ case class User(
                  passwordHash: String,
                  role: Role,
                  enabled: Boolean = true,
-                 id: UserId = Ids.generateId()
+                 id: UserId = Ids.generateId(),
+                 groups: Set[String] = Set.empty
 )
 
 object User:
@@ -48,14 +49,16 @@ object User:
         )
         enabled <- c.downField("enabled").as[Option[Boolean]].map(_.getOrElse(true))
         id <- c.downField("id").as[Option[UserId]].map(_.getOrElse(Ids.generateId()))
-      yield User(username = username, passwordHash = passwordHash, role = role, enabled = enabled, id = id)
+        groups <- c.downField("groups").as[Option[Set[String]]].map(_.getOrElse(Set.empty))
+      yield User(username = username, passwordHash = passwordHash, role = role, enabled = enabled, id = id, groups = groups)
     },
     (u: User) => JsonObject(
       "id" -> Json.fromString(u.id),
       "username" -> Json.fromString(u.username),
       "passwordHash" -> Json.fromString(u.passwordHash),
       "role" -> Json.fromString(u.role.toString.toLowerCase),
-      "enabled" -> Json.fromBoolean(u.enabled)
+      "enabled" -> Json.fromBoolean(u.enabled),
+      "groups" -> Json.fromValues(u.groups.toSeq.sorted.map(Json.fromString))
     )
   )
 

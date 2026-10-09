@@ -30,27 +30,32 @@ import scala.collection.immutable.TreeSeqMap.OrderBy
 
 case class Ics205Event(id: EventId = Ids.generateId(),
                        ics205: Ics205,
-                       metadata: Ics205Metadata = Ics205Metadata()) derives Codec.AsObject:
+                       group: String = "Default"):
   val fileName: String = s"$id.$extension"
 
   def bakFileName: String = s"$id-$UtcFormatter().$extension"
 
   def eventName: String = if ics205.incidentName.nonEmpty then ics205.incidentName else id
 
-  def canView(user: AuthenticatedUser): Boolean = metadata.canView(user)
+  def canView(user: AuthenticatedUser): Boolean = user.hasPermission(Permission.ViewPlans)
 
-  def canView(user: User): Boolean = metadata.canView(user)
+  def canView(user: User): Boolean = user.role.hasPermission(Permission.ViewPlans)
 
-  def canEdit(user: AuthenticatedUser): Boolean = metadata.canEdit(user)
+  def canEdit(user: AuthenticatedUser): Boolean = user.hasPermission(Permission.EditPlans)
 
-  def canEdit(user: User): Boolean = metadata.canEdit(user)
+  def canEdit(user: User): Boolean = user.role.hasPermission(Permission.EditPlans)
 
-  def accessFor(user: AuthenticatedUser): Option[PlanAccess] = metadata.accessFor(user)
+  def accessFor(user: AuthenticatedUser): Option[PlanAccess] =
+    if user.role == Role.Admin || user.hasPermission(Permission.EditPlans) then Some(PlanAccess.Edit)
+    else if user.hasPermission(Permission.ViewPlans) then Some(PlanAccess.ReadOnly)
+    else None
 
-  def accessFor(user: User): Option[PlanAccess] = metadata.accessFor(user)
+  def accessFor(user: User): Option[PlanAccess] =
+    if user.role == Role.Admin || user.role.hasPermission(Permission.EditPlans) then Some(PlanAccess.Edit)
+    else if user.role.hasPermission(Permission.ViewPlans) then Some(PlanAccess.ReadOnly)
+    else None
 
-  def update(authenticatedUser: AuthenticatedUser): Ics205Event =
-    copy(metadata = metadata.withLastEditedBy(authenticatedUser.user.id).withSavedAt(Instant.now()))
+  def update(authenticatedUser: AuthenticatedUser): Ics205Event = this
 
 
 object Ics205Event:
@@ -58,14 +63,36 @@ object Ics205Event:
 
   given Ordering[Ics205Event] = Ordering.by(_.ics205.incidentName)
 
+  given Codec.AsObject[Ics205Event] = Codec.AsObject.from(
+    (c: HCursor) => {
+      for
+        id <- c.downField("id").as[Option[EventId]].map(_.getOrElse(Ids.generateId()))
+        ics205 <- c.downField("ics205").as[Ics205]
+        group <- c.downField("group").as[Option[String]].flatMap {
+          case Some(g) if g.nonEmpty => Right(g)
+          case _ =>
+            c.downField("metadata").downField("group").as[Option[String]].map {
+              case Some(mg) if mg.nonEmpty => mg
+              case _ => "Default"
+            }
+        }
+      yield Ics205Event(id = id, ics205 = ics205, group = group)
+    },
+    (e: Ics205Event) => JsonObject(
+      "id" -> Json.fromString(e.id),
+      "ics205" -> e.ics205.asJson,
+      "group" -> Json.fromString(e.group)
+    )
+  )
+
   def apply(id: EventId,
             ics205: Ics205,
-            metadata: Ics205Metadata): Ics205Event = new Ics205Event(id, ics205, metadata)
+            group: String): Ics205Event = new Ics205Event(id, ics205, group)
 
   def apply(id: EventId,
-            ics205: Ics205): Ics205Event = new Ics205Event(id, ics205, Ics205Metadata())
+            ics205: Ics205): Ics205Event = new Ics205Event(id, ics205, "Default")
 
   def apply(ics205: Ics205,
-            metadata: Ics205Metadata): Ics205Event = new Ics205Event(Ids.generateId(), ics205, metadata)
+            group: String): Ics205Event = new Ics205Event(Ids.generateId(), ics205, group)
 
-  def apply(ics205: Ics205): Ics205Event = new Ics205Event(Ids.generateId(), ics205, Ics205Metadata())
+  def apply(ics205: Ics205): Ics205Event = new Ics205Event(Ids.generateId(), ics205, "Default")

@@ -28,7 +28,7 @@ object UserAdminPage:
   def render(
     currentUser: AuthenticatedUser,
     users: Seq[User]
-  ): String = render(Some(currentUser), users, None, None, None)
+  ): String = render(Some(currentUser), users, None, None, None, Set("Default"))
 
   def render(
     currentUser: AuthenticatedUser,
@@ -36,14 +36,15 @@ object UserAdminPage:
     editingUserId: Option[String],
     message: Option[String],
     error: Option[String]
-  ): String = render(Some(currentUser), users, editingUserId, message, error)
+  ): String = render(Some(currentUser), users, editingUserId, message, error, Set("Default"))
 
   def render(
     currentUser: Option[AuthenticatedUser],
     users: Seq[User],
     editingUserId: Option[String] = None,
     message: Option[String] = None,
-    error: Option[String] = None
+    error: Option[String] = None,
+    knownGroups: Set[String] = Set("Default")
   ): String =
     val editingUser = editingUserId.flatMap(id => users.find(_.id == id))
     val isEdit = editingUser.isDefined
@@ -82,18 +83,29 @@ object UserAdminPage:
                     tr(
                       th("Username"),
                       th("Role"),
+                      th("Groups"),
                       th("Status"),
                       th("Actions")
                     )
                   ),
                   tbody(
                     if users.isEmpty then
-                      tr(td(colspan := 4, style := "text-align: center; color: #6b778c; padding: 16px;")("No users found."))
+                      tr(td(colspan := 5, style := "text-align: center; color: #6b778c; padding: 16px;")("No users found."))
                     else
                       users.map { user =>
                         tr(
                           td(strong(user.username)),
                           td(span(cls := "badge badge-role")(user.role.toString)),
+                          td(
+                            if user.role == Role.Admin then
+                              span(style := "color: #5e6c84; font-style: italic;")("All (Admin)")
+                            else if user.groups.isEmpty then
+                              span(style := "color: #6b778c; font-style: italic;")("None")
+                            else
+                              user.groups.toSeq.sorted.map(g =>
+                                span(cls := "badge badge-role", style := "margin-right: 4px; display: inline-block;")(g)
+                              )
+                          ),
                           td(
                             if user.enabled then
                               span(cls := "badge badge-active")("Active")
@@ -187,6 +199,38 @@ object UserAdminPage:
                             span(style := "color: #42526e;")(r.permissions.map(_.toString).toSeq.sorted.mkString(", "))
                           )
                         }
+                      )
+                    )
+                  ),
+
+                  div(cls := "form-group", id := "groups-form-group")(
+                    label("Groups"),
+                    p(cls := "form-help")(
+                      "Assign this user to zero or more groups (non-admin users only)."
+                    ),
+                    div(cls := "groups-checkbox-list", style := "display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px;")(
+                      knownGroups.toSeq.sorted.map { g =>
+                        label(cls := "checkbox-inline", style := "display: inline-flex; align-items: center; gap: 4px; margin-right: 8px;")(
+                          input(
+                            tpe := "checkbox",
+                            name := s"group_$g",
+                            value := "true",
+                            if editingUser.exists(_.groups.contains(g)) then checked else cls := ""
+                          ),
+                          span(g)
+                        )
+                      }
+                    ),
+                    div(cls := "form-group", style := "margin-top: 6px;")(
+                      label(attr("for") := "newGroup", style := "font-weight: normal; font-size: 9pt;")("Or create new group:"),
+                      input(
+                        tpe := "text",
+                        id := "newGroup",
+                        name := "newGroup",
+                        placeholder := "e.g. Field Operations"
+                      ),
+                      p(cls := "form-help")(
+                        "New group names are automatically formatted to Capitalized Words (e.g. 'hello world' -> 'Hello World')."
                       )
                     )
                   ),

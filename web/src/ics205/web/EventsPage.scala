@@ -37,11 +37,13 @@ object EventsPage:
     currentEventName: Option[String] = None,
     message: Option[String] = None,
     error: Option[String] = None,
-    fileModifiedAt: Map[String, Instant] = Map.empty
+    fileModifiedAt: Map[String, Instant] = Map.empty,
+    knownGroups: Set[String] = Set("Default")
   ): String =
     val sortedEvents = events.sortBy(ev => (ev.eventName.toLowerCase(java.util.Locale.ROOT), ev.eventName))
     val availableNames = sortedEvents.map(_.eventName)
     val isAdmin = currentUser.role == Role.Admin
+    val groups = (knownGroups + "Default").toSeq.sorted
 
     doctype("html")(
       html(lang := "en")(
@@ -81,6 +83,7 @@ object EventsPage:
                   tr(
                     th("Event Name"),
                     th("Incident Name"),
+                    th("Group"),
                     th("Channels"),
                     th("File Modified"),
                     th("Your Access"),
@@ -89,7 +92,7 @@ object EventsPage:
                 ),
                 tbody(
                   if events.isEmpty then
-                    tr(td(colspan := 6, style := "text-align: center; color: #6b778c; padding: 20px;")("No events found. Create an event below to get started."))
+                    tr(td(colspan := 7, style := "text-align: center; color: #6b778c; padding: 20px;")("No events found. Create an event below to get started."))
                   else
                     sortedEvents.map { ev =>
                       val isSelected = currentEventName.contains(ev.eventName) || (currentEventName.isEmpty && events.headOption.contains(ev))
@@ -113,6 +116,7 @@ object EventsPage:
                             span()
                         ),
                         td(if ev.ics205.incidentName.nonEmpty then ev.ics205.incidentName else "—"),
+                        td(span(cls := "badge badge-role")(ev.group)),
                         td(ev.ics205.channels.size.toString),
                         td(
                           fileModifiedAt.get(ev.id).map { modified =>
@@ -131,7 +135,7 @@ object EventsPage:
                             option(value := s"/events/export?name=${encode(ev.id)}")("Export"),
                             if canEdit || isAdmin then
                               Seq[Modifier](
-                                option(value := s"/events/metadata?name=${encode(ev.id)}")("Metadata"),
+                                option(value := s"/events/metadata?name=${encode(ev.id)}")("Edit Event"),
                                 option(value := "duplicate")("Duplicate")
                               )
                             else Seq.empty[Modifier],
@@ -184,6 +188,33 @@ object EventsPage:
                         placeholder := "Leave blank to use Event Name"
                       ),
                       p(cls := "form-help")("Incident name displayed on the ICS 205 form.")
+                    ),
+                    div(cls := "form-group")(
+                      label(attr("for") := "group")("Group"),
+                      select(
+                        id := "group",
+                        name := "group"
+                      )(
+                        groups.map { g =>
+                          option(
+                            value := g,
+                            if g == "Default" then selected else cls := ""
+                          )(g)
+                        }
+                      ),
+                      p(cls := "form-help")("Assign this event to a group.")
+                    ),
+                    div(cls := "form-group", style := "margin-top: 6px;")(
+                      label(attr("for") := "newGroupName", style := "font-weight: normal; font-size: 9pt;")("Or create new group:"),
+                      input(
+                        tpe := "text",
+                        id := "newGroupName",
+                        name := "newGroupName",
+                        placeholder := "e.g. Field Operations"
+                      ),
+                      p(cls := "form-help")(
+                        "New group names are automatically formatted to Capitalized Words (e.g. 'hello world' -> 'Hello World')."
+                      )
                     ),
                     div(style := "margin-top: 20px;")(
                       button(tpe := "submit", cls := "btn btn-primary")("Create Event")

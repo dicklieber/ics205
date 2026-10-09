@@ -56,8 +56,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val body = res.as[String].unsafeRunSync()
       assert(body.contains("Field Day"))
       assert(body.contains("Marathon"))
-      assert(body.contains("Plan"))
-      assert(body.contains("Metadata"))
+      assert(body.contains("Edit Event"))
       assert(body.contains("Create New Event"))
       assert(!body.contains("Working On") && !body.contains(">Select<"))
       assert(body.contains("/?event=Field+Day"))
@@ -115,24 +114,23 @@ class EventsEndpointsTests extends munit.FunSuite:
       assertEquals(getRes.status, Status.Ok)
       val getBody = getRes.as[String].unsafeRunSync()
       assert(getBody.contains("Airshow"))
-      assert(getBody.contains("operator"))
 
-      // POST metadata to grant operator EditPlans
+      // POST metadata to update event group with capitalization normalization
       val postReq = Request[IO](Method.POST, Uri.unsafeFromString("/events/metadata"))
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}"))
         .withEntity(UrlForm(
           "originalEventName" -> "Airshow",
           "newEventName" -> "Airshow",
           "incidentName" -> "Annual Airshow",
-          s"perm_${operator.id}" -> "edit"
+          "newGroupName" -> "air operations"
         ))
 
       val postRes = routes.orNotFound.run(postReq).unsafeRunSync()
       assertEquals(postRes.status, Status.SeeOther)
 
       val updatedEvent = store.getEvent("Airshow").get
-      assertEquals(updatedEvent.metadata.permissions.get(operator.id), Some(Permission.EditPlans))
-      assertEquals(updatedEvent.canEdit(operator), true)
+      assertEquals(updatedEvent.group, "Air Operations")
+      assertEquals(updatedEvent.ics205.incidentName, "Annual Airshow")
     }
 
   test("POST /events/metadata renames event and updates incident name"):
@@ -163,23 +161,16 @@ class EventsEndpointsTests extends munit.FunSuite:
       assertEquals(renamed.get.ics205.incidentName, "New Incident")
     }
 
-  test("Event authorization isolates permissions across multiple events"):
+  test("Event permissions are checked directly on users"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val userViewer = userStore.add(User("viewerUser", passwordService.hash("pass"), Role.Viewer, enabled = true, id = "u-v")).toOption.get
-      val session = sessionStore.create(userViewer.id)
+      val editor = userStore.add(User("editorUser", passwordService.hash("pass"), Role.Editor, enabled = true, id = "u-ed")).toOption.get
+      val session = sessionStore.create(editor.id)
 
-      // Event 1 has explicit EditPlans for viewerUser
-      val event1 = Ics205Event("AllowedEvent", Ics205(incidentName = "Allowed Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty),
-        Ics205Metadata(permissions = Map(userViewer.id -> Permission.EditPlans)))
-      // Event 2 has explicit ViewPlans for other users only
-      val event2 = Ics205Event("RestrictedEvent", Ics205(incidentName = "Restricted Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty),
-        Ics205Metadata(permissions = Map("other-user" -> Permission.ViewPlans)))
-
+      val event1 = Ics205Event("AllowedEvent", Ics205(incidentName = "Allowed Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ares Ops")
       store.save(event1)
-      store.save(event2)
 
-      // User can view and edit AllowedEvent
+      // Editor can view and edit event
       val req1 = Request[IO](Method.GET, Uri.unsafeFromString("/?event=AllowedEvent"))
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}"))
       val res1 = routes.orNotFound.run(req1).unsafeRunSync()
@@ -187,12 +178,6 @@ class EventsEndpointsTests extends munit.FunSuite:
       val body1 = res1.as[String].unsafeRunSync()
       assert(body1.contains("Allowed Incident"))
       assert(body1.contains("Save plan"))
-
-      // User is forbidden from RestrictedEvent
-      val req2 = Request[IO](Method.GET, Uri.unsafeFromString("/?event=RestrictedEvent"))
-        .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}"))
-      val res2 = routes.orNotFound.run(req2).unsafeRunSync()
-      assertEquals(res2.status, Status.Forbidden)
     }
 
   test("POST /events/delete deletes event for Admin"):
@@ -346,7 +331,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       assertEquals(res.status, Status.Forbidden)
     }
 
-  test("Duplicate copies the plan and permissions, validates names, and requires edit access"):
+  test("Duplicate copies the plan and group, validates names, and requires edit access"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
       val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
@@ -354,7 +339,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val adminSession = sessionStore.create(admin.id)
       val viewerSession = sessionStore.create(viewer.id)
       store.save(Ics205Event("Original", Ics205(incidentName = "Original", operationalPeriod = OperationalPeriod(), channels = Seq.empty),
-        Ics205Metadata()))
+        group = "Ares Ops"))
       val original = store.getEvent("Original").get
       def duplicate(name: String, sessionId: String) =
         routes.orNotFound.run(Request[IO](Method.POST, Uri.unsafeFromString("/events/duplicate"))
@@ -366,8 +351,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       assertEquals(duplicate("Original (1)", adminSession.id).status, Status.SeeOther)
       val copied = store.findByName("Original (1)").get
       assertEquals(copied.ics205, original.ics205.copy(incidentName = "Original (1)"))
-      assertEquals(copied.metadata.permissions, original.metadata.permissions)
-      assertEquals(copied.metadata.lastEditedBy, Some(admin.id))
+      assertEquals(copied.group, "Ares Ops")
       assertEquals(store.getEvent("Original").get, original)
       val collision = duplicate("original", adminSession.id)
       assert(collision.headers.get(CIString("Location")).get.head.value.contains("err="))
@@ -401,7 +385,6 @@ class EventsEndpointsTests extends munit.FunSuite:
       assert(savedEvent.isDefined)
       assertEquals(savedEvent.get.ics205.incidentName, "Field Day Updated")
       assertEquals(savedEvent.get.ics205.specialInstructions, "Check repeaters")
-      assertEquals(savedEvent.get.metadata.lastEditedBy, Some(admin.id))
     }
 
   test("POST / saves plan when event has different ID from event name"):
@@ -413,8 +396,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val originalPlan = Ics205(incidentName = "Custom Event", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
       val customEvent = Ics205Event(
         id = "custom-uuid-12345",
-        ics205 = originalPlan,
-        metadata = Ics205Metadata()
+        ics205 = originalPlan
       )
       store.save(customEvent)
 
@@ -445,8 +427,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val plan = Ics205(incidentName = "Special Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
       val event = Ics205Event(
         id = "ev-drill-999",
-        ics205 = plan,
-        metadata = Ics205Metadata()
+        ics205 = plan
       )
       store.save(event)
 

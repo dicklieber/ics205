@@ -30,7 +30,7 @@ import java.time.format.DateTimeFormatter
 object NavigationBar:
 
   enum ActivePage:
-    case Plan, Radio, ExportRadio, Events, UserAdmin, ChangePassword, Login, Logging, LoggingYaml, None
+    case Plan, Radio, ExportRadio, Events, Groups, UserAdmin, ChangePassword, Login, Logging, LoggingYaml, None
 
   private val aboutDialogClick: String =
     "const d = document.getElementById('about-dialog');" +
@@ -138,6 +138,13 @@ object NavigationBar:
                 href := "/events",
                 if activePage == ActivePage.Events then attr("aria-current") := "page" else cls := ""
               )("Events")
+            ),
+            li(cls := "nav-item")(
+              a(
+                cls := s"nav-link ${if activePage == ActivePage.Groups then "active" else ""}".trim,
+                href := "/groups",
+                if activePage == ActivePage.Groups then attr("aria-current") := "page" else cls := ""
+              )("Groups")
             ),
             if availableEvents.nonEmpty then
               li(cls := "nav-item dropdown")(
