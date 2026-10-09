@@ -101,29 +101,21 @@ object EventMetadataPage:
                 ),
                 div(cls := "form-group")(
                   label(attr("for") := "group")("Group"),
-                  select(
-                    id := "group",
-                    name := "group"
-                  )(
-                    groups.map { g =>
-                      option(
-                        value := g,
-                        if event.group.equalsIgnoreCase(g) then selected else cls := ""
-                      )(g)
-                    }
-                  ),
-                  p(cls := "form-help")("Assign this event to a group.")
-                ),
-                div(cls := "form-group", style := "margin-top: 6px;")(
-                  label(attr("for") := "newGroupName", style := "font-weight: normal; font-size: 9pt;")("Or create new group:"),
                   input(
                     tpe := "text",
-                    id := "newGroupName",
-                    name := "newGroupName",
-                    placeholder := "e.g. Field Operations"
+                    id := "group",
+                    name := "group",
+                    value := event.group,
+                    attr("list") := "group-list",
+                    placeholder := "e.g. Default or Field Operations"
+                  ),
+                  tag("datalist")(id := "group-list")(
+                    groups.map { g =>
+                      option(value := g)
+                    }
                   ),
                   p(cls := "form-help")(
-                    "New group names are automatically formatted to Capitalized Words (e.g. 'hello world' -> 'Hello World')."
+                    "Assign this event to a group. Select an existing group from the list or type a new one."
                   )
                 ),
                 div(style := "margin-top: 24px; display: flex; gap: 12px; align-items: center;")(

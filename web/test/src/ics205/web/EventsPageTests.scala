@@ -65,3 +65,23 @@ class EventsPageTests extends munit.FunSuite:
     val event = Ics205Event("ev-unique-id-777", Ics205(incidentName = "Grand Prix", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
     val html = EventsPage.render(adminUser, Seq(event))
     assert(html.contains("href=\"/?event=ev-unique-id-777\"><strong>Grand Prix</strong></a>"))
+
+  test("EventsPage and EventMetadataPage render editable combo-box with datalist for group selection"):
+    val event = Ics205Event("Field Day", Ics205(incidentName = "Field Day", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ares Ops")
+    val knownGroups = Set("Default", "Ares Ops", "Hospital Network")
+
+    val eventsHtml = EventsPage.render(adminUser, Seq(event), knownGroups = knownGroups)
+    assert(eventsHtml.contains("list=\"group-list\""), "EventsPage must use input list attribute")
+    assert(eventsHtml.contains("name=\"group\""), "EventsPage must use group input name")
+    assert(eventsHtml.contains("<datalist id=\"group-list\">"), "EventsPage must render datalist with id group-list")
+    assert(eventsHtml.contains("<option value=\"Ares Ops\">"), "EventsPage must render datalist option for Ares Ops")
+    assert(eventsHtml.contains("<option value=\"Hospital Network\">"), "EventsPage must render datalist option for Hospital Network")
+    assert(!eventsHtml.contains("name=\"newGroupName\""), "EventsPage must not render obsolete newGroupName input")
+
+    val metadataHtml = EventMetadataPage.render(adminUser, event, knownGroups = knownGroups)
+    assert(metadataHtml.contains("list=\"group-list\""), "EventMetadataPage must use input list attribute")
+    assert(metadataHtml.contains("name=\"group\""), "EventMetadataPage must use group input name")
+    assert(metadataHtml.contains("value=\"Ares Ops\""), "EventMetadataPage must populate current group value")
+    assert(metadataHtml.contains("<datalist id=\"group-list\">"), "EventMetadataPage must render datalist with id group-list")
+    assert(metadataHtml.contains("<option value=\"Hospital Network\">"), "EventMetadataPage must render datalist option for Hospital Network")
+    assert(!metadataHtml.contains("name=\"newGroupName\""), "EventMetadataPage must not render obsolete newGroupName input")

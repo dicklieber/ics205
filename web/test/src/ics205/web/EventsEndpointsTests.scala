@@ -70,7 +70,7 @@ class EventsEndpointsTests extends munit.FunSuite:
 
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/events/create"))
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}"))
-        .withEntity(UrlForm("eventName" -> "Winter Drill", "incidentName" -> "Winter Drill 2026"))
+        .withEntity(UrlForm("eventName" -> "Winter Drill", "incidentName" -> "Winter Drill 2026", "group" -> "winter response team"))
 
       val res = routes.orNotFound.run(req).unsafeRunSync()
       assertEquals(res.status, Status.SeeOther)
@@ -78,6 +78,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       assert(created.isDefined)
       assertEquals(sessionStore.get(session.id).flatMap(_.currentIcs205), Some(created.get.id))
       assertEquals(created.get.ics205.incidentName, "Winter Drill 2026")
+      assertEquals(created.get.group, "Winter Response Team")
       assertEquals(res.headers.get(org.typelevel.ci.CIString("Location")).map(_.head.value), Some(s"/?event=${java.net.URLEncoder.encode(created.get.id, "UTF-8")}&saved=1"))
     }
 
@@ -122,7 +123,7 @@ class EventsEndpointsTests extends munit.FunSuite:
           "originalEventName" -> "Airshow",
           "newEventName" -> "Airshow",
           "incidentName" -> "Annual Airshow",
-          "newGroupName" -> "air operations"
+          "group" -> "air operations"
         ))
 
       val postRes = routes.orNotFound.run(postReq).unsafeRunSync()

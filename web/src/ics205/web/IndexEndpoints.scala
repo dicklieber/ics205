@@ -367,9 +367,7 @@ class IndexEndpoints @Inject() (
         else
           val eventName = formData.getOrElse("eventName", "").trim
           val incidentName = formData.get("incidentName").map(_.trim).filter(_.nonEmpty).getOrElse(eventName)
-          val groupInput = formData.getOrElse("group", "Default")
-          val newGroupInput = formData.getOrElse("newGroupName", "").trim
-          val group = if newGroupInput.nonEmpty then GroupHelper.cleanGroupName(newGroupInput) else GroupHelper.cleanGroupName(groupInput)
+          val group = GroupHelper.cleanGroupName(formData.getOrElse("group", "Default"))
 
           if eventName.isEmpty then
             (StatusCode.SeeOther, "/events?err=Event+name+cannot+be+empty", "")
@@ -439,9 +437,7 @@ class IndexEndpoints @Inject() (
           .getOrElse("").trim
         val newName = formData.getOrElse("newEventName", origTarget).trim
         val incidentName = formData.getOrElse("incidentName", "").trim
-        val groupInput = formData.getOrElse("group", "Default")
-        val newGroupInput = formData.getOrElse("newGroupName", "").trim
-        val group = if newGroupInput.nonEmpty then GroupHelper.cleanGroupName(newGroupInput) else GroupHelper.cleanGroupName(groupInput)
+        val group = GroupHelper.cleanGroupName(formData.getOrElse("group", "Default"))
 
         store.findByName(origTarget) match
           case None =>
