@@ -58,105 +58,84 @@ object GroupsPage:
           div(cls := "admin-container")(
             div(cls := "admin-header")(
               div(
-                h1("Groups"),
-                p(style := "color: #5e6c84; margin-top: 4px; margin-bottom: 0;")(
-                  "All known groups with their associated users and ICS 205 events."
-                )
+                h1("Groups")
               )
             ),
 
             if groups.isEmpty then
               div(cls := "card")(
-                p(style := "color: #6b778c; text-align: center; padding: 24px 0; margin: 0;")(
+                p(style := "color: #6b778c; text-align: center; padding: 16px 0; margin: 0;")(
                   "No groups found."
                 )
               )
             else
-              div(cls := "groups-list", style := "display: flex; flex-direction: column; gap: 20px; margin-top: 16px;")(
-                groups.map { group =>
-                  div(cls := "card")(
-                    div(style := "display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ebecf0; padding-bottom: 10px; margin-bottom: 14px;")(
-                      h2(style := "margin: 0; font-size: 15pt; display: flex; align-items: center; gap: 10px;")(
-                        group.name,
-                        span(cls := "badge badge-role", style := "font-size: 9pt; font-weight: normal;")(
-                          s"${group.users.size} user${if group.users.size == 1 then "" else "s"}, ${group.events.size} event${if group.events.size == 1 then "" else "s"}"
+              div(cls := "card")(
+                table(cls := "users-table groups-table")(
+                  thead(
+                    tr(
+                      th(style := "width: 22%;")("Group"),
+                      th(style := "width: 38%;")("Associated Users"),
+                      th(style := "width: 40%;")("Associated ICS 205 Events")
+                    )
+                  ),
+                  tbody(
+                    groups.map { group =>
+                      tr(
+                        td(style := "vertical-align: top; white-space: nowrap;")(
+                          strong(group.name),
+                          span(cls := "badge badge-role", style := "margin-left: 8px; font-weight: normal; font-size: 8.5pt;")(
+                            s"${group.users.size} u / ${group.events.size} ev"
+                          )
+                        ),
+                        td(style := "vertical-align: top;")(
+                          if group.users.isEmpty then
+                            span(style := "color: #6b778c; font-style: italic; font-size: 9.5pt;")("None")
+                          else
+                            div(style := "display: flex; flex-direction: column; gap: 4px;")(
+                              group.users.map { user =>
+                                div(style := "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;")(
+                                  if canEditUsers then
+                                    a(href := s"/admin/users?edit=${user.id}#user-form", style := "font-weight: 600; text-decoration: none; color: #0052cc;")(user.username)
+                                  else
+                                    strong(user.username),
+                                  span(cls := "badge badge-role", style := "font-size: 8pt; padding: 1px 5px;")(user.role.toString),
+                                  if !user.enabled then
+                                    span(cls := "badge badge-disabled", style := "font-size: 8pt; padding: 1px 5px;")("Disabled")
+                                  else
+                                    span(),
+                                  if canEditUsers then
+                                    a(href := s"/admin/users?edit=${user.id}#user-form", cls := "btn btn-secondary btn-sm", style := "font-size: 9.5px; padding: 1px 5px; margin-left: 2px;")("Edit")
+                                  else
+                                    span()
+                                )
+                              }
+                            )
+                        ),
+                        td(style := "vertical-align: top;")(
+                          if group.events.isEmpty then
+                            span(style := "color: #6b778c; font-style: italic; font-size: 9.5pt;")("None")
+                          else
+                            div(style := "display: flex; flex-direction: column; gap: 4px;")(
+                              group.events.map { event =>
+                                div(style := "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;")(
+                                  a(href := s"/?event=${encode(event.id)}", style := "font-weight: 600; text-decoration: none; color: #0052cc;")(event.eventName),
+                                  if event.ics205.incidentName.nonEmpty then
+                                    span(style := "color: #5e6c84; font-size: 9pt;")(s"(${event.ics205.incidentName})")
+                                  else
+                                    span(),
+                                  span(style := "color: #6b778c; font-size: 8.5pt;")(s"${event.ics205.channels.size} ch"),
+                                  if canEditPlans then
+                                    a(href := s"/events/metadata?name=${encode(event.id)}", cls := "btn btn-secondary btn-sm", style := "font-size: 9.5px; padding: 1px 5px; margin-left: 2px;")("Edit")
+                                  else
+                                    span()
+                                )
+                              }
+                            )
                         )
                       )
-                    ),
-
-                    // Associated Users Section
-                    div(style := "margin-bottom: 16px;")(
-                      h3(style := "font-size: 11pt; color: #172b4d; margin-top: 0; margin-bottom: 8px;")("Associated Users"),
-                      if group.users.isEmpty then
-                        p(style := "color: #6b778c; font-style: italic; margin: 0; font-size: 9.5pt;")("No users assigned to this group.")
-                      else
-                        table(cls := "users-table", style := "margin-bottom: 0;")(
-                          thead(
-                            tr(
-                              th("Username"),
-                              th("Role"),
-                              th("Status"),
-                              th("Actions")
-                            )
-                          ),
-                          tbody(
-                            group.users.map { user =>
-                              tr(
-                                td(strong(user.username)),
-                                td(span(cls := "badge badge-role")(user.role.toString)),
-                                td(
-                                  if user.enabled then
-                                    span(cls := "badge badge-active")("Active")
-                                  else
-                                    span(cls := "badge badge-disabled")("Disabled")
-                                ),
-                                td(cls := "actions-cell")(
-                                  if canEditUsers then
-                                    a(href := s"/admin/users?edit=${user.id}#user-form", cls := "btn btn-secondary btn-sm")("Edit User")
-                                  else
-                                    span()
-                                )
-                              )
-                            }
-                          )
-                        )
-                    ),
-
-                    // Associated ICS 205 Events Section
-                    div(style := "margin-top: 14px;")(
-                      h3(style := "font-size: 11pt; color: #172b4d; margin-top: 0; margin-bottom: 8px;")("Associated ICS 205 Events"),
-                      if group.events.isEmpty then
-                        p(style := "color: #6b778c; font-style: italic; margin: 0; font-size: 9.5pt;")("No events assigned to this group.")
-                      else
-                        table(cls := "users-table", style := "margin-bottom: 0;")(
-                          thead(
-                            tr(
-                              th("Event Name"),
-                              th("Incident Name"),
-                              th("Channels"),
-                              th("Actions")
-                            )
-                          ),
-                          tbody(
-                            group.events.map { event =>
-                              tr(
-                                td(strong(event.eventName)),
-                                td(if event.ics205.incidentName.nonEmpty then event.ics205.incidentName else "—"),
-                                td(s"${event.ics205.channels.size} channel${if event.ics205.channels.size == 1 then "" else "s"}"),
-                                td(cls := "actions-cell")(
-                                  a(href := s"/?event=${encode(event.id)}", cls := "btn btn-primary btn-sm", style := "margin-right: 6px;")("View Plan"),
-                                  if canEditPlans then
-                                    a(href := s"/events/metadata?name=${encode(event.id)}", cls := "btn btn-secondary btn-sm")("Edit Event")
-                                  else
-                                    span()
-                                )
-                              )
-                            }
-                          )
-                        )
-                    )
+                    }
                   )
-                }
+                )
               )
           )
         )

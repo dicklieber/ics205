@@ -24,3 +24,13 @@ table.users-table {
     background-color: vars.$color-bg-subtle;
   }
 }
+
+table.groups-table {
+  border: 1px solid vars.$color-border;
+  border-collapse: collapse;
+
+  th,
+  td {
+    border: 1px solid vars.$color-border;
+  }
+}
