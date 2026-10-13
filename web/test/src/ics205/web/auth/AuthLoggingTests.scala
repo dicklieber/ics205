@@ -101,7 +101,7 @@ class AuthLoggingTests extends munit.FunSuite:
     withContext { (userStore, sessionStore, passwordService, _, _, _, app, events) =>
       val hash = passwordService.hash("validpassword123")
       userStore.add(User("alice", hash, Role.Admin, enabled = true, id = "u-alice"))
-      userStore.add(User("disabled_bob", hash, Role.User, enabled = false, id = "u-bob"))
+      userStore.add(User("disabled_bob", hash, Role.Viewer, enabled = false, id = "u-bob"))
       events.clear()
 
       val sensitiveSecret = "secret_plaintext_pass_999"
@@ -207,7 +207,7 @@ class AuthLoggingTests extends munit.FunSuite:
     withContext { (userStore, sessionStore, passwordService, _, _, _, app, events) =>
       val hash = passwordService.hash("password123")
       userStore.add(User("admin1", hash, Role.Admin, enabled = true, id = "u-admin"))
-      userStore.add(User("targetuser", hash, Role.User, enabled = true, id = "u-target"))
+      userStore.add(User("targetuser", hash, Role.Viewer, enabled = true, id = "u-target"))
       val session = sessionStore.create("u-admin")
       events.clear()
 
@@ -230,7 +230,7 @@ class AuthLoggingTests extends munit.FunSuite:
   test("User changes own password is logged at INFO level"):
     withContext { (userStore, sessionStore, passwordService, _, _, _, app, events) =>
       val hash = passwordService.hash("oldpassword123")
-      userStore.add(User("charlie", hash, Role.User, enabled = true, id = "u-charlie"))
+      userStore.add(User("charlie", hash, Role.Viewer, enabled = true, id = "u-charlie"))
       val session = sessionStore.create("u-charlie")
       events.clear()
 
@@ -255,7 +255,7 @@ class AuthLoggingTests extends munit.FunSuite:
     withContext { (userStore, sessionStore, passwordService, _, _, _, app, events) =>
       val hash = passwordService.hash("originalpass123")
       userStore.add(User("admin1", hash, Role.Admin, enabled = true, id = "u-admin"))
-      userStore.add(User("member1", hash, Role.User, enabled = true, id = "u-member"))
+      userStore.add(User("member1", hash, Role.Viewer, enabled = true, id = "u-member"))
       val session = sessionStore.create("u-admin")
       events.clear()
 

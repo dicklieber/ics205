@@ -18,7 +18,7 @@
 
 package ics205.web.admin
 
-import ics205.auth.{AuthenticatedUser, Role, User}
+import ics205.auth.{AuthenticatedUser, Permission, Role, User}
 import ics205.web.NavigationBar
 import scalatags.Text.all.*
 import scalatags.Text.tags2.{details, summary}
@@ -97,8 +97,8 @@ object UserAdminPage:
                           td(strong(user.username)),
                           td(span(cls := "badge badge-role")(user.role.toString)),
                           td(
-                            if user.role == Role.Admin then
-                              span(style := "color: #5e6c84; font-style: italic;")("All (Admin)")
+                            if user.hasPermission(Permission.AllGroup) then
+                              span(style := "color: #5e6c84; font-style: italic;")(s"All (${user.role})")
                             else if user.groups.isEmpty then
                               span(style := "color: #6b778c; font-style: italic;")("None")
                             else
@@ -185,7 +185,7 @@ object UserAdminPage:
                       Role.values.map { r =>
                         option(
                           value := r.toString.toLowerCase,
-                          if editingUser.exists(_.role == r) || (editingUser.isEmpty && r == (if users.isEmpty then Role.Admin else Role.User)) then selected else cls := ""
+                          if editingUser.exists(_.role == r) || (editingUser.isEmpty && r == (if users.isEmpty then Role.Admin else Role.Viewer)) then selected else cls := ""
                         )(r.toString)
                       }
                     ),

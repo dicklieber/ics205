@@ -22,7 +22,7 @@ import ics205.auth.{AuthenticatedUser, Role}
 
 class ChangePasswordPageTests extends munit.FunSuite:
 
-  val testUser = AuthenticatedUser(user = "testuser", session = Role.User)
+  val testUser = AuthenticatedUser(user = "testuser", session = Role.Viewer)
 
   test("ChangePasswordPage renders change password form with all required fields"):
     val html = ChangePasswordPage.render(

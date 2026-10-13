@@ -24,7 +24,7 @@ import ics205.model.{GroupInfo, Ics205, Ics205Event, OperationalPeriod}
 class GroupsPageTests extends munit.FunSuite:
 
   val adminUser = AuthenticatedUser(user = "admin", session = Role.Admin)
-  val normalUser = AuthenticatedUser(user = "alice", session = Role.User)
+  val normalUser = AuthenticatedUser(user = "alice", session = Role.Viewer)
 
   test("GroupsPage renders empty state when no groups exist"):
     val html = GroupsPage.render(
@@ -34,8 +34,8 @@ class GroupsPageTests extends munit.FunSuite:
     assert(html.contains("No groups found."))
 
   test("GroupsPage renders compact single table layout for all groups"):
-    val user1 = User("carol", "hash", Role.User, enabled = true, id = "u-carol", groups = Set("Logistics"))
-    val user2 = User("dave", "hash", Role.User, enabled = false, id = "u-dave", groups = Set("Logistics"))
+    val user1 = User("carol", "hash", Role.Viewer, enabled = true, id = "u-carol", groups = Set("Logistics"))
+    val user2 = User("dave", "hash", Role.Viewer, enabled = false, id = "u-dave", groups = Set("Logistics"))
     val ev1 = Ics205Event("Logistics Comm", Ics205(incidentName = "Wildfire 2026", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Logistics")
 
     val groups = Seq(

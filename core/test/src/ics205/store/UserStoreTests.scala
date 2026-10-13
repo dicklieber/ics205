@@ -69,10 +69,10 @@ class UserStoreTests extends munit.FunSuite:
       val store = new UserStore(helper(dir))
       assertEquals(store.add(testUser), Right(testUser))
 
-      val dupName = User("ADMIN", "hash2", Role.User, enabled = true, id = "user-2")
+      val dupName = User("ADMIN", "hash2", Role.Viewer, enabled = true, id = "user-2")
       assert(store.add(dupName).isLeft)
 
-      val dupId = User("other", "hash3", Role.User, enabled = true, id = "user-1")
+      val dupId = User("other", "hash3", Role.Viewer, enabled = true, id = "user-1")
       assert(store.add(dupId).isLeft)
     }
 
@@ -132,16 +132,16 @@ class UserStoreTests extends munit.FunSuite:
   test("all returns users sorted by username case-insensitively"):
     withDirectory { dir =>
       val store = new UserStore(helper(dir))
-      store.add(User("charlie", "hash", Role.User, enabled = true, id = "u-3"))
-      store.add(User("Alice", "hash", Role.User, enabled = true, id = "u-1"))
-      store.add(User("bob", "hash", Role.User, enabled = true, id = "u-2"))
+      store.add(User("charlie", "hash", Role.Viewer, enabled = true, id = "u-3"))
+      store.add(User("Alice", "hash", Role.Viewer, enabled = true, id = "u-1"))
+      store.add(User("bob", "hash", Role.Viewer, enabled = true, id = "u-2"))
       assertEquals(store.all().map(_.username), Seq("Alice", "bob", "charlie"))
     }
 
   test("persists and reloads user groups"):
     withDirectory { dir =>
       val store = new UserStore(helper(dir))
-      val userWithGroups = User("operator", "hash", Role.User, enabled = true, id = "u-op", groups = Set("Ares Operations", "North Team"))
+      val userWithGroups = User("operator", "hash", Role.Viewer, enabled = true, id = "u-op", groups = Set("Ares Operations", "North Team"))
       store.add(userWithGroups)
 
       val loaded = store.findById("u-op").get

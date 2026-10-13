@@ -18,7 +18,7 @@
 
 package ics205.model
 
-import ics205.auth.{AuthenticatedUser, Permission, Role, User, UserId}
+import ics205.auth.{AuthenticatedUser, UserId}
 import ics205.util.{Ids, UtcFormatter}
 import ics205.util.Ids.Id
 import io.circe.{Codec, Decoder, Encoder, HCursor, Json, JsonObject}
@@ -36,24 +36,6 @@ case class Ics205Event(id: EventId = Ids.generateId(),
   def bakFileName: String = s"$id-$UtcFormatter().$extension"
 
   def eventName: String = if ics205.incidentName.nonEmpty then ics205.incidentName else id
-
-  def canView(user: AuthenticatedUser): Boolean = user.hasPermission(Permission.ViewPlans)
-
-  def canView(user: User): Boolean = user.role.hasPermission(Permission.ViewPlans)
-
-  def canEdit(user: AuthenticatedUser): Boolean = user.hasPermission(Permission.EditPlans)
-
-  def canEdit(user: User): Boolean = user.role.hasPermission(Permission.EditPlans)
-
-  def accessFor(user: AuthenticatedUser): Option[PlanAccess] =
-    if user.role == Role.Admin || user.hasPermission(Permission.EditPlans) then Some(PlanAccess.Edit)
-    else if user.hasPermission(Permission.ViewPlans) then Some(PlanAccess.ReadOnly)
-    else None
-
-  def accessFor(user: User): Option[PlanAccess] =
-    if user.role == Role.Admin || user.role.hasPermission(Permission.EditPlans) then Some(PlanAccess.Edit)
-    else if user.role.hasPermission(Permission.ViewPlans) then Some(PlanAccess.ReadOnly)
-    else None
 
   def update(authenticatedUser: AuthenticatedUser): Ics205Event = this
 

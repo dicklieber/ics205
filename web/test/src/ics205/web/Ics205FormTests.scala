@@ -182,11 +182,11 @@ class Ics205FormTests extends munit.FunSuite:
       val config = ics205.auth.AuthConfig()
 
       // Add a viewer user (no EditPlans permission)
-      userStore.add(ics205.auth.User("viewer1", passwordService.hash("pass"), ics205.auth.Role.Viewer, enabled = true, id = "u-viewer"))
+      userStore.add(ics205.auth.User("viewer1", passwordService.hash("pass"), ics205.auth.Role.Viewer, enabled = true, id = "u-viewer", groups = Set("Default")))
       val viewerSession = sessionStore.create("u-viewer")
 
       // Add an editor user (has EditPlans permission)
-      userStore.add(ics205.auth.User("editor1", passwordService.hash("pass"), ics205.auth.Role.Editor, enabled = true, id = "u-editor"))
+      userStore.add(ics205.auth.User("editor1", passwordService.hash("pass"), ics205.auth.Role.Editor, enabled = true, id = "u-editor", groups = Set("Default")))
       val editorSession = sessionStore.create("u-editor")
 
       val app = Http4sServerInterpreter[IO]().toRoutes(new IndexEndpoints(store, authService, config).endpoints).orNotFound

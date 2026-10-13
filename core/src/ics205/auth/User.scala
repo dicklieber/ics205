@@ -32,7 +32,11 @@ case class User(
                  enabled: Boolean = true,
                  id: UserId = Ids.generateId(),
                  groups: Set[String] = Set.empty
-)
+) extends UserContext:
+  def hasPermission(permission: Permission): Boolean = role.hasPermission(permission)
+
+  def canAccessGroup(groupName: String): Boolean =
+    hasPermission(Permission.AllGroup) || groups.exists(_.equalsIgnoreCase(groupName.trim))
 
 object User:
   given Ordering[User] = Ordering.by(_.username.toLowerCase)
@@ -44,8 +48,8 @@ object User:
         passwordHash <- c.downField("passwordHash").as[String]
         role <- c.downField("role").as[Role].orElse(
           c.downField("roles").as[Seq[String]].map(roles =>
-            roles.headOption.flatMap(Role.fromString).getOrElse(Role.User)
-          ).orElse(Right(Role.User))
+            roles.headOption.flatMap(Role.fromString).getOrElse(Role.Viewer)
+          ).orElse(Right(Role.Viewer))
         )
         enabled <- c.downField("enabled").as[Option[Boolean]].map(_.getOrElse(true))
         id <- c.downField("id").as[Option[UserId]].map(_.getOrElse(Ids.generateId()))

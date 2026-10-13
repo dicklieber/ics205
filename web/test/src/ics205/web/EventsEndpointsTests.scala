@@ -165,7 +165,7 @@ class EventsEndpointsTests extends munit.FunSuite:
   test("Event permissions are checked directly on users"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
-      val editor = userStore.add(User("editorUser", passwordService.hash("pass"), Role.Editor, enabled = true, id = "u-ed")).toOption.get
+      val editor = userStore.add(User("editorUser", passwordService.hash("pass"), Role.Editor, enabled = true, id = "u-ed", groups = Set("Ares Ops"))).toOption.get
       val session = sessionStore.create(editor.id)
 
       val event1 = Ics205Event("AllowedEvent", Ics205(incidentName = "Allowed Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ares Ops")

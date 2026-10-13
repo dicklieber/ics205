@@ -11,7 +11,7 @@ class UserAdminPageTests extends munit.FunSuite:
     val user = User(
       username = maliciousUsername,
       passwordHash = "hash",
-      role = Role.User,
+      role = Role.Viewer,
       enabled = true,
       id = "u-malicious"
     )
@@ -40,7 +40,7 @@ class UserAdminPageTests extends munit.FunSuite:
     val user = User(
       username = "testuser",
       passwordHash = "hash",
-      role = Role.User,
+      role = Role.Viewer,
       enabled = true,
       id = "u-test"
     )
@@ -58,7 +58,7 @@ class UserAdminPageTests extends munit.FunSuite:
     val user = User(
       username = "johndoe",
       passwordHash = "hash",
-      role = Role.User,
+      role = Role.Viewer,
       enabled = true,
       id = "user-uuid-12345"
     )

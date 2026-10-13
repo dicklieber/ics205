@@ -26,7 +26,7 @@ import io.circe.derivation.{Configuration, ConfiguredCodec}
 import java.time.Instant
 
 case class AuthenticatedUser(user: User,
-                             session: Session):
+                             session: Session) extends UserContext:
   def username: String = user.username
   def role: Role = user.role
   def id: UserId = user.id
@@ -34,7 +34,8 @@ case class AuthenticatedUser(user: User,
   def check(permission: Permission):Unit =
     if !hasPermission(permission) then throw new UnauthorizedException()
   def roles: Set[String] = Set(session.toString.toLowerCase)
-  def hasPermission(permission: Permission): Boolean = user.role.hasPermission(permission)
+  def hasPermission(permission: Permission): Boolean = user.hasPermission(permission)
+  def canAccessGroup(groupName: String): Boolean = user.canAccessGroup(groupName)
 
 object AuthenticatedUser:
   def apply(user: User): AuthenticatedUser =

@@ -19,6 +19,7 @@
 package ics205.model
 
 import ics205.auth.{AuthenticatedUser, Permission, Role, User}
+import ics205.auth.AuthorizationService.*
 import io.circe.Json
 import io.circe.parser.decode
 import io.circe.syntax.*
@@ -40,8 +41,8 @@ class GroupHelperTests extends munit.FunSuite:
     assertEquals(GroupHelper.cleanGroupName("   "), "Default")
 
   test("knownGroups aggregates groups from events and users including Default"):
-    val u1 = User("u1", "hash", Role.User, enabled = true, id = "1", groups = Set("Ares Operations", "North Team"))
-    val u2 = User("u2", "hash", Role.User, enabled = true, id = "2", groups = Set("North Team", "South Team"))
+    val u1 = User("u1", "hash", Role.Viewer, enabled = true, id = "1", groups = Set("Ares Operations", "North Team"))
+    val u2 = User("u2", "hash", Role.Viewer, enabled = true, id = "2", groups = Set("North Team", "South Team"))
     val ev1 = Ics205Event("ev1", Ics205(incidentName = "Ev1", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ares Operations")
     val ev2 = Ics205Event("ev2", Ics205(incidentName = "Ev2", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Default")
 
@@ -49,8 +50,8 @@ class GroupHelperTests extends munit.FunSuite:
     assertEquals(groups, Set("Default", "Ares Operations", "North Team", "South Team"))
 
   test("groupInfos associates users and events with groups and sorts alphabetically"):
-    val u1 = User("alice", "hash", Role.User, enabled = true, id = "1", groups = Set("North Team"))
-    val u2 = User("bob", "hash", Role.User, enabled = true, id = "2", groups = Set("South Team"))
+    val u1 = User("alice", "hash", Role.Viewer, enabled = true, id = "1", groups = Set("North Team"))
+    val u2 = User("bob", "hash", Role.Viewer, enabled = true, id = "2", groups = Set("South Team"))
     val ev1 = Ics205Event("ev1", Ics205(incidentName = "North Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "North Team")
     val ev2 = Ics205Event("ev2", Ics205(incidentName = "General Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Default")
 
@@ -88,26 +89,57 @@ class GroupHelperTests extends munit.FunSuite:
     assertEquals(legacyDecoded.id, "ev-legacy")
     assertEquals(legacyDecoded.group, "Legacy Group")
 
-  test("User permissions are checked directly on the user, not specific Ics205Events"):
+  test("User permissions are checked directly on the user and enforce group boundaries"):
     val admin = User("admin", "hash", Role.Admin)
-    val editor = User("editor", "hash", Role.Editor)
-    val viewer = User("viewer", "hash", Role.Viewer)
-    val regular = User("user", "hash", Role.User)
+    val editorWithGroup = User("editor", "hash", Role.Editor, groups = Set("Ops Group"))
+    val editorWithoutGroup = User("editor-no-grp", "hash", Role.Editor, groups = Set.empty)
+    val viewerWithGroup = User("viewer", "hash", Role.Viewer, groups = Set("Ops Group"))
+    val viewerWithoutGroup = User("viewer-no-grp", "hash", Role.Viewer, groups = Set.empty)
+    val regularWithGroup = User("user", "hash", Role.Viewer, groups = Set("Default"))
 
-    val ev = Ics205Event("ev-1", Ics205(incidentName = "Event 1", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+    val evOps = Ics205Event("ev-1", Ics205(incidentName = "Ops Event", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ops Group")
+    val evDefault = Ics205Event("ev-2", Ics205(incidentName = "Default Event", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Default")
 
-    assertEquals(ev.canView(admin), true)
-    assertEquals(ev.canEdit(admin), true)
-    assertEquals(ev.accessFor(admin), Some(PlanAccess.Edit))
+    // Admin has AllGroup permission so can access all groups
+    assertEquals(evOps.viewableBy(admin), true)
+    assertEquals(evOps.editableBy(admin), true)
+    assertEquals(evOps.accessBy(admin), Some(EventAccess.Edit))
+    assertEquals(evDefault.viewableBy(admin), true)
+    assertEquals(evDefault.editableBy(admin), true)
 
-    assertEquals(ev.canView(editor), true)
-    assertEquals(ev.canEdit(editor), true)
-    assertEquals(ev.accessFor(editor), Some(PlanAccess.Edit))
+    // Editor with Ops Group can view/edit Ops Event, but not Default Event
+    assertEquals(evOps.viewableBy(editorWithGroup), true)
+    assertEquals(evOps.editableBy(editorWithGroup), true)
+    assertEquals(evOps.accessBy(editorWithGroup), Some(EventAccess.Edit))
+    assertEquals(evDefault.viewableBy(editorWithGroup), false)
+    assertEquals(evDefault.editableBy(editorWithGroup), false)
+    assertEquals(evDefault.accessBy(editorWithGroup), None)
 
-    assertEquals(ev.canView(viewer), true)
-    assertEquals(ev.canEdit(viewer), false)
-    assertEquals(ev.accessFor(viewer), Some(PlanAccess.ReadOnly))
+    // Editor without group cannot access any event
+    assertEquals(evOps.viewableBy(editorWithoutGroup), false)
+    assertEquals(evOps.editableBy(editorWithoutGroup), false)
 
-    assertEquals(ev.canView(regular), true)
-    assertEquals(ev.canEdit(regular), false)
-    assertEquals(ev.accessFor(regular), Some(PlanAccess.ReadOnly))
+    // Viewer with Ops Group can view Ops Event as ReadOnly, but not edit
+    assertEquals(evOps.viewableBy(viewerWithGroup), true)
+    assertEquals(evOps.editableBy(viewerWithGroup), false)
+    assertEquals(evOps.accessBy(viewerWithGroup), Some(EventAccess.ReadOnly))
+    assertEquals(evDefault.viewableBy(viewerWithGroup), false)
+
+    // Viewer without group cannot access any event
+    assertEquals(evOps.viewableBy(viewerWithoutGroup), false)
+
+    // Regular user with Default group can view Default Event as ReadOnly
+    assertEquals(evDefault.viewableBy(regularWithGroup), true)
+    assertEquals(evDefault.editableBy(regularWithGroup), false)
+    assertEquals(evDefault.accessBy(regularWithGroup), Some(EventAccess.ReadOnly))
+    assertEquals(evOps.viewableBy(regularWithGroup), false)
+
+    // AuthenticatedUser also satisfies UserContext
+    val authAdmin = AuthenticatedUser(admin)
+    val authEditor = AuthenticatedUser(editorWithGroup)
+    assertEquals(evOps.viewableBy(authAdmin), true)
+    assertEquals(evOps.editableBy(authAdmin), true)
+    assertEquals(evOps.accessBy(authAdmin), Some(EventAccess.Edit))
+    assertEquals(evOps.viewableBy(authEditor), true)
+    assertEquals(evOps.editableBy(authEditor), true)
+    assertEquals(evDefault.viewableBy(authEditor), false)

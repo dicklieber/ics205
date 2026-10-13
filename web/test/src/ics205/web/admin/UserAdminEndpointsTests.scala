@@ -113,7 +113,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
       userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
-      userStore.add(User("bob", hash, Role.User, enabled = true, id = "u-bob"))
+      userStore.add(User("bob", hash, Role.Viewer, enabled = true, id = "u-bob"))
       val session = authService.authenticate("admin", "password").get
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/admin/users"))
@@ -134,7 +134,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       assert(body.contains("<select"))
       assert(body.contains("id=\"role\""))
       assert(body.contains("Role Permissions Reference:"))
-      assert(body.contains("Debug, EditPlans, EditUsers, ViewPlans, ViewUsers"))
+      assert(body.contains("AllGroup, Debug, DeletePlans, EditPlans, EditUsers, ViewPlans, ViewUsers"))
     }
 
   test("GET /admin/users?edit=<id> renders edit form with user details"):
@@ -239,7 +239,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("originalpass")
       userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
-      userStore.add(User("alice", hash, Role.User, enabled = true, id = "u-edit"))
+      userStore.add(User("alice", hash, Role.Viewer, enabled = true, id = "u-edit"))
       val session = authService.authenticate("admin", "originalpass").get
 
       val editFormShort = UrlForm(
@@ -277,7 +277,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
     withContext { (_, userStore, sessionStore, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("originalpass")
       userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
-      userStore.add(User("alice", hash, Role.User, enabled = true, id = "u-edit"))
+      userStore.add(User("alice", hash, Role.Viewer, enabled = true, id = "u-edit"))
       val adminSession = authService.authenticate("admin", "originalpass").get
       val aliceSession1 = authService.authenticate("alice", "originalpass").get
 
@@ -335,7 +335,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
     withContext { (_, userStore, sessionStore, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
       userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
-      userStore.add(User("delete_me", hash, Role.User, enabled = true, id = "u-del"))
+      userStore.add(User("delete_me", hash, Role.Viewer, enabled = true, id = "u-del"))
       val session = authService.authenticate("admin", "password").get
       val delSession = authService.authenticate("delete_me", "password").get
 

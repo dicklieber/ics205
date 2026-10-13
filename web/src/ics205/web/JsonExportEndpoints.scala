@@ -19,7 +19,8 @@
 package ics205.web
 
 import cats.effect.IO
-import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, Role}
+import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService}
+import ics205.auth.AuthorizationService.*
 import ics205.log.Ics205ActivityLogger
 import ics205.store.Ics205Store
 import ics205.web.auth.AuthSecurity
@@ -56,7 +57,7 @@ class JsonExportEndpoints @Inject()(
             case None =>
               (StatusCode.SeeOther, Some("/events"), "text/plain", None, "no-store", "")
             case Some(currentEvent) =>
-              if !currentEvent.canView(user) && user.role != Role.Admin then
+              if !currentEvent.viewableBy(user) then
                 (StatusCode.Forbidden, None, "text/plain", None, "no-store", "")
               else
                 Ics205ActivityLogger.logExport(

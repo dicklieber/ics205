@@ -19,7 +19,8 @@
 package ics205.web
 
 import cats.effect.IO
-import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, Permission, Role}
+import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, Permission}
+import ics205.auth.AuthorizationService.*
 import ics205.log.Ics205ActivityLogger
 import ics205.model.{GroupHelper, Ics205, Ics205Event, OperationalPeriod}
 import ics205.store.{Ics205Store, SessionStore, UserStore}
@@ -105,7 +106,7 @@ class IndexEndpoints @Inject() (
               case None =>
                 (StatusCode.SeeOther, Some("/events"), "")
               case Some(currentEvent) =>
-                if !currentEvent.canView(user) && user.role != Role.Admin then
+                if !currentEvent.viewableBy(user) then
                   (StatusCode.Forbidden, None, "You do not have permission to view this event.")
                 else if eventQueryOpt.exists(_ != currentEvent.id) then
                   val savedParam = if saved.contains("1") then "&saved=1" else ""
@@ -141,9 +142,23 @@ class IndexEndpoints @Inject() (
 
         currentEventOpt match
           case None =>
-            val eventName = targetName.getOrElse(data.getOrElse("incidentName", "Default Event")).trim
-            val effectiveName = if eventName.isEmpty then "Default Event" else eventName
-            Ics205Form.decode(data, Ics205(incidentName = effectiveName, operationalPeriod = OperationalPeriod(), channels = Seq.empty)) match
+            if !user.hasPermission(Permission.EditPlans) then
+              (
+                StatusCode.Forbidden,
+                None,
+                Ics205Editor.render(
+                  plan = Ics205(incidentName = "Default Event", operationalPeriod = OperationalPeriod(), channels = Seq.empty),
+                  error = Some("You do not have permission to edit plans."),
+                  currentUser = Some(user),
+                  currentEventName = Some("Default Event"),
+                  currentEventId = Some("Default Event"),
+                  availableEvents = authorizedEvents.map(_.eventName)
+                )
+              )
+            else
+              val eventName = targetName.getOrElse(data.getOrElse("incidentName", "Default Event")).trim
+              val effectiveName = if eventName.isEmpty then "Default Event" else eventName
+              Ics205Form.decode(data, Ics205(incidentName = effectiveName, operationalPeriod = OperationalPeriod(), channels = Seq.empty)) match
               case Left(message) =>
                 (StatusCode.SeeOther, Some("/events"), "")
               case Right(plan) =>
@@ -180,7 +195,7 @@ class IndexEndpoints @Inject() (
                       )
                     )
           case Some(currentEvent) =>
-            if !currentEvent.canEdit(user) && user.role != Role.Admin then
+            if !currentEvent.editableBy(user) then
               (
                 StatusCode.Forbidden,
                 None,
@@ -290,7 +305,7 @@ class IndexEndpoints @Inject() (
           case None =>
             (StatusCode.SeeOther, Some("/events"), "")
           case Some(currentEvent) =>
-            if !currentEvent.canView(user) && user.role != Role.Admin then
+            if !currentEvent.viewableBy(user) then
               (StatusCode.Forbidden, None, "You do not have permission to view this radio plan.")
             else
               (
@@ -315,7 +330,7 @@ class IndexEndpoints @Inject() (
     .serverLogicSuccess { user => (msg, err) =>
       IO.blocking {
         val allEvents = store.listEvents()
-        val visibleEvents = if user.role == Role.Admin then allEvents else allEvents.filter(_.canView(user))
+        val visibleEvents = allEvents.filter(_.viewableBy(user))
         val currentEventName = user.session.currentIcs205.flatMap(store.findByName).map(_.eventName).orElse(user.session.currentIcs205)
         val allUsers = userStore.all()
         val knownGroups = GroupHelper.knownGroups(allEvents, allUsers)
@@ -343,7 +358,7 @@ class IndexEndpoints @Inject() (
         nameOpt match
           case Some(name) =>
             store.findByName(name) match
-              case Some(ev) if ev.canView(user) || user.role == Role.Admin =>
+              case Some(ev) if ev.viewableBy(user) =>
                 sessionStore.save(user.session.copy(currentIcs205 = Some(ev.id)))
                 (StatusCode.SeeOther, returnUrlOpt.flatMap(RequestUtils.localRedirect).getOrElse("/"), "")
               case Some(_) =>
@@ -362,7 +377,7 @@ class IndexEndpoints @Inject() (
     .out(statusCode.and(header[String]("Location")).and(htmlBodyUtf8))
     .serverLogicSuccess { user => formData =>
       IO.blocking {
-        if user.role != Role.Admin && !user.hasPermission(Permission.EditPlans) then
+        if !user.hasPermission(Permission.EditPlans) then
           (StatusCode.Forbidden, "/events", "You do not have permission to create events.")
         else
           val eventName = formData.getOrElse("eventName", "").trim
@@ -404,13 +419,13 @@ class IndexEndpoints @Inject() (
           case None =>
             (StatusCode.SeeOther, Some("/events?err=Event+not+found"), "")
           case Some(ev) =>
-            if user.role != Role.Admin && !ev.canEdit(user) then
+            if !ev.editableBy(user) then
               (StatusCode.Forbidden, None, "You do not have permission to edit metadata for this event.")
             else
               val allUsers = userStore.all()
               val allEvents = store.listEvents()
               val knownGroups = GroupHelper.knownGroups(allEvents, allUsers)
-              val availableNames = allEvents.filter(e => user.role == Role.Admin || e.canView(user)).map(_.eventName)
+              val availableNames = allEvents.filter(e => e.viewableBy(user)).map(_.eventName)
               val html = EventMetadataPage.render(
                 currentUser = user,
                 event = ev,
@@ -443,7 +458,7 @@ class IndexEndpoints @Inject() (
           case None =>
             (StatusCode.SeeOther, "/events?err=Event+not+found", "")
           case Some(ev) =>
-            if user.role != Role.Admin && !ev.canEdit(user) then
+            if !ev.editableBy(user) then
               (StatusCode.Forbidden, "/events", "You do not have permission to edit metadata for this event.")
             else if newName.isEmpty then
               (StatusCode.SeeOther, s"/events/metadata?name=${encode(ev.id)}&err=Event+name+cannot+be+empty", "")
@@ -487,7 +502,7 @@ class IndexEndpoints @Inject() (
           case None =>
             (StatusCode.SeeOther, Some("/events?err=Event+not+found"), "text/plain", None, "no-store", "")
           case Some(ev) =>
-            if user.role != Role.Admin && !ev.canView(user) then
+            if !ev.viewableBy(user) then
               (StatusCode.Forbidden, None, "text/plain", None, "no-store", "You do not have permission to export this event.")
             else
               Ics205ActivityLogger.logExport(
@@ -513,7 +528,7 @@ class IndexEndpoints @Inject() (
     .out(statusCode.and(header[String]("Location")).and(htmlBodyUtf8))
     .serverLogicSuccess { user => importData =>
       IO.blocking {
-        if user.role != Role.Admin && !user.hasPermission(Permission.EditPlans) then
+        if !user.hasPermission(Permission.EditPlans) then
           (StatusCode.Forbidden, "/events?err=You+do+not+have+permission+to+import+events.", "You do not have permission to import events.")
         else
           val fileBytes = importData.file.body
@@ -555,7 +570,7 @@ class IndexEndpoints @Inject() (
           .getOrElse("").trim
         store.findByName(target) match
           case None => (StatusCode.SeeOther, "/events?err=Event+not+found", "")
-          case Some(ev) if user.role != Role.Admin && !ev.canEdit(user) =>
+          case Some(ev) if !ev.editableBy(user) =>
             (StatusCode.Forbidden, "/events", "You do not have permission to duplicate this event.")
           case Some(ev) =>
             val newName = formData.getOrElse("newEventName", "").trim
@@ -589,7 +604,7 @@ class IndexEndpoints @Inject() (
     .out(statusCode.and(header[String]("Location")).and(htmlBodyUtf8))
     .serverLogicSuccess { user => formData =>
       IO.blocking {
-        if user.role != Role.Admin then
+        if !user.hasPermission(Permission.DeletePlans) then
           (StatusCode.Forbidden, "/events", "Only administrators can delete events.")
         else
           val target = formData.get("eventId").filter(_.nonEmpty)

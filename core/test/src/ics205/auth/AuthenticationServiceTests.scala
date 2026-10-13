@@ -55,7 +55,7 @@ class AuthenticationServiceTests extends munit.FunSuite:
   test("failed login with unknown username or wrong password returns None without leaking details"):
     withDirectory { (_, authService, userStore, _, passwordService) =>
       val hash = passwordService.hash("secret123")
-      val user = User("operator", hash, Role.User, enabled = true, id = "user-1")
+      val user = User("operator", hash, Role.Viewer, enabled = true, id = "user-1")
       userStore.add(user)
 
       assertEquals(authService.authenticate("nonexistent", "secret123"), None)
@@ -65,7 +65,7 @@ class AuthenticationServiceTests extends munit.FunSuite:
   test("disabled user cannot authenticate via login"):
     withDirectory { (_, authService, userStore, _, passwordService) =>
       val hash = passwordService.hash("secret123")
-      val user = User("disabledUser", hash, Role.User, enabled = false, id = "user-1")
+      val user = User("disabledUser", hash, Role.Viewer, enabled = false, id = "user-1")
       userStore.add(user)
 
       assertEquals(authService.authenticate("disabledUser", "secret123"), None)
@@ -74,7 +74,7 @@ class AuthenticationServiceTests extends munit.FunSuite:
   test("nonexistent or expired session fails to authenticate"):
     withDirectory { (dir, _, userStore, _, passwordService) =>
       val hash = passwordService.hash("secret123")
-      val user = User("operator", hash, Role.User, enabled = true, id = "user-1")
+      val user = User("operator", hash, Role.Viewer, enabled = true, id = "user-1")
       userStore.add(user)
 
       val helper = new FileHelper(dir)
@@ -92,11 +92,11 @@ class AuthenticationServiceTests extends munit.FunSuite:
   test("role changes in UserStore take effect immediately for existing sessions"):
     withDirectory { (_, authService, userStore, _, passwordService) =>
       val hash = passwordService.hash("secret123")
-      val user = User("operator", hash, Role.User, enabled = true, id = "user-1")
+      val user = User("operator", hash, Role.Viewer, enabled = true, id = "user-1")
       userStore.add(user)
 
       val session = authService.authenticate("operator", "secret123").get
-      assertEquals(authService.authenticateSession(session.id).map(_.role), Right(Role.User))
+      assertEquals(authService.authenticateSession(session.id).map(_.role), Right(Role.Viewer))
 
       // Change user role in UserStore
       userStore.save(user.copy(role = Role.Admin))
@@ -106,7 +106,7 @@ class AuthenticationServiceTests extends munit.FunSuite:
   test("disabling a user invalidates access immediately for existing sessions"):
     withDirectory { (_, authService, userStore, _, passwordService) =>
       val hash = passwordService.hash("secret123")
-      val user = User("operator", hash, Role.User, enabled = true, id = "user-1")
+      val user = User("operator", hash, Role.Viewer, enabled = true, id = "user-1")
       userStore.add(user)
 
       val session = authService.authenticate("operator", "secret123").get

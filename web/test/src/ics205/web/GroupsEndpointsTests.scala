@@ -64,8 +64,8 @@ class GroupsEndpointsTests extends munit.FunSuite:
     withContext { (_, store, userStore, _, passwordService, authService, _, app) =>
       val hash = passwordService.hash("password")
       val admin = userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin")).toOption.get
-      val alice = userStore.add(User("alice", hash, Role.User, enabled = true, id = "u-alice", groups = Set("Ares Operations", "North Team"))).toOption.get
-      val bob = userStore.add(User("bob", hash, Role.User, enabled = true, id = "u-bob", groups = Set("North Team"))).toOption.get
+      val alice = userStore.add(User("alice", hash, Role.Viewer, enabled = true, id = "u-alice", groups = Set("Ares Operations", "North Team"))).toOption.get
+      val bob = userStore.add(User("bob", hash, Role.Viewer, enabled = true, id = "u-bob", groups = Set("North Team"))).toOption.get
 
       val ev1 = Ics205Event("Ev-North", Ics205(incidentName = "North Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "North Team")
       val ev2 = Ics205Event("Ev-Ares", Ics205(incidentName = "Ares Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ares Operations")

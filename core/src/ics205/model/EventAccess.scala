@@ -20,5 +20,5 @@ package ics205.model
 
 import io.circe.Codec
 
-enum PlanAccess derives Codec.AsObject:
+enum EventAccess derives Codec.AsObject:
   case Edit, ReadOnly

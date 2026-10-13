@@ -18,7 +18,8 @@
 
 package ics205.web
 
-import ics205.auth.{AuthenticatedUser, Role}
+import ics205.auth.AuthenticatedUser
+import ics205.auth.AuthorizationService.*
 import ics205.model.Ics205Event
 import ics205.store.Ics205Store
 
@@ -30,9 +31,10 @@ trait EventResolving:
     eventQuery: Option[String] = None
   ): (Option[Ics205Event], Seq[Ics205Event]) =
     val allEvents = store.listEvents()
-    val authorizedEvents = if user.role == Role.Admin then allEvents else allEvents.filter(_.canView(user))
+    val authorizedEvents = allEvents.filter(_.viewableBy(user))
     val chosenEvent = eventQuery.filter(_.nonEmpty).flatMap(store.findByName)
-      .orElse(user.session.currentIcs205.flatMap(store.findByName))
+      .filter(_.viewableBy(user))
+      .orElse(user.session.currentIcs205.flatMap(store.findByName).filter(_.viewableBy(user)))
       .orElse(authorizedEvents.headOption)
     (chosenEvent, authorizedEvents)
 

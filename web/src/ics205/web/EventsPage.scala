@@ -18,8 +18,9 @@
 
 package ics205.web
 
-import ics205.auth.{AuthenticatedUser, Role}
-import ics205.model.{Ics205Event, PlanAccess}
+import ics205.auth.{AuthenticatedUser, Permission}
+import ics205.auth.AuthorizationService.*
+import ics205.model.{Ics205Event, EventAccess}
 import scalatags.Text.all.*
 
 import java.net.URLEncoder
@@ -42,7 +43,7 @@ object EventsPage:
   ): String =
     val sortedEvents = events.sortBy(ev => (ev.eventName.toLowerCase(java.util.Locale.ROOT), ev.eventName))
     val availableNames = sortedEvents.map(_.eventName)
-    val isAdmin = currentUser.role == Role.Admin
+    val canDelete = currentUser.hasPermission(Permission.DeletePlans)
     val groups = (knownGroups + "Default").toSeq.sorted
 
     doctype("html")(
@@ -96,11 +97,10 @@ object EventsPage:
                   else
                     sortedEvents.map { ev =>
                       val isSelected = currentEventName.contains(ev.eventName) || (currentEventName.isEmpty && events.headOption.contains(ev))
-                      val canEdit = ev.canEdit(currentUser)
-                      val accessLabel = ev.accessFor(currentUser) match
-                        case Some(PlanAccess.Edit) => "Edit"
-                        case Some(PlanAccess.ReadOnly) => "View Only"
-                        case None if isAdmin => "Admin (Edit)"
+                      val canEdit = ev.editableBy(currentUser)
+                      val accessLabel = ev.accessBy(currentUser) match
+                        case Some(EventAccess.Edit) => "Edit"
+                        case Some(EventAccess.ReadOnly) => "View Only"
                         case None => "None"
 
                       val baseName = ev.eventName.replaceFirst("\\s*\\(\\d+\\)$", "")
@@ -124,7 +124,7 @@ object EventsPage:
                           }.getOrElse[Modifier](span("—"))
                         ),
                         td(
-                          if canEdit || isAdmin then
+                          if canEdit then
                             span(cls := "badge badge-role")(accessLabel)
                           else
                             span(cls := "badge")(accessLabel)
@@ -133,15 +133,15 @@ object EventsPage:
                           select(cls := "event-action-select", attr("aria-label") := s"Actions for ${ev.eventName}")(
                             option(value := "")("Actions…"),
                             option(value := s"/events/export?name=${encode(ev.id)}")("Export"),
-                            if canEdit || isAdmin then
+                            if canEdit then
                               Seq[Modifier](
                                 option(value := s"/events/metadata?name=${encode(ev.id)}")("Edit Event"),
                                 option(value := "duplicate")("Duplicate")
                               )
                             else Seq.empty[Modifier],
-                            if isAdmin then Seq[Modifier](option(value := "delete")("Delete")) else Seq.empty[Modifier]
+                            if canDelete then Seq[Modifier](option(value := "delete")("Delete")) else Seq.empty[Modifier]
                           ),
-                          if canEdit || isAdmin then
+                          if canEdit then
                             form(method := "post", action := "/events/duplicate", hidden,
                               attr("data-duplicate-name") := duplicateName)(
                               input(tpe := "hidden", name := "eventId", value := ev.id),
@@ -149,7 +149,7 @@ object EventsPage:
                               input(tpe := "hidden", name := "newEventName")
                             )
                           else span(),
-                          if isAdmin then
+                          if canDelete then
                             form(method := "post", action := "/events/delete", hidden,
                               attr("data-confirm") := s"Are you sure you want to delete event '${ev.eventName}'?")(
                               input(tpe := "hidden", name := "eventId", value := ev.id),
@@ -163,7 +163,7 @@ object EventsPage:
               )
             ),
 
-            if isAdmin || currentUser.hasPermission(ics205.auth.Permission.EditPlans) then
+            if currentUser.hasPermission(Permission.EditPlans) then
               div(
                 div(cls := "card", id := "new-event-form")(
                   h2("Create New Event"),

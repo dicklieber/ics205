@@ -72,7 +72,7 @@ class ActivityEndpointsTests extends munit.FunSuite:
   test("POST /import/log with valid session logs import activity and returns 200"):
     withContext { (_, userStore, _, _, authService, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("operator1", passwordService.hash("password"), Role.User, enabled = true, id = "u1"))
+      userStore.add(User("operator1", passwordService.hash("password"), Role.Viewer, enabled = true, id = "u1"))
       val session = authService.authenticate("operator1", "password").get
 
       val body = """{"eventName":"Flood","incidentName":"Flood Response","channelCount":5,"fileName":"flood.json","format":"json"}"""
@@ -103,7 +103,7 @@ class ActivityEndpointsTests extends munit.FunSuite:
   test("POST /export/log with valid session logs export activity and returns 200"):
     withContext { (_, userStore, _, _, authService, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("operator2", passwordService.hash("password"), Role.User, enabled = true, id = "u2"))
+      userStore.add(User("operator2", passwordService.hash("password"), Role.Viewer, enabled = true, id = "u2"))
       val session = authService.authenticate("operator2", "password").get
 
       val body = """{"eventName":"Flood","format":"json","incidentName":"Flood Response","channelCount":5}"""

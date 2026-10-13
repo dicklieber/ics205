@@ -20,10 +20,10 @@ package ics205.auth
 
 class UserTests extends munit.FunSuite:
   test("User ordering is case-insensitive by username"):
-    val u1 = User(username = "alice", passwordHash = "", role = Role.User)
-    val u2 = User(username = "Bob", passwordHash = "", role = Role.User)
-    val u3 = User(username = "charlie", passwordHash = "", role = Role.User)
-    val u4 = User(username = "DAVID", passwordHash = "", role = Role.User)
+    val u1 = User(username = "alice", passwordHash = "", role = Role.Viewer)
+    val u2 = User(username = "Bob", passwordHash = "", role = Role.Viewer)
+    val u3 = User(username = "charlie", passwordHash = "", role = Role.Viewer)
+    val u4 = User(username = "DAVID", passwordHash = "", role = Role.Viewer)
 
     val users = Seq(u4, u2, u1, u3)
     val sorted = users.sorted

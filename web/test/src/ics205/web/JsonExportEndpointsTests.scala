@@ -87,7 +87,7 @@ class JsonExportEndpointsTests extends munit.FunSuite:
   test("GET /export/json with valid session downloads pretty JSON for current event"):
     withContext { (_, userStore, _, store, authService, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("testuser", passwordService.hash("password"), Role.User, enabled = true, id = "u1"))
+      userStore.add(User("testuser", passwordService.hash("password"), Role.Viewer, enabled = true, id = "u1", groups = Set("Default")))
       val session = authService.authenticate("testuser", "password").get
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/json"))

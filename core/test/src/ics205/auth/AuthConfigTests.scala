@@ -109,6 +109,7 @@ class AuthConfigTests extends munit.FunSuite:
 
   test("Permission fromString and KeyCodec"):
     assertEquals(Permission.fromString("ViewUsers"), Some(Permission.ViewUsers))
+    assertEquals(Permission.fromString("AllGroup"), Some(Permission.AllGroup))
     assertEquals(Permission.fromString("UnknownPerm"), None)
     assertEquals(Role.fromString("UnknownRole"), None)
     assert(Role.hasPermission("admin", Permission.EditUsers))

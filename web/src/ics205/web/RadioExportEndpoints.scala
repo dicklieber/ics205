@@ -19,7 +19,8 @@
 package ics205.web
 
 import cats.effect.IO
-import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, Role}
+import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService}
+import ics205.auth.AuthorizationService.*
 import ics205.exporter.{RadioExportDefinitions, RadioExporter}
 import ics205.log.Ics205ActivityLogger
 import ics205.model.Ics205Event
@@ -64,7 +65,7 @@ class RadioExportEndpoints @Inject()(
           case None =>
             (StatusCode.SeeOther, Some("/events"), "")
           case Some(currentEvent) =>
-            if !currentEvent.canView(user) && user.role != Role.Admin then
+            if !currentEvent.viewableBy(user) then
               (StatusCode.Forbidden, None, "You do not have permission to view this radio plan.")
             else
               val plan = currentEvent.ics205
@@ -127,7 +128,7 @@ class RadioExportEndpoints @Inject()(
           case None =>
             (StatusCode.SeeOther, Some("/events"), "text/html; charset=utf-8", None, "")
           case Some(currentEvent) =>
-            if !currentEvent.canView(user) && user.role != Role.Admin then
+            if !currentEvent.viewableBy(user) then
               (StatusCode.Forbidden, None, "text/html; charset=utf-8", None, "You do not have permission to view this radio plan.")
             else
               val plan = currentEvent.ics205

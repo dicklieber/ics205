@@ -87,7 +87,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
   test("GET /export redirects to /export/radio"):
     withContext { (_, userStore, _, _, authService, _, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("testuser", passwordService.hash("password"), Role.User, enabled = true, id = "u1"))
+      userStore.add(User("testuser", passwordService.hash("password"), Role.Viewer, enabled = true, id = "u1", groups = Set("Default")))
       val session = authService.authenticate("testuser", "password").get
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/export"))
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
@@ -99,7 +99,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
   test("GET /export/radio with authenticated user renders export page"):
     withContext { (_, userStore, _, _, authService, _, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("testuser", passwordService.hash("password"), Role.User, enabled = true, id = "u1"))
+      userStore.add(User("testuser", passwordService.hash("password"), Role.Viewer, enabled = true, id = "u1", groups = Set("Default")))
       val session = authService.authenticate("testuser", "password").get
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/radio"))
@@ -120,7 +120,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
   test("POST /export/radio generates CSV and displays in textarea"):
     withContext { (_, userStore, _, _, authService, _, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("testuser", passwordService.hash("password"), Role.User, enabled = true, id = "u1"))
+      userStore.add(User("testuser", passwordService.hash("password"), Role.Viewer, enabled = true, id = "u1", groups = Set("Default")))
       val session = authService.authenticate("testuser", "password").get
 
       val form = UrlForm(
@@ -150,7 +150,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
   test("POST /export/radio without includeHeader generates CSV without header"):
     withContext { (_, userStore, _, _, authService, _, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("testuser", passwordService.hash("password"), Role.User, enabled = true, id = "u1"))
+      userStore.add(User("testuser", passwordService.hash("password"), Role.Viewer, enabled = true, id = "u1", groups = Set("Default")))
       val session = authService.authenticate("testuser", "password").get
 
       val form = UrlForm(
@@ -174,7 +174,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
 
   test("Save CSV File downloads CSV using the selected header option"):
     withContext { (_, userStore, _, store, authService, _, app) =>
-      userStore.add(User("csvuser", new ScalaPassPasswordService().hash("password"), Role.User, enabled = true, id = "csv-user"))
+      userStore.add(User("csvuser", new ScalaPassPasswordService().hash("password"), Role.Viewer, enabled = true, id = "csv-user", groups = Set("Default")))
       val session = authService.authenticate("csvuser", "password").get
       val exporter = new RadioExporter(new RadioExportDefinitions())
       Seq(true, false).foreach { includeHeader =>
@@ -196,7 +196,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
 
   test("Save CSV File appends extra to channel name only when appendExtra is checked"):
     withContext { (_, userStore, _, _, authService, _, app) =>
-      userStore.add(User("csvuser", new ScalaPassPasswordService().hash("password"), Role.User, enabled = true, id = "csv-user"))
+      userStore.add(User("csvuser", new ScalaPassPasswordService().hash("password"), Role.Viewer, enabled = true, id = "csv-user", groups = Set("Default")))
       val session = authService.authenticate("csvuser", "password").get
       Seq(true, false).foreach { appendExtra =>
         val fields = Map("definition" -> "Kenwood TH-D75", "download" -> "true") ++
@@ -221,7 +221,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
 
   test("PDF download reads the latest saved plan and returns PDF headers"):
     withContext { (_, userStore, _, store, authService, _, app) =>
-      userStore.add(User("pdfuser", new ScalaPassPasswordService().hash("password"), Role.User, enabled = true, id = "pdf-user"))
+      userStore.add(User("pdfuser", new ScalaPassPasswordService().hash("password"), Role.Viewer, enabled = true, id = "pdf-user", groups = Set("Default")))
       val session = authService.authenticate("pdfuser", "password").get
       store.save(store.ics205().copy(incidentName = "Updated incident"))
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/pdf"))
@@ -240,7 +240,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
   test("POST /export/radio with custom groupOrBank passes value into generated CSV"):
     withContext { (_, userStore, _, _, authService, _, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("testuser", passwordService.hash("password"), Role.User, enabled = true, id = "u1"))
+      userStore.add(User("testuser", passwordService.hash("password"), Role.Viewer, enabled = true, id = "u1", groups = Set("Default")))
       val session = authService.authenticate("testuser", "password").get
 
       val form = UrlForm(
@@ -266,7 +266,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
   test("GET /export/radio with definition query parameter generates CSV preview"):
     withContext { (_, userStore, _, _, authService, _, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("testuser", passwordService.hash("password"), Role.User, enabled = true, id = "u1"))
+      userStore.add(User("testuser", passwordService.hash("password"), Role.Viewer, enabled = true, id = "u1", groups = Set("Default")))
       val session = authService.authenticate("testuser", "password").get
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/radio?definition=Kenwood+TH-D75&includeHeader=true"))
@@ -284,7 +284,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
   test("GET /export/radio with invalid definition or msg and err queries renders notifications"):
     withContext { (_, userStore, _, _, authService, _, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("testuser", passwordService.hash("password"), Role.User, enabled = true, id = "u1"))
+      userStore.add(User("testuser", passwordService.hash("password"), Role.Viewer, enabled = true, id = "u1", groups = Set("Default")))
       val session = authService.authenticate("testuser", "password").get
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/export/radio?definition=UnknownModel&msg=NoticeMessage&err=ErrorMessage"))
@@ -310,7 +310,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
   test("POST /export/radio with empty definition renders error alert"):
     withContext { (_, userStore, _, _, authService, _, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("testuser", passwordService.hash("password"), Role.User, enabled = true, id = "u1"))
+      userStore.add(User("testuser", passwordService.hash("password"), Role.Viewer, enabled = true, id = "u1", groups = Set("Default")))
       val session = authService.authenticate("testuser", "password").get
 
       val form = UrlForm("definition" -> "")
@@ -330,7 +330,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
   test("POST /export/radio with unknown definition renders failure alert"):
     withContext { (_, userStore, _, _, authService, _, app) =>
       val passwordService = new ScalaPassPasswordService()
-      userStore.add(User("testuser", passwordService.hash("password"), Role.User, enabled = true, id = "u1"))
+      userStore.add(User("testuser", passwordService.hash("password"), Role.Viewer, enabled = true, id = "u1", groups = Set("Default")))
       val session = authService.authenticate("testuser", "password").get
 
       val form = UrlForm("definition" -> "NoSuchRadio")

@@ -21,11 +21,7 @@ package ics205.auth
 import io.circe.{Codec, Decoder, Encoder}
 
 enum Permission derives Codec.AsObject:
-  case ViewUsers
-  case EditUsers
-  case Debug
-  case ViewPlans
-  case EditPlans
+  case ViewUsers, EditUsers, Debug, ViewPlans, EditPlans, DeletePlans, AllGroup
 
 object Permission:
   def fromString(name: String): Option[Permission] =
@@ -45,14 +41,13 @@ enum Role(val permissions: Set[Permission]):
     Permission.EditUsers,
     Permission.Debug,
     Permission.ViewPlans,
-    Permission.EditPlans
+    Permission.EditPlans,
+    Permission.DeletePlans,
+    Permission.AllGroup
   ))
   case Editor extends Role(Set(
     Permission.ViewPlans,
     Permission.EditPlans
-  ))
-  case User extends Role(Set(
-    Permission.ViewPlans
   ))
   case Viewer extends Role(Set(
     Permission.ViewPlans
@@ -63,7 +58,9 @@ enum Role(val permissions: Set[Permission]):
 
 object Role:
   def fromString(name: String): Option[Role] =
-    values.find(_.toString.equalsIgnoreCase(name.trim))
+    name.trim.toLowerCase match
+      case "user" => Some(Viewer) // legacy name, merged into Viewer
+      case n => values.find(_.toString.equalsIgnoreCase(n))
 
   def hasPermission(role: Role, permission: Permission): Boolean =
     role.hasPermission(permission)

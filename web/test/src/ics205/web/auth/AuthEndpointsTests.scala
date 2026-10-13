@@ -389,7 +389,7 @@ class AuthEndpointsTests extends munit.FunSuite:
   test("GET /change-password with valid session renders change password page"):
     withContext { (_, userStore, sessionStore, passwordService, _, _, _, app) =>
       val hash = passwordService.hash("mypassword")
-      userStore.add(User("alice", hash, Role.User, enabled = true, id = "u1"))
+      userStore.add(User("alice", hash, Role.Viewer, enabled = true, id = "u1"))
       val session = sessionStore.create("u1")
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/change-password"))
@@ -411,7 +411,7 @@ class AuthEndpointsTests extends munit.FunSuite:
   test("POST /change-password validates current password, minimum length, and password match"):
     withContext { (_, userStore, sessionStore, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("correctOldPass123")
-      userStore.add(User("bob", hash, Role.User, enabled = true, id = "u-bob"))
+      userStore.add(User("bob", hash, Role.Viewer, enabled = true, id = "u-bob"))
       val session = sessionStore.create("u-bob")
 
       // Empty current password
@@ -483,7 +483,7 @@ class AuthEndpointsTests extends munit.FunSuite:
   test("POST /change-password via JSON handles authentication, validation, and updates password"):
     withContext { (_, userStore, sessionStore, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("mysecretpass")
-      userStore.add(User("carol", hash, Role.User, enabled = true, id = "u-carol"))
+      userStore.add(User("carol", hash, Role.Viewer, enabled = true, id = "u-carol"))
       val session = sessionStore.create("u-carol")
 
       // Unauthorized without session
