@@ -144,7 +144,7 @@ class UserAdminEndpoints @Inject()(
               val confirmPassword = formData.getOrElse("confirmPassword", formData.getOrElse("confirm_password", ""))
               val defaultRole = if isInitial then "admin" else "user"
               val roleInput = formData.getOrElse("role", formData.getOrElse("roles", defaultRole)).trim
-              val role = Role.fromString(roleInput).getOrElse(if isInitial then Role.Admin else Role.Viewer)
+              val role = Role.values.find(_.toString.equalsIgnoreCase(roleInput)).getOrElse(if isInitial then Role.Admin else Role.Viewer)
               val enabled = formData.get("enabled").contains("true") || isInitial
               val userGroups = parseUserGroups(formData, role)
 
@@ -194,7 +194,7 @@ class UserAdminEndpoints @Inject()(
           val password = formData.getOrElse("password", "")
           val confirmPassword = formData.getOrElse("confirmPassword", formData.getOrElse("confirm_password", ""))
           val roleInput = formData.getOrElse("role", formData.getOrElse("roles", "user")).trim
-          val role = Role.fromString(roleInput).getOrElse(Role.Viewer)
+          val role = Role.values.find(_.toString.equalsIgnoreCase(roleInput)).getOrElse(Role.Viewer)
           val enabled = formData.get("enabled").contains("true")
           val userGroups = parseUserGroups(formData, role)
 

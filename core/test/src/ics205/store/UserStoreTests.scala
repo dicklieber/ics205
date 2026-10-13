@@ -107,28 +107,6 @@ class UserStoreTests extends munit.FunSuite:
       assertEquals(store.all(), Seq.empty)
     }
 
-  test("loads users from legacy JSON with roles array"):
-    withDirectory { dir =>
-      val legacyJson =
-        """{
-          |  "users": [
-          |    {
-          |      "id": "legacy-1",
-          |      "username": "legacyuser",
-          |      "passwordHash": "hash",
-          |      "roles": ["editor", "viewer"],
-          |      "enabled": true
-          |    }
-          |  ]
-          |}""".stripMargin
-      os.write(dir / "admin" / "users.json", legacyJson, createFolders = true)
-      val store = new UserStore(helper(dir))
-      val user = store.findById("legacy-1")
-      assert(user.isDefined)
-      assertEquals(user.get.username, "legacyuser")
-      assertEquals(user.get.role, Role.Editor)
-    }
-
   test("all returns users sorted by username case-insensitively"):
     withDirectory { dir =>
       val store = new UserStore(helper(dir))

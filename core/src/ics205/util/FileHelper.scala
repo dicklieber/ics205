@@ -47,13 +47,13 @@ object FileHelper:
       name.contains("mill.testrunner")
     }
 
-  def defaultDirectory(appName: String = BuildInfo.appName, productName: String = BuildInfo.productName): os.Path =
+  private def defaultDirectory(appName: String = BuildInfo.appName, productName: String = BuildInfo.productName): os.Path =
     if isTestExecution then
       os.temp.dir(prefix = "ics205-test-")
     else
       appHome(appName, productName)
 
-  def defaultConfigDirectory(appName: String = BuildInfo.appName, productName: String = BuildInfo.productName): os.Path =
+  private def defaultConfigDirectory(appName: String = BuildInfo.appName, productName: String = BuildInfo.productName): os.Path =
     if isTestExecution then
       os.temp.dir(prefix = "ics205-test-config-")
     else
@@ -147,7 +147,7 @@ class FileHelper(customDir: Option[os.Path] = None, customConfigDir: Option[os.P
       val sJson: String = os.read(path)
       val r: T = parse(sJson).flatMap(_.as[T]).fold(
         err =>
-          logger.error("Failed to parse/decode JSON", err, "File" -> file)
+          logger.error(s"Failed to parse/decode JSON file: $file!", err)
           default
         ,
         identity
@@ -155,10 +155,10 @@ class FileHelper(customDir: Option[os.Path] = None, customConfigDir: Option[os.P
       r
     catch
       case _: NoSuchFileException =>
-        logger.debug("File not found, using default", "File" -> file)
+        logger.debug(s"File: $file not found, using default data!")
         default
       case e: Exception =>
-        logger.error("Failed to read file", e, "File" -> file)
+        logger.error(s"Failed to read file: $file", e)
         default
 
   def save[T: Encoder](locus: Locus, file: String, value: T): Unit =

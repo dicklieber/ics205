@@ -20,20 +20,8 @@ package ics205.auth
 
 import io.circe.{Codec, Decoder, Encoder}
 
-enum Permission derives Codec.AsObject:
+enum Permission:
   case ViewUsers, EditUsers, Debug, ViewPlans, EditPlans, DeletePlans, AllGroup
-
-object Permission:
-  def fromString(name: String): Option[Permission] =
-    values.find(_.toString.equalsIgnoreCase(name.trim))
-
-  given Codec[Permission] = Codec.from(
-    Decoder.decodeString.emap(str => fromString(str).toRight(s"Unknown permission: $str")),
-    Encoder.encodeString.contramap(_.toString)
-  )
-
-  given io.circe.KeyEncoder[Permission] = io.circe.KeyEncoder.encodeKeyString.contramap(_.toString)
-  given io.circe.KeyDecoder[Permission] = io.circe.KeyDecoder.instance(fromString)
 
 enum Role(val permissions: Set[Permission]):
   case Admin extends Role(Set(
@@ -56,19 +44,14 @@ enum Role(val permissions: Set[Permission]):
   def hasPermission(permission: Permission): Boolean =
     permissions.contains(permission)
 
+object Permission:
+  given Codec[Permission] = enumCodec(Permission.values)
+
 object Role:
-  def fromString(name: String): Option[Role] =
-    name.trim.toLowerCase match
-      case "user" => Some(Viewer) // legacy name, merged into Viewer
-      case n => values.find(_.toString.equalsIgnoreCase(n))
+  given Codec[Role] = enumCodec(Role.values)
 
-  def hasPermission(role: Role, permission: Permission): Boolean =
-    role.hasPermission(permission)
-
-  def hasPermission(roleName: String, permission: Permission): Boolean =
-    fromString(roleName).exists(_.hasPermission(permission))
-
-  given Codec[Role] = Codec.from(
-    Decoder.decodeString.emap(str => fromString(str).toRight(s"Unknown role: $str")),
-    Encoder.encodeString.contramap(_.toString.toLowerCase)
+private def enumCodec[E <: scala.reflect.Enum](values: Array[E]): Codec[E] =
+  Codec.from(
+    Decoder.decodeString.emap(n => values.find(_.toString == n).toRight(s"Unknown value: $n")),
+    Encoder.encodeString.contramap(_.toString)
   )

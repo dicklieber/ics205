@@ -213,7 +213,7 @@ class AuthEndpointsTests extends munit.FunSuite:
 
       val json = parse(body).toOption.get
       assertEquals(json.hcursor.downField("user").downField("user").downField("username").as[String], Right("alice"))
-      assertEquals(json.hcursor.downField("user").downField("user").downField("role").as[String], Right("admin"))
+      assert(json.hcursor.downField("user").downField("user").downField("role").as[String] == Right("Admin"))
     }
 
   test("failed login with bad username or password returns 401 without cookie"):

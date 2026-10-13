@@ -107,10 +107,9 @@ class AuthConfigTests extends munit.FunSuite:
     val parsed = decode[AuthErrorResponse](json)
     assertEquals(parsed, Right(err))
 
-  test("Permission fromString and KeyCodec"):
-    assertEquals(Permission.fromString("ViewUsers"), Some(Permission.ViewUsers))
-    assertEquals(Permission.fromString("AllGroup"), Some(Permission.AllGroup))
-    assertEquals(Permission.fromString("UnknownPerm"), None)
-    assertEquals(Role.fromString("UnknownRole"), None)
-    assert(Role.hasPermission("admin", Permission.EditUsers))
-    assert(!Role.hasPermission("viewer", Permission.EditUsers))
+  test("Permission and Role roundtrip through derived codecs"):
+    import io.circe.syntax.*
+    Permission.values.foreach(p => assertEquals(p.asJson.as[Permission], Right(p)))
+    Role.values.foreach(r => assertEquals(r.asJson.as[Role], Right(r)))
+    assert(Role.Admin.hasPermission(Permission.EditUsers))
+    assert(!Role.Viewer.hasPermission(Permission.EditUsers))

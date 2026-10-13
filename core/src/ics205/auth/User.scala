@@ -46,11 +46,7 @@ object User:
       for
         username <- c.downField("username").as[String]
         passwordHash <- c.downField("passwordHash").as[String]
-        role <- c.downField("role").as[Role].orElse(
-          c.downField("roles").as[Seq[String]].map(roles =>
-            roles.headOption.flatMap(Role.fromString).getOrElse(Role.Viewer)
-          ).orElse(Right(Role.Viewer))
-        )
+        role <- c.downField("role").as[Role]
         enabled <- c.downField("enabled").as[Option[Boolean]].map(_.getOrElse(true))
         id <- c.downField("id").as[Option[UserId]].map(_.getOrElse(Ids.generateId()))
         groups <- c.downField("groups").as[Option[Set[String]]].map(_.getOrElse(Set.empty))
@@ -60,7 +56,7 @@ object User:
       "id" -> Json.fromString(u.id),
       "username" -> Json.fromString(u.username),
       "passwordHash" -> Json.fromString(u.passwordHash),
-      "role" -> Json.fromString(u.role.toString.toLowerCase),
+      "role" -> Encoder[Role].apply(u.role),
       "enabled" -> Json.fromBoolean(u.enabled),
       "groups" -> Json.fromValues(u.groups.toSeq.sorted.map(Json.fromString))
     )
