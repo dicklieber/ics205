@@ -20,7 +20,7 @@ package ics205.web
 
 import ics205.auth.{AuthenticatedUser, Permission}
 import ics205.auth.AuthorizationService.*
-import ics205.model.{Ics205Event, EventAccess}
+import ics205.model.{Ics205Plan, EventAccess}
 import scalatags.Text.all.*
 
 import java.net.URLEncoder
@@ -33,13 +33,13 @@ object EventsPage:
   private val fileDateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss 'UTC'").withZone(ZoneOffset.UTC)
 
   def render(
-    currentUser: AuthenticatedUser,
-    events: Seq[Ics205Event],
-    currentEventName: Option[String] = None,
-    message: Option[String] = None,
-    error: Option[String] = None,
-    fileModifiedAt: Map[String, Instant] = Map.empty,
-    knownGroups: Set[String] = Set("Default")
+              currentUser: AuthenticatedUser,
+              events: Seq[Ics205Plan],
+              currentEventName: Option[String] = None,
+              message: Option[String] = None,
+              error: Option[String] = None,
+              fileModifiedAt: Map[String, Instant] = Map.empty,
+              knownGroups: Set[String] = Set("Default")
   ): String =
     val sortedEvents = events.sortBy(ev => (ev.eventName.toLowerCase(java.util.Locale.ROOT), ev.eventName))
     val availableNames = sortedEvents.map(_.eventName)

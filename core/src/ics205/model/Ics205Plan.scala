@@ -23,29 +23,29 @@ import ics205.util.{Ids, UtcFormatter}
 import ics205.util.Ids.Id
 import io.circe.{Codec, Decoder, Encoder, HCursor, Json, JsonObject}
 import io.circe.syntax.*
-import Ics205Event.extension
+import Ics205Plan.extension
 
 import java.time.Instant
 import scala.collection.immutable.TreeSeqMap.OrderBy
 
-case class Ics205Event(id: EventId = Ids.generateId(),
-                       ics205: Ics205,
-                       group: String = "Default"):
+case class Ics205Plan(id: EventId = Ids.generateId(),
+                      ics205: Ics205,
+                      group: String = "Default"):
   val fileName: String = s"$id.$extension"
 
   def bakFileName: String = s"$id-$UtcFormatter().$extension"
 
   def eventName: String = if ics205.incidentName.nonEmpty then ics205.incidentName else id
 
-  def update(authenticatedUser: AuthenticatedUser): Ics205Event = this
+  def update(authenticatedUser: AuthenticatedUser): Ics205Plan = this
 
 
-object Ics205Event:
+object Ics205Plan:
   val extension: String = "ics205"
 
-  given Ordering[Ics205Event] = Ordering.by(_.ics205.incidentName)
+  given Ordering[Ics205Plan] = Ordering.by(_.ics205.incidentName)
 
-  given Codec.AsObject[Ics205Event] = Codec.AsObject.from(
+  given Codec.AsObject[Ics205Plan] = Codec.AsObject.from(
     (c: HCursor) => {
       for
         id <- c.downField("id").as[Option[EventId]].map(_.getOrElse(Ids.generateId()))
@@ -58,9 +58,9 @@ object Ics205Event:
               case _ => "Default"
             }
         }
-      yield Ics205Event(id = id, ics205 = ics205, group = group)
+      yield Ics205Plan(id = id, ics205 = ics205, group = group)
     },
-    (e: Ics205Event) => JsonObject(
+    (e: Ics205Plan) => JsonObject(
       "id" -> Json.fromString(e.id),
       "ics205" -> e.ics205.asJson,
       "group" -> Json.fromString(e.group)
@@ -69,12 +69,12 @@ object Ics205Event:
 
   def apply(id: EventId,
             ics205: Ics205,
-            group: String): Ics205Event = new Ics205Event(id, ics205, group)
+            group: String): Ics205Plan = new Ics205Plan(id, ics205, group)
 
   def apply(id: EventId,
-            ics205: Ics205): Ics205Event = new Ics205Event(id, ics205, "Default")
+            ics205: Ics205): Ics205Plan = new Ics205Plan(id, ics205, "Default")
 
   def apply(ics205: Ics205,
-            group: String): Ics205Event = new Ics205Event(Ids.generateId(), ics205, group)
+            group: String): Ics205Plan = new Ics205Plan(Ids.generateId(), ics205, group)
 
-  def apply(ics205: Ics205): Ics205Event = new Ics205Event(Ids.generateId(), ics205, "Default")
+  def apply(ics205: Ics205): Ics205Plan = new Ics205Plan(Ids.generateId(), ics205, "Default")

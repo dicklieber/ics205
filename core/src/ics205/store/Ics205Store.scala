@@ -21,7 +21,7 @@ package ics205.store
 import com.typesafe.scalalogging.LazyLogging
 import ics205.auth.{AuthenticatedUser, Permission, Unauthorized, UserId}
 import ics205.auth.Permission.EditPlans
-import ics205.model.{EventId, Ics205, Ics205Event, OperationalPeriod}
+import ics205.model.{EventId, Ics205, Ics205Plan, OperationalPeriod}
 import ics205.util.{FileHelper, UnauthorizedException, UtcFormatter}
 import ics205.util.Ids.generateId
 import io.circe.{Codec, Printer}
@@ -39,29 +39,29 @@ import scala.collection.concurrent.TrieMap
 @Singleton class Ics205Store @Inject()(fileHelper: FileHelper) extends LazyLogging:
   private val eventsDirectory: os.Path = fileHelper.directory / "events"
 
-  private var allEvents: TrieMap[EventId, Ics205Event] = loadFromDisk()
+  private var allEvents: TrieMap[EventId, Ics205Plan] = loadFromDisk()
 
-  private def loadFromDisk(): TrieMap[EventId, Ics205Event] = synchronized {
-    val newMap = TrieMap.empty[EventId, Ics205Event]
+  private def loadFromDisk(): TrieMap[EventId, Ics205Plan] = synchronized {
+    val newMap = TrieMap.empty[EventId, Ics205Plan]
     if os.exists(eventsDirectory) then
       for file <- os.list(eventsDirectory)
-        if file.last.endsWith(Ics205Event.extension) || file.last.endsWith(".json") || file.last.endsWith(".ics205")
+        if file.last.endsWith(Ics205Plan.extension) || file.last.endsWith(".json") || file.last.endsWith(".ics205")
         ics205Event <- parseEventFile(file)
       yield
         newMap.put(ics205Event.id, ics205Event)
     newMap
   }
 
-  private def parseEventFile(path: os.Path): Option[Ics205Event] =
+  private def parseEventFile(path: os.Path): Option[Ics205Plan] =
     val sJson = os.read(path)
-    decode[Ics205Event](sJson) match
+    decode[Ics205Plan](sJson) match
       case Left(err) =>
         logger.error("Failed to decode Ics205Event from file" )
         None
       case Right(event) =>
         Some(event)
 
-  def save(event: Ics205Event,
+  def save(event: Ics205Plan,
            authenticatedUser: AuthenticatedUser): Unit = synchronized { // add to in-memory store
     allEvents.put(event.id, event)
     // then copy current file to the backup directory for this event
@@ -80,7 +80,7 @@ import scala.collection.concurrent.TrieMap
         createFolders = true)
   }
 
-  def save(event: Ics205Event): Unit = synchronized {
+  def save(event: Ics205Plan): Unit = synchronized {
     allEvents.put(event.id, event)
     val path = eventsDirectory / event.fileName
     os.write
@@ -90,18 +90,18 @@ import scala.collection.concurrent.TrieMap
   }
 
   def save(ics205: Ics205): Unit = synchronized {
-    val ev = currentEvent().getOrElse(Ics205Event(ics205 = ics205))
+    val ev = currentEvent().getOrElse(Ics205Plan(ics205 = ics205))
     save(ev.copy(ics205 = ics205))
   }
 
   def save(ics205: Ics205,
            authenticatedUser: AuthenticatedUser): Unit = synchronized {
-    val ev = currentEvent().getOrElse(Ics205Event(ics205 = ics205))
+    val ev = currentEvent().getOrElse(Ics205Plan(ics205 = ics205))
     save(ev.copy(ics205 = ics205), authenticatedUser)
   }
 
 
-  def events(): Seq[Ics205Event] = listEvents()
+  def events(): Seq[Ics205Plan] = listEvents()
 
   def fileModifiedAt(idOrName: String): Option[Instant] = synchronized {
     findByName(idOrName).flatMap { event =>
@@ -110,26 +110,26 @@ import scala.collection.concurrent.TrieMap
     }
   }
 
-  def listEvents(): Seq[Ics205Event] = synchronized {
+  def listEvents(): Seq[Ics205Plan] = synchronized {
     allEvents.values.toSeq
   }
 
-  def currentEvent(): Option[Ics205Event] = listEvents().headOption
+  def currentEvent(): Option[Ics205Plan] = listEvents().headOption
 
   def currentEventName: Option[String] = currentEvent().map(_.eventName)
 
-  def event(): Option[Ics205Event] = currentEvent()
+  def event(): Option[Ics205Plan] = currentEvent()
 
-  def ics205Event(): Option[Ics205Event] = currentEvent()
+  def ics205Event(): Option[Ics205Plan] = currentEvent()
 
   def ics205(): Ics205 = currentEvent().map(_.ics205).getOrElse(Ics205(incidentName = "", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
 
 
-  def getEvent(id: EventId): Option[Ics205Event] = synchronized {
+  def getEvent(id: EventId): Option[Ics205Plan] = synchronized {
     allEvents.get(id)
   }
 
-  def findByName(name: String): Option[Ics205Event] = synchronized {
+  def findByName(name: String): Option[Ics205Plan] = synchronized {
     getEvent(name).orElse(listEvents().find(_.eventName.equalsIgnoreCase(name)))
   }
 
@@ -146,7 +146,7 @@ import scala.collection.concurrent.TrieMap
       s"$cleanName ($counter)"
   }
 
-  def importEvent(event: Ics205Event, userId: Option[UserId] = None): Ics205Event = synchronized {
+  def importEvent(event: Ics205Plan, userId: Option[UserId] = None): Ics205Plan = synchronized {
     val baseName = if event.eventName.trim.nonEmpty then event.eventName.trim else "Imported Event"
     val finalName = if getEvent(baseName).isDefined || listEvents().exists(_.eventName.equalsIgnoreCase(baseName)) then
       uniqueEventName(baseName)

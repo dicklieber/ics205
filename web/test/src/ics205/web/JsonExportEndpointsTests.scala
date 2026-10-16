@@ -21,7 +21,7 @@ package ics205.web
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import ics205.auth.*
-import ics205.model.{Frequency, Ics205, Ics205Channel, Ics205Event, OperationalPeriod, RadioMode, RxWithOffset}
+import ics205.model.{Frequency, Ics205, Ics205Channel, Ics205Plan, OperationalPeriod, RadioMode, RxWithOffset}
 import ics205.store.{Ics205Store, InMemJsonSessionStore, SessionStore, UserStore}
 import ics205.util.FileHelper
 import io.circe.parser.decode
@@ -60,7 +60,7 @@ class JsonExportEndpointsTests extends munit.FunSuite:
         operationalPeriod = OperationalPeriod(),
         channels = Seq(sampleChannel)
       )
-      ics205Store.save(Ics205Event(plan))
+      ics205Store.save(Ics205Plan(plan))
 
       val jsonEndpoints = new JsonExportEndpoints(ics205Store, authService, config)
       val httpApp = Http4sServerInterpreter[IO]().toRoutes(jsonEndpoints.endpoints).orNotFound
@@ -100,7 +100,7 @@ class JsonExportEndpointsTests extends munit.FunSuite:
       assertEquals(res.headers.get(CIString("Cache-Control")).map(_.head.value), Some("no-store"))
 
       val body = res.as[String].unsafeRunSync()
-      val decoded = decode[Ics205Event](body)
+      val decoded = decode[Ics205Plan](body)
       assert(decoded.isRight)
       assertEquals(decoded.toOption.get.ics205.incidentName, "Wildfire Incident")
       assertEquals(decoded.toOption.get.ics205.channels.size, 1)

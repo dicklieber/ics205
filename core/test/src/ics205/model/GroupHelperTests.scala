@@ -43,8 +43,8 @@ class GroupHelperTests extends munit.FunSuite:
   test("knownGroups aggregates groups from events and users including Default"):
     val u1 = User("u1", "hash", Role.Viewer, enabled = true, id = "1", groups = Set("Ares Operations", "North Team"))
     val u2 = User("u2", "hash", Role.Viewer, enabled = true, id = "2", groups = Set("North Team", "South Team"))
-    val ev1 = Ics205Event("ev1", Ics205(incidentName = "Ev1", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ares Operations")
-    val ev2 = Ics205Event("ev2", Ics205(incidentName = "Ev2", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Default")
+    val ev1 = Ics205Plan("ev1", Ics205(incidentName = "Ev1", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ares Operations")
+    val ev2 = Ics205Plan("ev2", Ics205(incidentName = "Ev2", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Default")
 
     val groups = GroupHelper.knownGroups(Seq(ev1, ev2), Seq(u1, u2))
     assertEquals(groups, Set("Default", "Ares Operations", "North Team", "South Team"))
@@ -52,8 +52,8 @@ class GroupHelperTests extends munit.FunSuite:
   test("groupInfos associates users and events with groups and sorts alphabetically"):
     val u1 = User("alice", "hash", Role.Viewer, enabled = true, id = "1", groups = Set("North Team"))
     val u2 = User("bob", "hash", Role.Viewer, enabled = true, id = "2", groups = Set("South Team"))
-    val ev1 = Ics205Event("ev1", Ics205(incidentName = "North Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "North Team")
-    val ev2 = Ics205Event("ev2", Ics205(incidentName = "General Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Default")
+    val ev1 = Ics205Plan("ev1", Ics205(incidentName = "North Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "North Team")
+    val ev2 = Ics205Plan("ev2", Ics205(incidentName = "General Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Default")
 
     val infos = GroupHelper.groupInfos(Seq(ev1, ev2), Seq(u1, u2))
     assertEquals(infos.map(_.name), Seq("Default", "North Team", "South Team"))
@@ -71,21 +71,21 @@ class GroupHelperTests extends munit.FunSuite:
     assertEquals(southGroup.events, Seq.empty)
 
   test("Ics205Event serializes and deserializes group and handles legacy metadata"):
-    val ev = Ics205Event("ev-1", Ics205(incidentName = "Wildfire", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ops Group")
+    val ev = Ics205Plan("ev-1", Ics205(incidentName = "Wildfire", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ops Group")
     val json = ev.asJson.noSpaces
-    val decoded = decode[Ics205Event](json).toOption.get
+    val decoded = decode[Ics205Plan](json).toOption.get
     assertEquals(decoded.id, "ev-1")
     assertEquals(decoded.group, "Ops Group")
 
     // Default group when omitted
-    val defaultEv = Ics205Event("ev-2", Ics205(incidentName = "Storm", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+    val defaultEv = Ics205Plan("ev-2", Ics205(incidentName = "Storm", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
     assertEquals(defaultEv.group, "Default")
 
     // Legacy JSON with metadata.group
-    val legacyEvent = Ics205Event("ev-legacy", Ics205(incidentName = "Legacy Event", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+    val legacyEvent = Ics205Plan("ev-legacy", Ics205(incidentName = "Legacy Event", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
     val legacyJson = io.circe.parser.parse(legacyEvent.asJson.noSpaces).toOption.get
       .mapObject(_.remove("group").add("metadata", Json.obj("group" -> Json.fromString("Legacy Group")))).noSpaces
-    val legacyDecoded = decode[Ics205Event](legacyJson).toOption.get
+    val legacyDecoded = decode[Ics205Plan](legacyJson).toOption.get
     assertEquals(legacyDecoded.id, "ev-legacy")
     assertEquals(legacyDecoded.group, "Legacy Group")
 
@@ -97,8 +97,8 @@ class GroupHelperTests extends munit.FunSuite:
     val viewerWithoutGroup = User("viewer-no-grp", "hash", Role.Viewer, groups = Set.empty)
     val regularWithGroup = User("user", "hash", Role.Viewer, groups = Set("Default"))
 
-    val evOps = Ics205Event("ev-1", Ics205(incidentName = "Ops Event", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ops Group")
-    val evDefault = Ics205Event("ev-2", Ics205(incidentName = "Default Event", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Default")
+    val evOps = Ics205Plan("ev-1", Ics205(incidentName = "Ops Event", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ops Group")
+    val evDefault = Ics205Plan("ev-2", Ics205(incidentName = "Default Event", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Default")
 
     // Admin has AllGroup permission so can access all groups
     assertEquals(evOps.viewableBy(admin), true)

@@ -1,14 +1,14 @@
 package ics205.web
 
 import ics205.auth.{AuthenticatedUser, Role}
-import ics205.model.{Ics205, Ics205Event, OperationalPeriod}
+import ics205.model.{Ics205, Ics205Plan, OperationalPeriod}
 
 class EventsPageTests extends munit.FunSuite:
 
   val adminUser = AuthenticatedUser("admin", Role.Admin)
 
   test("EventsPage displays file modification date and time in UTC"):
-    val event = Ics205Event("Field Day", Ics205(incidentName = "Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+    val event = Ics205Plan("Field Day", Ics205(incidentName = "Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
     val modified = java.time.Instant.parse("2026-10-06T15:30:45Z")
     val html = EventsPage.render(adminUser, Seq(event), fileModifiedAt = Map(event.id -> modified))
     assert(html.contains("<th>File Modified</th>"))
@@ -17,7 +17,7 @@ class EventsPageTests extends munit.FunSuite:
 
   test("EventsPage does not use inline onsubmit for delete confirmation and uses data-confirm"):
     val maliciousEventName = "Test', (alert(document.domain), true) || '"
-    val event = Ics205Event(
+    val event = Ics205Plan(
       id = maliciousEventName,
       ics205 = Ics205(incidentName = "Test Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
     )
@@ -34,7 +34,7 @@ class EventsPageTests extends munit.FunSuite:
     assert(!html.contains(s"confirm('Are you sure you want to delete event \\'$maliciousEventName\\'?'"), "Should not interpolate into confirm string literal")
 
   test("EventsPage renders export buttons for events and import event form"):
-    val event = Ics205Event(
+    val event = Ics205Plan(
       id = "Field Day",
       ics205 = Ics205(incidentName = "Field Day 2026", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
     )
@@ -53,7 +53,7 @@ class EventsPageTests extends munit.FunSuite:
     assert(html.contains("type=\"file\""), "Should contain file input")
 
   test("Event table links names, removes operational period, and suggests the next duplicate name"):
-    val event = Ics205Event("Field Day", Ics205(incidentName = "Field Day", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+    val event = Ics205Plan("Field Day", Ics205(incidentName = "Field Day", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
     val html = EventsPage.render(adminUser, Seq(event, event.copy(id = "Field Day (1)", ics205 = event.ics205.copy(incidentName = "Field Day (1)"))))
     assert(!html.contains("<th>Operational Period</th>"))
     assert(html.contains("href=\"/?event=Field+Day\"><strong>Field Day</strong></a>"))
@@ -62,12 +62,12 @@ class EventsPageTests extends munit.FunSuite:
     assert(html.contains("action=\"/events/duplicate\""))
 
   test("EventsPage links to event editor using event ID"):
-    val event = Ics205Event("ev-unique-id-777", Ics205(incidentName = "Grand Prix", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
+    val event = Ics205Plan("ev-unique-id-777", Ics205(incidentName = "Grand Prix", operationalPeriod = OperationalPeriod(), channels = Seq.empty))
     val html = EventsPage.render(adminUser, Seq(event))
     assert(html.contains("href=\"/?event=ev-unique-id-777\"><strong>Grand Prix</strong></a>"))
 
   test("EventsPage and EventMetadataPage render editable combo-box with datalist for group selection"):
-    val event = Ics205Event("Field Day", Ics205(incidentName = "Field Day", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ares Ops")
+    val event = Ics205Plan("Field Day", Ics205(incidentName = "Field Day", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ares Ops")
     val knownGroups = Set("Default", "Ares Ops", "Hospital Network")
 
     val eventsHtml = EventsPage.render(adminUser, Seq(event), knownGroups = knownGroups)

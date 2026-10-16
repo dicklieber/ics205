@@ -80,7 +80,7 @@ class Ics205StoreTests extends munit.FunSuite:
   test("save updates memory and a new store loads all model fields"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
-      val event = Ics205Event(plan)
+      val event = Ics205Plan(plan)
       store.save(event)
       val saved = store.ics205()
       assertEquals(saved.copy(prepared = plan.prepared), plan)
@@ -100,7 +100,7 @@ class Ics205StoreTests extends munit.FunSuite:
         preparedBy = None,
         channels = Seq(plan.channels.head.copy(remarks = ""))
       )
-      val event = Ics205Event(sparse)
+      val event = Ics205Plan(sparse)
       store.save(event)
       val json = io.circe.parser.parse(os.read(directory / "events" / event.fileName)).toOption.get
       val ics205Cursor = json.hcursor.downField("ics205")
@@ -120,7 +120,7 @@ class Ics205StoreTests extends munit.FunSuite:
         u,
         Session(userId = u.id, createdAt = Instant.now(), expiresAt = Instant.now().plusSeconds(3600))
       )
-      store.save(Ics205Event(plan), user)
+      store.save(Ics205Plan(plan), user)
       assertEquals(store.events().size, 1)
 
       val reloaded = new Ics205Store(helper(directory))
@@ -131,7 +131,7 @@ class Ics205StoreTests extends munit.FunSuite:
   test("saving event preserves group across reloads"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
-      val event = Ics205Event("FieldOps", plan.copy(incidentName = "Field Ops Incident"), group = "Ares Ops")
+      val event = Ics205Plan("FieldOps", plan.copy(incidentName = "Field Ops Incident"), group = "Ares Ops")
       store.save(event)
       assertEquals(store.getEvent("FieldOps").get.group, "Ares Ops")
 
@@ -161,7 +161,7 @@ class Ics205StoreTests extends munit.FunSuite:
 
   test("valid Ics205Event JSON in events directory loads successfully"):
     withDirectory { directory =>
-      val event = Ics205Event("Drill", plan)
+      val event = Ics205Plan("Drill", plan)
       os.write(directory / "events" / "Drill.json", event.asJson.noSpaces, createFolders = true)
       val store = new Ics205Store(helper(directory))
       assertEquals(store.events().size, 1)
@@ -178,7 +178,7 @@ class Ics205StoreTests extends munit.FunSuite:
   test("failed save preserves the previous in-memory plan"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
-      val event = Ics205Event("Test incident", plan)
+      val event = Ics205Plan("Test incident", plan)
       store.save(event)
       val original = store.ics205()
       os.remove.all(directory / "events")
@@ -203,7 +203,7 @@ class Ics205StoreTests extends munit.FunSuite:
       val store = new Ics205Store(helper(directory))
       assertEquals(store.event(), None)
       assertEquals(store.ics205Event(), None)
-      val event = Ics205Event("Test Event", plan)
+      val event = Ics205Plan("Test Event", plan)
       store.save(event)
       assertEquals(store.event().get.ics205.incidentName, "Test incident")
       assertEquals(store.ics205Event().get.ics205.incidentName, "Test incident")
@@ -212,8 +212,8 @@ class Ics205StoreTests extends munit.FunSuite:
   test("Ics205Store supports multiple events, lookup by eventName, adding and deleting events"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
-      val event1 = Ics205Event("Field Day", plan.copy(incidentName = "Field Day 2026"))
-      val event2 = Ics205Event("Marathon", plan.copy(incidentName = "City Marathon"))
+      val event1 = Ics205Plan("Field Day", plan.copy(incidentName = "Field Day 2026"))
+      val event2 = Ics205Plan("Marathon", plan.copy(incidentName = "City Marathon"))
 
       store.save(event1)
       store.save(event2)
@@ -248,7 +248,7 @@ class Ics205StoreTests extends munit.FunSuite:
   test("each Ics205Event has its own file and event renaming cleans up old file"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
-      val event = Ics205Event("Alpha Event", plan.copy(incidentName = "Alpha Incident"))
+      val event = Ics205Plan("Alpha Event", plan.copy(incidentName = "Alpha Incident"))
       store.save(event)
       assert(os.exists(directory / "events" / event.fileName))
 
@@ -276,7 +276,7 @@ class Ics205StoreTests extends munit.FunSuite:
       val store = new Ics205Store(helper(directory))
       val user = AuthenticatedUser("user-1", Role.Admin)
       val initialPlan = plan.copy(incidentName = "Field Day 2026", specialInstructions = "Version 1")
-      val eventV1 = Ics205Event("Field Day", initialPlan)
+      val eventV1 = Ics205Plan("Field Day", initialPlan)
 
       // First save: no backup should be created since file didn't exist
       store.save(eventV1, user)
@@ -289,15 +289,15 @@ class Ics205StoreTests extends munit.FunSuite:
 
       // Second save: previous file should be copied to backup directory with timestamp
       val updatedPlan = plan.copy(incidentName = "Field Day 2026", specialInstructions = "Version 2")
-      val eventV2 = Ics205Event("Field Day", updatedPlan)
+      val eventV2 = Ics205Plan("Field Day", updatedPlan)
       store.save(eventV2, user)
 
       assert(os.exists(bakDir) && os.isDir(bakDir))
-      val backupFiles = os.list(bakDir).filter(p => os.isFile(p) && p.last.endsWith(Ics205Event.extension))
+      val backupFiles = os.list(bakDir).filter(p => os.isFile(p) && p.last.endsWith(Ics205Plan.extension))
       assertEquals(backupFiles.size, 1)
       val backupFile = backupFiles.head
       assert(backupFile.last.startsWith("Field Day-"))
-      assert(backupFile.last.endsWith(s".${Ics205Event.extension}"))
+      assert(backupFile.last.endsWith(s".${Ics205Plan.extension}"))
 
       // The backup file must have the content of Version 1
       assertEquals(os.read(backupFile), v1Content)
@@ -317,9 +317,9 @@ class Ics205StoreTests extends munit.FunSuite:
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
       val user = AuthenticatedUser("user-1", Role.Admin)
-      val eventV1 = Ics205Event("Campout", plan.copy(incidentName = "Campout"))
+      val eventV1 = Ics205Plan("Campout", plan.copy(incidentName = "Campout"))
       store.save(eventV1, user)
-      val eventV2 = Ics205Event("Campout", plan.copy(incidentName = "Campout", specialInstructions = "V2"))
+      val eventV2 = Ics205Plan("Campout", plan.copy(incidentName = "Campout", specialInstructions = "V2"))
       store.save(eventV2, user)
 
       val eventFile = directory / "events" / eventV1.fileName
@@ -335,14 +335,14 @@ class Ics205StoreTests extends munit.FunSuite:
   test("uniqueEventName differentiates names by adding suffix"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
-      store.save(Ics205Event("Field Day", plan.copy(incidentName = "Field Day")))
+      store.save(Ics205Plan("Field Day", plan.copy(incidentName = "Field Day")))
       assertEquals(store.uniqueEventName("Field Day"), "Field Day (1)")
 
-      store.save(Ics205Event("Field Day (1)", plan.copy(incidentName = "Field Day (1)")))
+      store.save(Ics205Plan("Field Day (1)", plan.copy(incidentName = "Field Day (1)")))
       assertEquals(store.uniqueEventName("Field Day"), "Field Day (2)")
       assertEquals(store.uniqueEventName("Field Day (1)"), "Field Day (2)")
 
-      store.save(Ics205Event("Field Day (2)", plan.copy(incidentName = "Field Day (2)")))
+      store.save(Ics205Plan("Field Day (2)", plan.copy(incidentName = "Field Day (2)")))
       assertEquals(store.uniqueEventName("Field Day"), "Field Day (3)")
 
       // Non-existing name remains unchanged
@@ -352,7 +352,7 @@ class Ics205StoreTests extends munit.FunSuite:
   test("importEvent saves new event or adds suffix if duplicate"):
     withDirectory { directory =>
       val store = new Ics205Store(helper(directory))
-      val event1 = Ics205Event("Skywarn", plan.copy(incidentName = "Skywarn"))
+      val event1 = Ics205Plan("Skywarn", plan.copy(incidentName = "Skywarn"))
       val imported1 = store.importEvent(event1, userId = Some("admin-1"))
       assertEquals(imported1.id, "Skywarn")
       assertEquals(store.getEvent("Skywarn").isDefined, true)
@@ -364,7 +364,7 @@ class Ics205StoreTests extends munit.FunSuite:
       assertEquals(store.events().size, 2)
 
       // Import with empty eventName derives from incidentName
-      val unnamedEvent = Ics205Event("", plan.copy(incidentName = "Skywarn Drill"))
+      val unnamedEvent = Ics205Plan("", plan.copy(incidentName = "Skywarn Drill"))
       val imported3 = store.importEvent(unnamedEvent, userId = Some("admin-1"))
       assertEquals(imported3.eventName, "Skywarn Drill")
       assertEquals(store.getEvent("Skywarn Drill").isDefined, true)

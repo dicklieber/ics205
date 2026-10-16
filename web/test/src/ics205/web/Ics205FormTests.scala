@@ -65,7 +65,7 @@ class Ics205FormTests extends munit.FunSuite:
     try
       val helper = new FileHelper(tempDirectory)
       val store = new Ics205Store(helper)
-      store.save(ics205.model.Ics205Event("Exercise Event", base.copy(formatVersion = "1.0")))
+      store.save(ics205.model.Ics205Plan("Exercise Event", base.copy(formatVersion = "1.0")))
       val userStore = new ics205.store.UserStore(helper)
       val sessionStore = new ics205.store.InMemJsonSessionStore(helper)
       val passwordService = new ics205.auth.ScalaPassPasswordService
@@ -174,7 +174,7 @@ class Ics205FormTests extends munit.FunSuite:
     try
       val helper = new FileHelper(tempDirectory)
       val store = new Ics205Store(helper)
-      store.save(ics205.model.Ics205Event("Exercise Event", base))
+      store.save(ics205.model.Ics205Plan("Exercise Event", base))
       val userStore = new ics205.store.UserStore(helper)
       val sessionStore = new ics205.store.InMemJsonSessionStore(helper)
       val passwordService = new ics205.auth.ScalaPassPasswordService

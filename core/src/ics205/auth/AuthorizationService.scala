@@ -18,10 +18,10 @@
 
 package ics205.auth
 
-import ics205.model.{EventAccess, Ics205Event}
+import ics205.model.{EventAccess, Ics205Plan}
 
 object AuthorizationService:
-  extension (event: Ics205Event)
+  extension (event: Ics205Plan)
     /** Access a user has to this event; decided only by permissions (group access via [[Permission.AllGroup]] or membership). */
     def accessBy(user: UserContext): Option[EventAccess] =
       if !user.canAccessGroup(event.group) then None

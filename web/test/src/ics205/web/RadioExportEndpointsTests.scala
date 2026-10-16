@@ -22,7 +22,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import ics205.auth.*
 import ics205.exporter.{RadioExportDefinitions, RadioExporter}
-import ics205.model.{Frequency, Ics205, Ics205Channel, Ics205Event, OperationalPeriod, RadioMode, RxWithOffset}
+import ics205.model.{Frequency, Ics205, Ics205Channel, Ics205Plan, OperationalPeriod, RadioMode, RxWithOffset}
 import ics205.store.{Ics205Store, InMemJsonSessionStore, SessionStore, UserStore}
 import ics205.util.FileHelper
 import org.http4s.{Header, Method, Request, Status, Uri, UrlForm}
@@ -63,7 +63,7 @@ class RadioExportEndpointsTests extends munit.FunSuite:
         operationalPeriod = OperationalPeriod(),
         channels = Seq(sampleChannel)
       )
-      ics205Store.save(Ics205Event(plan))
+      ics205Store.save(Ics205Plan(plan))
 
       val definitions = new RadioExportDefinitions()
       val exporter = new RadioExporter(definitions)

@@ -20,7 +20,7 @@ package ics205.web
 
 import ics205.auth.AuthenticatedUser
 import ics205.auth.AuthorizationService.*
-import ics205.model.Ics205Event
+import ics205.model.Ics205Plan
 import ics205.store.Ics205Store
 
 trait EventResolving:
@@ -29,7 +29,7 @@ trait EventResolving:
   def resolveEvent(
     user: AuthenticatedUser,
     eventQuery: Option[String] = None
-  ): (Option[Ics205Event], Seq[Ics205Event]) =
+  ): (Option[Ics205Plan], Seq[Ics205Plan]) =
     val allEvents = store.listEvents()
     val authorizedEvents = allEvents.filter(_.viewableBy(user))
     val chosenEvent = eventQuery.filter(_.nonEmpty).flatMap(store.findByName)
@@ -41,5 +41,5 @@ trait EventResolving:
   def resolveEvent(
     eventQuery: Option[String],
     user: AuthenticatedUser
-  ): (Option[Ics205Event], Seq[Ics205Event]) =
+  ): (Option[Ics205Plan], Seq[Ics205Plan]) =
     resolveEvent(user, eventQuery)

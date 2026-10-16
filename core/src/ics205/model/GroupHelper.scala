@@ -23,7 +23,7 @@ import ics205.auth.User
 case class GroupInfo(
   name: String,
   users: Seq[User],
-  events: Seq[Ics205Event]
+  events: Seq[Ics205Plan]
 )
 
 object GroupHelper:
@@ -47,12 +47,12 @@ object GroupHelper:
     val formatted = formatGroupName(name)
     if formatted.isEmpty then defaultGroup else formatted
 
-  def knownGroups(events: Seq[Ics205Event], users: Seq[User]): Set[String] =
+  def knownGroups(events: Seq[Ics205Plan], users: Seq[User]): Set[String] =
     val fromEvents = events.map(_.group).filter(_.trim.nonEmpty)
     val fromUsers = users.flatMap(_.groups).filter(_.trim.nonEmpty)
     (fromEvents ++ fromUsers :+ defaultGroup).map(formatGroupName).filter(_.nonEmpty).toSet
 
-  def groupInfos(events: Seq[Ics205Event], users: Seq[User]): Seq[GroupInfo] =
+  def groupInfos(events: Seq[Ics205Plan], users: Seq[User]): Seq[GroupInfo] =
     val groups = knownGroups(events, users).toSeq.sortBy(_.toLowerCase(java.util.Locale.ROOT))
     val sortedUsers = users.sortBy(_.username.toLowerCase(java.util.Locale.ROOT))
     val sortedEvents = events.sortBy(e => (e.eventName.toLowerCase(java.util.Locale.ROOT), e.eventName))

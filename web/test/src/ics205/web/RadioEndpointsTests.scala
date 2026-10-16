@@ -49,7 +49,7 @@ class RadioEndpointsTests extends munit.FunSuite:
       }
       val authenticated = request.putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       Seq("First incident", "Updated incident").foreach { incident =>
-        store.save(ics205.model.Ics205Event(ics205.model.Ics205(incidentName = incident, operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+        store.save(ics205.model.Ics205Plan(ics205.model.Ics205(incidentName = incident, operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
         val response = app.run(authenticated).unsafeRunSync()
         assertEquals(response.status, Status.Ok)
         val html = response.as[String].unsafeRunSync()

@@ -81,7 +81,7 @@ class DebugEndpointsTests extends munit.FunSuite:
       val session = authService.authenticate("admin", "password").get
 
       // Initial event store - create an event
-      val initialEvent = ics205.model.Ics205Event(
+      val initialEvent = ics205.model.Ics205Plan(
         id = "TestEvent",
         ics205 = ics205.model.Ics205(incidentName = "Initial Incident", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty)
       )
@@ -134,7 +134,7 @@ class DebugEndpointsTests extends munit.FunSuite:
       userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
       val session = authService.authenticate("admin", "password").get
 
-      val initialEvent = ics205.model.Ics205Event(
+      val initialEvent = ics205.model.Ics205Plan(
         id = "PostEvent",
         ics205 = ics205.model.Ics205(incidentName = "Initial Incident", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty)
       )
@@ -182,7 +182,7 @@ class DebugEndpointsTests extends munit.FunSuite:
       val session = authService.authenticate("admin", "password").get
 
       // Add files in data directory
-      val event = ics205.model.Ics205Event(
+      val event = ics205.model.Ics205Plan(
         id = "SummerDrill",
         ics205 = ics205.model.Ics205(incidentName = "Summer Incident", operationalPeriod = ics205.model.OperationalPeriod(), channels = Seq.empty)
       )

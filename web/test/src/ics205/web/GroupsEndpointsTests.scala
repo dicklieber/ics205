@@ -21,7 +21,7 @@ package ics205.web
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import ics205.auth.*
-import ics205.model.{Ics205, Ics205Event, OperationalPeriod}
+import ics205.model.{Ics205, Ics205Plan, OperationalPeriod}
 import ics205.store.{Ics205Store, InMemJsonSessionStore, SessionStore, UserStore}
 import ics205.util.FileHelper
 import ics205.web.auth.AuthSecurity
@@ -67,9 +67,9 @@ class GroupsEndpointsTests extends munit.FunSuite:
       val alice = userStore.add(User("alice", hash, Role.Viewer, enabled = true, id = "u-alice", groups = Set("Ares Operations", "North Team"))).toOption.get
       val bob = userStore.add(User("bob", hash, Role.Viewer, enabled = true, id = "u-bob", groups = Set("North Team"))).toOption.get
 
-      val ev1 = Ics205Event("Ev-North", Ics205(incidentName = "North Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "North Team")
-      val ev2 = Ics205Event("Ev-Ares", Ics205(incidentName = "Ares Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ares Operations")
-      val ev3 = Ics205Event("Ev-Default", Ics205(incidentName = "General Ops", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Default")
+      val ev1 = Ics205Plan("Ev-North", Ics205(incidentName = "North Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "North Team")
+      val ev2 = Ics205Plan("Ev-Ares", Ics205(incidentName = "Ares Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ares Operations")
+      val ev3 = Ics205Plan("Ev-Default", Ics205(incidentName = "General Ops", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Default")
 
       store.save(ev1)
       store.save(ev2)

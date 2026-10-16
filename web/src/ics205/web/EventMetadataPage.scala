@@ -19,19 +19,19 @@
 package ics205.web
 
 import ics205.auth.{AuthenticatedUser, Role, User}
-import ics205.model.Ics205Event
+import ics205.model.Ics205Plan
 import scalatags.Text.all.*
 
 object EventMetadataPage:
 
   def render(
-    currentUser: AuthenticatedUser,
-    event: Ics205Event,
-    users: Seq[User] = Seq.empty,
-    availableEvents: Seq[String] = Seq.empty,
-    message: Option[String] = None,
-    error: Option[String] = None,
-    knownGroups: Set[String] = Set("Default")
+              currentUser: AuthenticatedUser,
+              event: Ics205Plan,
+              users: Seq[User] = Seq.empty,
+              availableEvents: Seq[String] = Seq.empty,
+              message: Option[String] = None,
+              error: Option[String] = None,
+              knownGroups: Set[String] = Set("Default")
   ): String =
     val displayName = event.eventName
     val groups = (knownGroups + event.group + "Default").toSeq.sorted

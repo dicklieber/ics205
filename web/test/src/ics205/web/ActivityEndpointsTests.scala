@@ -50,7 +50,7 @@ class ActivityEndpointsTests extends munit.FunSuite:
         operationalPeriod = OperationalPeriod(),
         channels = Seq.empty
       )
-      ics205Store.save(Ics205Event(plan))
+      ics205Store.save(Ics205Plan(plan))
 
       val activityEndpoints = new ActivityEndpoints(ics205Store, authService, config)
       val httpApp = Http4sServerInterpreter[IO]().toRoutes(activityEndpoints.endpoints).orNotFound

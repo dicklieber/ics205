@@ -23,7 +23,7 @@ import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService}
 import ics205.auth.AuthorizationService.*
 import ics205.exporter.{RadioExportDefinitions, RadioExporter}
 import ics205.log.Ics205ActivityLogger
-import ics205.model.Ics205Event
+import ics205.model.Ics205Plan
 import ics205.store.Ics205Store
 import ics205.web.auth.AuthSecurity
 import jakarta.inject.{Inject, Singleton}

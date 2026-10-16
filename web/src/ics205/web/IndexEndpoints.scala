@@ -22,7 +22,7 @@ import cats.effect.IO
 import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, Permission}
 import ics205.auth.AuthorizationService.*
 import ics205.log.Ics205ActivityLogger
-import ics205.model.{GroupHelper, Ics205, Ics205Event, OperationalPeriod}
+import ics205.model.{GroupHelper, Ics205, Ics205Plan, OperationalPeriod}
 import ics205.store.{Ics205Store, SessionStore, UserStore}
 import ics205.util.Ids
 import ics205.web.auth.AuthSecurity
@@ -163,7 +163,7 @@ class IndexEndpoints @Inject() (
                 (StatusCode.SeeOther, Some("/events"), "")
               case Right(plan) =>
                 try
-                  val newEvent = Ics205Event(
+                  val newEvent = Ics205Plan(
                     id = Ids.generateId(),
                     ics205 = plan,
                     group = "Default"
@@ -387,7 +387,7 @@ class IndexEndpoints @Inject() (
           if eventName.isEmpty then
             (StatusCode.SeeOther, "/events?err=Event+name+cannot+be+empty", "")
           else
-            val newEvent = Ics205Event(
+            val newEvent = Ics205Plan(
               id = Ids.generateId(),
               ics205 = Ics205(incidentName = incidentName, operationalPeriod = OperationalPeriod(), channels = Seq.empty),
               group = group
@@ -536,8 +536,8 @@ class IndexEndpoints @Inject() (
           if content.isEmpty then
             (StatusCode.SeeOther, "/events?err=Uploaded+file+is+empty", "")
           else
-            val parsedResult = io.circe.parser.decode[Ics205Event](content)
-              .orElse(io.circe.parser.decode[Ics205](content).map(plan => Ics205Event(plan)))
+            val parsedResult = io.circe.parser.decode[Ics205Plan](content)
+              .orElse(io.circe.parser.decode[Ics205](content).map(plan => Ics205Plan(plan)))
             parsedResult match
               case Left(err) =>
                 (StatusCode.SeeOther, s"/events?err=${encode(s"Failed to parse event JSON: $err")}", "")

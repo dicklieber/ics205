@@ -46,8 +46,8 @@ class EventsEndpointsTests extends munit.FunSuite:
       val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
       val session = sessionStore.create(admin.id)
 
-      store.save(Ics205Event("Field Day", Ics205(incidentName = "Field Day 2026", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
-      store.save(Ics205Event("Marathon", Ics205(incidentName = "City Marathon", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Plan("Field Day", Ics205(incidentName = "Field Day 2026", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Plan("Marathon", Ics205(incidentName = "City Marathon", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/events"))
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}"))
@@ -88,7 +88,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
       val session = sessionStore.create(admin.id)
 
-      store.save(Ics205Event("Campout", Ics205(incidentName = "Scout Campout", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Plan("Campout", Ics205(incidentName = "Scout Campout", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/events/select?name=Campout&returnUrl=/radio"))
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}"))
@@ -106,7 +106,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val operator = userStore.add(User("operator", passwordService.hash("pass"), Role.Viewer, enabled = true, id = "u-op")).toOption.get
       val session = sessionStore.create(admin.id)
 
-      store.save(Ics205Event("Airshow", Ics205(incidentName = "Annual Airshow", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Plan("Airshow", Ics205(incidentName = "Annual Airshow", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
 
       // GET metadata
       val getReq = Request[IO](Method.GET, Uri.unsafeFromString("/events/metadata?name=Airshow"))
@@ -140,7 +140,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
       val session = sessionStore.create(admin.id)
 
-      store.save(Ics205Event("OldEvent", Ics205(incidentName = "Old Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Plan("OldEvent", Ics205(incidentName = "Old Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
 
       val postReq = Request[IO](Method.POST, Uri.unsafeFromString("/events/metadata"))
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}"))
@@ -168,7 +168,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val editor = userStore.add(User("editorUser", passwordService.hash("pass"), Role.Editor, enabled = true, id = "u-ed", groups = Set("Ares Ops"))).toOption.get
       val session = sessionStore.create(editor.id)
 
-      val event1 = Ics205Event("AllowedEvent", Ics205(incidentName = "Allowed Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ares Ops")
+      val event1 = Ics205Plan("AllowedEvent", Ics205(incidentName = "Allowed Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Ares Ops")
       store.save(event1)
 
       // Editor can view and edit event
@@ -187,7 +187,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
       val session = sessionStore.create(admin.id)
 
-      store.save(Ics205Event("ToDelete", Ics205(incidentName = "To Delete", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Plan("ToDelete", Ics205(incidentName = "To Delete", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
       assert(store.getEvent("ToDelete").isDefined)
 
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/events/delete"))
@@ -235,7 +235,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val session = sessionStore.create(admin.id)
 
       val plan = Ics205(incidentName = "Wildfire Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
-      val event = Ics205Event("Wildfire 2026", plan)
+      val event = Ics205Plan("Wildfire 2026", plan)
       store.save(event)
 
       val req = Request[IO](Method.GET, Uri.unsafeFromString("/events/export?name=Wildfire+2026"))
@@ -246,7 +246,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val disposition = res.headers.get(CIString("Content-Disposition")).map(_.head.value).getOrElse("")
       assert(disposition.contains("attachment; filename=\"Wildfire Incident.json\""))
       val body = res.as[String].unsafeRunSync()
-      val decoded = decode[Ics205Event](body)
+      val decoded = decode[Ics205Plan](body)
       assert(decoded.isRight)
       assertEquals(decoded.toOption.get.id, "Wildfire 2026")
       assertEquals(decoded.toOption.get.eventName, "Wildfire Incident")
@@ -260,10 +260,10 @@ class EventsEndpointsTests extends munit.FunSuite:
       val session = sessionStore.create(admin.id)
 
       // Seed an existing event named "Winter Drill"
-      store.save(Ics205Event("Winter Drill", Ics205(incidentName = "Winter Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
+      store.save(Ics205Plan("Winter Drill", Ics205(incidentName = "Winter Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
 
       // Prepare an imported event JSON with the same name "Winter Drill"
-      val importPayload = Ics205Event("Winter Drill", Ics205(incidentName = "Winter Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty, specialInstructions = "Imported"))
+      val importPayload = Ics205Plan("Winter Drill", Ics205(incidentName = "Winter Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty, specialInstructions = "Imported"))
       val jsonBytes = importPayload.asJson.spaces2.getBytes(java.nio.charset.StandardCharsets.UTF_8)
 
       val multipart = Multipart[IO](Vector(
@@ -293,7 +293,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val session = sessionStore.create(admin.id)
 
       val plan = Ics205(incidentName = "Marathon Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
-      val jsonBytes = Ics205Event(plan).asJson.spaces2.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+      val jsonBytes = Ics205Plan(plan).asJson.spaces2.getBytes(java.nio.charset.StandardCharsets.UTF_8)
 
       val multipart = Multipart[IO](Vector(
         Part.formData[IO]("file", new String(jsonBytes, java.nio.charset.StandardCharsets.UTF_8), org.http4s.headers.`Content-Disposition`("form-data", Map(CIString("name") -> "file", CIString("filename") -> "marathon.json")))
@@ -320,7 +320,7 @@ class EventsEndpointsTests extends munit.FunSuite:
 
       val plan = Ics205(incidentName = "Forbidden Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
       val multipart = Multipart[IO](Vector(
-        Part.formData[IO]("file", Ics205Event(plan).asJson.spaces2, org.http4s.headers.`Content-Disposition`("form-data", Map(CIString("name") -> "file", CIString("filename") -> "forbid.json")))
+        Part.formData[IO]("file", Ics205Plan(plan).asJson.spaces2, org.http4s.headers.`Content-Disposition`("form-data", Map(CIString("name") -> "file", CIString("filename") -> "forbid.json")))
       ))
 
       val req = Request[IO](Method.POST, Uri.unsafeFromString("/events/import"))
@@ -339,7 +339,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val viewer = userStore.add(User("viewer", passwordService.hash("pass"), Role.Viewer, enabled = true, id = "u-view")).toOption.get
       val adminSession = sessionStore.create(admin.id)
       val viewerSession = sessionStore.create(viewer.id)
-      store.save(Ics205Event("Original", Ics205(incidentName = "Original", operationalPeriod = OperationalPeriod(), channels = Seq.empty),
+      store.save(Ics205Plan("Original", Ics205(incidentName = "Original", operationalPeriod = OperationalPeriod(), channels = Seq.empty),
         group = "Ares Ops"))
       val original = store.getEvent("Original").get
       def duplicate(name: String, sessionId: String) =
@@ -368,7 +368,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val session = sessionStore.create(admin.id)
 
       val originalPlan = Ics205(incidentName = "Field Day Original", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
-      store.save(Ics205Event("Field Day", originalPlan))
+      store.save(Ics205Plan("Field Day", originalPlan))
 
       val fields = Ics205Form.fields(originalPlan)
         .updated("eventName", "Field Day")
@@ -395,7 +395,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val session = sessionStore.create(admin.id)
 
       val originalPlan = Ics205(incidentName = "Custom Event", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
-      val customEvent = Ics205Event(
+      val customEvent = Ics205Plan(
         id = "custom-uuid-12345",
         ics205 = originalPlan
       )
@@ -426,7 +426,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       val session = sessionStore.create(admin.id)
 
       val plan = Ics205(incidentName = "Special Drill", operationalPeriod = OperationalPeriod(), channels = Seq.empty)
-      val event = Ics205Event(
+      val event = Ics205Plan(
         id = "ev-drill-999",
         ics205 = plan
       )
