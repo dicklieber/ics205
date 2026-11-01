@@ -19,7 +19,7 @@
 package ics205.web
 
 import ics205.BuildInfo
-import ics205.auth.{AuthenticatedUser, Permission}
+import ics205.auth.{AuthenticatedUser, Permission, Role}
 import ics205.util.{DurationFormat, FileHelper}
 import scalatags.Text.all.*
 import scalatags.Text.tags2.nav
@@ -401,7 +401,21 @@ object NavigationBar:
                 )
               }
             )
-          )
+          ),
+          if currentUser.exists(_.role == Role.Admin) then
+            div(cls := "about-section")(
+              h4("Environment Variables"),
+              dl(cls := "about-dl")(
+                sys.env.toSeq.sortBy(_._1).map { case (key, value) =>
+                  div(cls := "about-field")(
+                    dt(key),
+                    dd(value)
+                  )
+                }
+              )
+            )
+          else
+            frag()
         ),
         div(cls := "about-dialog-actions")(
           button(

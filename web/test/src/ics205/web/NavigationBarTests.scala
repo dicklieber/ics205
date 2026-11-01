@@ -30,6 +30,13 @@ class NavigationBarTests extends munit.FunSuite:
 
   val viewerUser = AuthenticatedUser(user = "viewerUser", session = Role.Viewer)
 
+  test("environment variables are rendered only for admins"):
+    assert(NavigationBar.aboutDialog(currentUser = Some(adminUser)).render.contains("Environment Variables"))
+    for role <- Seq(Role.Editor, Role.Viewer) do
+      val user = AuthenticatedUser(user = "nonAdmin", session = role)
+      assert(!NavigationBar.aboutDialog(currentUser = Some(user)).render.contains("Environment Variables"))
+    assert(!NavigationBar.aboutDialog(currentUser = None).render.contains("Environment Variables"))
+
   test("NavigationBar renders brand, main links, and unauthenticated state"):
     val html = NavigationBar.render(activePage = NavigationBar.ActivePage.Plan, currentUser = None).render
     assert(html.contains("navbar"))
