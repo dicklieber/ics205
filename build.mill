@@ -3,6 +3,7 @@
 //|   "com.lihaoyi::mill-contrib-scoverage:$MILL_VERSION",
 //|   "de.larsgrefer.sass:sass-embedded-host:3.7.3"
 //| ]
+//| mill-jvm-version: system
 
 /*
  * Copyright (c) 2026. Dick Lieber, WA9NNN
