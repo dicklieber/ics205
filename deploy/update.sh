@@ -18,7 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Release settings
-GITHUB_REPO="dlieber/ics205"
+GITHUB_REPO="dicklieber/ics205"
 DEFAULT_SERVICE_PATH="${SCRIPT_DIR}/ics205.service"
 DEFAULT_LOG4J_PATH=""
 REMOTE_USER="ics205"
@@ -177,8 +177,9 @@ fi
 echo "=================================================="
 echo "ICS-205 Remote Update"
 echo "Target Host:       ${TARGET_HOST}"
-echo "Release:           ${RELEASE_TAG}\necho "Release JAR:       ${ASSET_NAME}"
-echo "Release:           ${RELEASE_TAG}"\necho "Release JAR:       ${ASSET_NAME}"\necho "Remote Target:     ${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
+echo "Release:           ${RELEASE_TAG}"
+echo "Release JAR:       ${ASSET_NAME}"
+echo "Remote Target:     ${REMOTE_APP_DIR}/${REMOTE_USER}.jar"
 echo "Sync Service Unit: ${UPDATE_SERVICE}"
 echo "Restart Service:   ${RESTART_SERVICE}"
 echo "=================================================="
