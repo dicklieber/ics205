@@ -175,6 +175,47 @@ class ApplicationModuleTests extends munit.FunSuite:
       System.clearProperty("PORT")
       ConfigFactory.invalidateCaches()
 
+  test("HTTP backend defaults to loopback and supports an explicit bind host"):
+    val defaults = Guice.createInjector(new ApplicationModule).getInstance(classOf[WebApplication])
+    assertEquals(defaults.host, "127.0.0.1")
+    assertEquals(defaults.bindHost.toString, "127.0.0.1")
+    val config = ConfigFactory.parseString("host = \"0.0.0.0\"").withFallback(ConfigFactory.load()).resolve()
+    val explicit = Guice.createInjector(new ApplicationModule(config)).getInstance(classOf[WebApplication])
+    assertEquals(explicit.bindHost.toString, "0.0.0.0")
+
+  test("invalid bind hosts fail before server startup"):
+    intercept[IllegalArgumentException] {
+      new WebApplication(new java.util.HashSet[ApiEndpoints](), 8080, null, ics205.auth.AuthConfig(), "not a host!")
+    }
+
+  test("service JVM flags override legacy insecure file settings and set Secure cookies"):
+    val directory = os.temp.dir()
+    val configFile = directory / "ics205.conf"
+    os.write(configFile, "host = \"0.0.0.0\"\nauth.secureCookie = false\nport = 9090")
+    val overrides = Map("config.file" -> configFile.toString, "host" -> "127.0.0.1", "auth.secureCookie" -> "true")
+    val previous = overrides.keys.map(key => key -> Option(System.getProperty(key))).toMap
+    try
+      overrides.foreach((key, value) => System.setProperty(key, value))
+      ConfigFactory.invalidateCaches()
+      val config = ApplicationModule.loadConfig()
+      assertEquals(config.getString("host"), "127.0.0.1")
+      assert(config.getBoolean("auth.secureCookie"))
+      assertEquals(config.getInt("port"), 9090)
+      val injector = Guice.createInjector(new ApplicationModule(config))
+      val app = injector.getInstance(classOf[WebApplication])
+      assertEquals(app.bindHost.toString, "127.0.0.1")
+      val security = injector.getInstance(classOf[ics205.web.auth.AuthSecurity])
+      assert(security.sessionCookieWithMeta("test-session").valueWithMeta.secure)
+      assert(security.expiredCookieWithMeta().valueWithMeta.secure)
+    finally
+      previous.foreach { (key, value) =>
+        value match
+          case Some(original) => System.setProperty(key, original)
+          case None => System.clearProperty(key)
+      }
+      ConfigFactory.invalidateCaches()
+      os.remove.all(directory)
+
 // This test-only group has no explicit Guice binding or server registration.
 class DiscoveryTestEndpoints @Inject() (store: Ics205Store) extends ApiEndpoints:
   override val endpoints: List[ServerEndpoint[Any, IO]] = List(

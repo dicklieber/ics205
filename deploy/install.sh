@@ -273,10 +273,10 @@ sudo chmod 644 "/etc/systemd/system/${SERVICE_NAME}"
 if [ ! -f "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env" ] && [ ! -f "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.conf" ] && [ ! -f "${REMOTE_CONFIG_DIR}/application.conf" ]; then
   echo "Creating default environment file at ${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env..."
   sudo tee "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env" > /dev/null << 'EOF'
-JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=false
+JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
 JAR_PATH=/home/ics205/app/ics205.jar
-# Remote Java Debugger (listening on port 5005 across all network interfaces):
-# JAVA_OPTS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=false
+# Remote Java Debugger (loopback only; use an SSH tunnel to port 5005):
+# JAVA_OPTS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5005 -Xms256m -Xmx512m -XX:+UseG1GC
 EOF
   sudo chown "${REMOTE_USER}:${REMOTE_GROUP}" "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
   sudo chmod 640 "${REMOTE_CONFIG_DIR}/${REMOTE_USER}.env"
@@ -347,7 +347,9 @@ echo "=================================================="
 echo "Installation complete on ${TARGET_HOST}!"
 echo ""
 echo "Next steps:"
-echo "1. Access the web interface at http://${TARGET_HOST}:8080/ to create the initial admin user."
+echo "1. Configure an HTTPS reverse proxy using deploy/Caddyfile as a template."
+echo "   The app listens on 127.0.0.1:8080; use your HTTPS hostname to access it."
+echo "   Save the initial setup token from the service logs for first-admin creation."
 echo ""
 echo "2. Check service status and live logs:"
 echo "   ssh -t ${SSH_EXTRA_FLAGS}${TARGET_HOST} \"sudo systemctl status ${SERVICE_NAME}\""

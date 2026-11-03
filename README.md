@@ -92,7 +92,7 @@ Code coverage is instrumented using Scoverage (`mill-contrib-scoverage`).
 ./mill web.run
 ```
 
-Open http://localhost:8080.
+Open http://localhost:8080. The development server binds to `127.0.0.1` by default. An explicit `host` setting can change the bind address; command-line JVM properties override file configuration.
 
 The index renders an editable HTML form using `Ics205Page.render(plan: Ics205)`
 and Scalatags, following the first page of the reference PDF. Use **Add channel**,
@@ -203,7 +203,7 @@ Session tokens are transmitted using an HTTP-only cookie named `session` (config
 - `SameSite`: Lax (CSRF defense)
 - `Path`: `/`
 - `Max-Age`: session duration (or 0 when logging out)
-- `Secure`: defaults to `false` in development and can be configured for production via `auth.secureCookie` or `AuthConfig.secureCookie`.
+- `Secure`: defaults to `false` for local development. The packaged production service enforces `auth.secureCookie=true` and binds the HTTP backend to loopback behind an HTTPS proxy.
 
 ### Role Resolution for Existing Sessions
 
@@ -377,10 +377,10 @@ A production-ready systemd service unit file is provided at `deploy/ics205.servi
 2. (Optional) Customize environment variables by creating `/home/ics205/config/ics205.env`:
    ```bash
    sudo tee /home/ics205/config/ics205.env > /dev/null << 'EOF'
-   JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=false
+   JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC
    JAR_PATH=/home/ics205/app/ics205.jar
-   # Remote Java Debugger (listening on port 5005 across all network interfaces):
-   # JAVA_OPTS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Xms256m -Xmx512m -XX:+UseG1GC -Dauth.secureCookie=false
+   # Remote Java Debugger (loopback only; connect using an SSH tunnel):
+   # JAVA_OPTS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5005 -Xms256m -Xmx512m -XX:+UseG1GC
    EOF
    sudo chown ics205:ics205 /home/ics205/config/ics205.env
    sudo chmod 640 /home/ics205/config/ics205.env
@@ -392,7 +392,7 @@ A production-ready systemd service unit file is provided at `deploy/ics205.servi
    sudo systemctl enable --now ics205.service
    ```
 
-4. Save the setup token printed to the service console (`journalctl -u ics205`), then create the initial admin user by opening `http://<server-ip>:8080/` (or port 80 if configured) in your web browser.
+4. Configure the HTTPS reverse proxy below. Save the setup token printed to the service console (`journalctl -u ics205`), then open your HTTPS hostname to create the initial admin user.
 
 ### 5. Service Management and Monitoring
 
@@ -409,10 +409,17 @@ A production-ready systemd service unit file is provided at `deploy/ics205.servi
   sudo systemctl restart ics205.service
   ```
 
-### 6. Reverse Proxy, Port 80, and HTTPS Setup
+### 6. HTTPS Reverse Proxy
 
-- **Port 80 Direct Binding**: The systemd service is granted `CAP_NET_BIND_SERVICE` capability via `AmbientCapabilities` and `CapabilityBoundingSet`, allowing the unprivileged `ics205` user to bind directly to privileged low ports such as port 80 (set via `PORT=80` in `/home/ics205/config/ics205.env` or `port = 80` in `/home/ics205/config/ics205.conf`).
-- **Reverse Proxy and HTTPS**: In production, the application can also be placed behind a reverse proxy (such as Nginx, Caddy, or Apache) with TLS/HTTPS enabled:
-  - Configure proxy forwarding to `http://127.0.0.1:8080`.
-  - Ensure `X-Forwarded-For` and `X-Forwarded-Proto` headers are preserved.
-  - When serving over HTTPS, ensure `-Dauth.secureCookie=true` is set in `JAVA_OPTS` to enforce `Secure` attributes on session cookies.
+The packaged service runs an HTTP backend on `127.0.0.1:8080` with Secure session cookies. The service flags follow `JAVA_OPTS`, so legacy options in `ics205.env` cannot re-enable insecure cookies or a public bind address. No low-port capabilities are granted to the application. Local development with `./mill web.run` continues to use HTTP on loopback.
+
+Use `deploy/Caddyfile` as a reverse-proxy template:
+
+1. Install Caddy and point a DNS hostname to the server. Allow inbound TCP ports 80 and 443 for Caddy; keep the backend port private.
+2. Replace `ics205.example.com` in the template with your hostname, then install it as `/etc/caddy/Caddyfile` (merge with any existing sites).
+3. Run `sudo caddy validate --config /etc/caddy/Caddyfile`, then reload Caddy using `sudo systemctl reload caddy`.
+4. Open `https://your-hostname/`. Caddy manages the TLS certificate and HTTP-to-HTTPS redirects; all credential entry and setup-token entry must use HTTPS.
+
+The template adds an HSTS header for the configured hostname. Other HTTPS reverse proxies can forward to `http://127.0.0.1:8080`; preserve the original Host header. A proxy on another machine requires a separately secured backend connection and explicit deployment changes.
+
+When upgrading an existing deployment, use `./deploy/update.sh --sync-service user@remote-server` to install the hardened service unit along with the JAR. Arrange the HTTPS proxy first: direct remote HTTP access will stop working and login requires HTTPS after the new unit is applied. Existing environment files are preserved. If the old backend used port 80, change its port setting to 8080 (or another unprivileged port and adjust the proxy target). Merely replacing the JAR does not update the service unit.

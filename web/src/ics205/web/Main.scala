@@ -45,11 +45,16 @@ class WebApplication @Inject() (
   endpointsSet: java.util.Set[ApiEndpoints],
   @Named("port") val port: Int,
   authService: AuthenticationService,
-  authConfig: AuthConfig
+  authConfig: AuthConfig,
+  @Named("host") val host: String = "127.0.0.1"
 ) extends LazyLogging:
 
   def this(endpointsSet: java.util.Set[ApiEndpoints], port: Int) =
     this(endpointsSet, port, null, AuthConfig.default)
+
+  val bindHost: Host = Host.fromString(host).getOrElse(
+    throw new IllegalArgumentException(s"Invalid bind host: $host")
+  )
 
   val httpApp: org.http4s.HttpApp[IO] =
     val configuredEndpoints = endpointsSet.asScala.toList
@@ -86,7 +91,7 @@ class WebApplication @Inject() (
       throw new IllegalArgumentException(s"Invalid port number: $port")
     )
     EmberServerBuilder.default[IO]
-      .withHost(ipv4"0.0.0.0")
+      .withHost(bindHost)
       .withPort(serverPort)
       .withHttpApp(httpApp)
       .build

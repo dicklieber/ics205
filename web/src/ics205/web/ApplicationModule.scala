@@ -131,6 +131,9 @@ class ApplicationModule(
     if (!fullConfig.hasPath("port")) {
       bind[Int].annotatedWith(Names.named("port")).toInstance(8080)
     }
+    if (!fullConfig.hasPath("host")) {
+      bind[String].annotatedWith(Names.named("host")).toInstance("127.0.0.1")
+    }
 
     bind[Config].toInstance(fullConfig)
 
@@ -147,7 +150,8 @@ object ApplicationModule:
       .orElse(Option(FileHelper.configDirectory / "application.conf").filter(os.exists))
       .getOrElse(os.pwd / "config" / "ics205.conf")
 
-    ConfigFactory.parseFile(configFile.toIO)
+    ConfigFactory.systemProperties()
+      .withFallback(ConfigFactory.parseFile(configFile.toIO))
       .withFallback(ConfigFactory.load())
       .resolve()
 

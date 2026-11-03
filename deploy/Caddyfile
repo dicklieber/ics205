@@ -1,0 +1,5 @@
+# Replace this hostname and point its DNS record to the server before use.
+ics205.example.com {
+    reverse_proxy 127.0.0.1:8080
+    header Strict-Transport-Security "max-age=31536000"
+}
