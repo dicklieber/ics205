@@ -29,19 +29,27 @@ git remote get-url origin >/dev/null 2>&1 || die "Git remote 'origin' is not con
 [[ -z "$(git status --porcelain)" ]] || die "Git working tree is not clean."
 
 CURRENT_VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
-if [[ ! "$CURRENT_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)-SNAPSHOT$ ]]; then
-  die "$VERSION_FILE must contain X.Y.Z-SNAPSHOT; found '$CURRENT_VERSION'."
+if [[ ! "$CURRENT_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-SNAPSHOT)?$ ]]; then
+  die "$VERSION_FILE must contain X.Y.Z or X.Y.Z-SNAPSHOT; found '$CURRENT_VERSION'."
 fi
 
 MAJOR="${BASH_REMATCH[1]}"
 MINOR="${BASH_REMATCH[2]}"
 PATCH="${BASH_REMATCH[3]}"
+# A plain version can remain after an interrupted release. Skip that version
+# so rerunning the full workflow does not reuse its commit or tag.
+if [[ "$CURRENT_VERSION" != *-SNAPSHOT ]]; then
+  PATCH=$((10#$PATCH + 1))
+  echo "Previous release left version $CURRENT_VERSION; starting a new release."
+fi
 DEFAULT_RELEASE="${MAJOR}.${MINOR}.${PATCH}"
-DEFAULT_NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))-SNAPSHOT"
 
 read -r -p "Release version [$DEFAULT_RELEASE]: " RELEASE_VERSION
 RELEASE_VERSION="${RELEASE_VERSION:-$DEFAULT_RELEASE}"
 [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "Release version must be X.Y.Z."
+RELEASE_PREFIX="${RELEASE_VERSION%.*}"
+RELEASE_PATCH="${RELEASE_VERSION##*.}"
+DEFAULT_NEXT="${RELEASE_PREFIX}.$((10#$RELEASE_PATCH + 1))-SNAPSHOT"
 
 read -r -p "Next version [$DEFAULT_NEXT]: " NEXT_VERSION
 NEXT_VERSION="${NEXT_VERSION:-$DEFAULT_NEXT}"
@@ -56,7 +64,10 @@ RELEASE_ARTIFACT="${APP_NAME}-${RELEASE_VERSION}${ARTIFACT_EXTENSION}"
 CHECKSUM_FILE="${RELEASE_ARTIFACT}.sha256"
 
 git show-ref --verify --quiet "refs/tags/$TAG" && die "Local tag $TAG already exists."
-if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+REMOTE_TAG="$(git ls-remote --tags origin "refs/tags/$TAG")" \
+  || die "Cannot read Git remote. Fix authentication before releasing (gh auth login; gh auth setup-git)."
+git push --dry-run origin HEAD || die "Cannot push to origin. Fix Git authentication or permissions before releasing."
+if [[ -n "$REMOTE_TAG" ]]; then
   die "Remote tag $TAG already exists."
 fi
 if gh release view "$TAG" >/dev/null 2>&1; then
