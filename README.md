@@ -188,6 +188,8 @@ User and session databases are stored in the application data directory (resolve
 
 Session lifetime is configurable via `auth.sessionLifetime` (defaults to 24 hours). Expired sessions are cleaned opportunistically on access and filtered on application startup.
 
+A successful password change revokes every session for that user, including the current session, and clears the browser session cookie. The browser returns to login; JSON clients must log in again using the new password. Validation or password-save failures leave existing sessions intact.
+
 Initial-admin creation, adding users, and editing users share one form and `POST /admin/users` handler. Validation failures return the populated form; password fields are cleared. Initial setup requires its setup token, while subsequent changes require an authenticated administrator. The separate `/admin/users/setup` step verifies the initial token before showing the shared form.
 
 JSON login responses contain only public user identity fields (`id`, `username`, `role`, and `groups`) under `user`, plus a `message`. Password hashes and session details are excluded; the session token is returned through the HTTP-only session cookie.

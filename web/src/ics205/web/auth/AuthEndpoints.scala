@@ -274,11 +274,33 @@ class AuthEndpoints @Inject()(
       .in(header[Option[String]]("Content-Type"))
       .in(stringBody)
       .errorOut(statusCode.and(header[Option[String]]("Location")).and(header[Option[String]]("Content-Type")).and(stringBody))
-      .out(statusCode.and(header[Option[String]]("Location")).and(header[Option[String]]("Content-Type")).and(stringBody))
+      .out(statusCode.and(header[Option[String]]("Location")).and(header[Option[String]]("Content-Type")).and(stringBody).and(setCookies))
+      .out(header("Cache-Control", "no-store"))
       .serverLogic[IO] { (serverRequest, sessionIdOpt, contentType, body) =>
         IO.blocking {
           val ip = RequestUtils.clientIp(serverRequest)
           val isJson = contentType.exists(_.toLowerCase.contains("application/json"))
+
+          def completeChange(storedUser: ics205.auth.User, newPassword: String): Either[
+            (StatusCode, Option[String], Option[String], String),
+            (StatusCode, Option[String], Option[String], String, List[sttp.model.headers.CookieWithMeta])
+          ] =
+            val failure = (StatusCode.InternalServerError, None, Some("text/plain; charset=utf-8"), "Password could not be changed. Please try again.")
+            try
+              userStore.save(storedUser.copy(passwordHash = passwordService.hash(newPassword))) match
+                case Left(_) => Left(failure)
+                case Right(_) =>
+                  sessionStore.deleteAllForUser(storedUser.id)
+                  logger.info(s"User '${storedUser.username}' (id: '${storedUser.id}') changed their password from IP $ip")
+                  val message = "Password changed successfully. Please log in again."
+                  val cookies = List(security.expiredCookieWithMeta())
+                  if isJson then
+                    Right((StatusCode.Ok, None, Some("application/json"), ChangePasswordResponse(message).asJson.noSpaces, cookies))
+                  else
+                    Right((StatusCode.SeeOther, Some(s"/login?msg=${urlEncode(message)}"), None, "", cookies))
+            catch
+              case scala.util.control.NonFatal(_) => Left(failure)
+
           sessionIdOpt match
             case Some(sessionId) =>
               authService.authenticateSession(sessionId) match
@@ -304,11 +326,7 @@ class AuthEndpoints @Inject()(
                             else if !passwordService.verify(currentPassword, storedUser.passwordHash) then
                               Left((StatusCode.BadRequest, None, Some("text/plain; charset=utf-8"), "Current password is incorrect."))
                             else
-                              val newHash = passwordService.hash(newPassword)
-                              userStore.save(storedUser.copy(passwordHash = newHash))
-                              logger.info(s"User '${authUser.username}' (id: '${authUser.id}') changed their password from IP $ip")
-                              val respJson = ChangePasswordResponse("Password changed successfully.").asJson.noSpaces
-                              Right((StatusCode.Ok, None, Some("application/json"), respJson))
+                              completeChange(storedUser, newPassword)
                       else
                         val formData = parseFormData(body)
                         val currentPassword = formData.getOrElse("currentPassword", formData.getOrElse("current_password", formData.getOrElse("oldPassword", "")))
@@ -326,10 +344,7 @@ class AuthEndpoints @Inject()(
                         else if !passwordService.verify(currentPassword, storedUser.passwordHash) then
                           Left((StatusCode.SeeOther, Some(s"/change-password?err=${urlEncode("Current password is incorrect.")}"), None, ""))
                         else
-                          val newHash = passwordService.hash(newPassword)
-                          userStore.save(storedUser.copy(passwordHash = newHash))
-                          logger.info(s"User '${authUser.username}' (id: '${authUser.id}') changed their password from IP $ip")
-                          Right((StatusCode.SeeOther, Some(s"/change-password?msg=${urlEncode("Password changed successfully.")}"), None, ""))
+                          completeChange(storedUser, newPassword)
                     case None =>
                       if isJson then
                         Left((StatusCode.Unauthorized, None, Some("text/plain; charset=utf-8"), "User not found or disabled"))

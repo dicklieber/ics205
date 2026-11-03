@@ -78,7 +78,7 @@ object ChangePasswordPage:
                     required,
                     placeholder := "Enter new password (min. 8 characters)"
                   ),
-                  p(cls := "form-help")("Password must be at least 8 characters.")
+                  p(cls := "form-help")("Password must be at least 8 characters. Changing it signs you out on all devices.")
                 ),
 
                 div(cls := "form-group")(

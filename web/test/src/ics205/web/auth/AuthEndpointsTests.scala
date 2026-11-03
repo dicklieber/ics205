@@ -477,7 +477,7 @@ class AuthEndpointsTests extends munit.FunSuite:
           .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       ).unsafeRunSync()
       assertEquals(res6.status, Status.SeeOther)
-      assert(res6.headers.get(CIString("Location")).get.head.value.contains("msg=Password+changed+successfully."))
+      assert(res6.headers.get(CIString("Location")).get.head.value.startsWith("/login?msg=Password+changed+successfully."))
 
       // Old password no longer authenticates, new password authenticates
       assert(authService.authenticate("bob", "correctOldPass123").isEmpty)
@@ -535,6 +535,77 @@ class AuthEndpointsTests extends munit.FunSuite:
       assert(authService.authenticate("carol", "mysecretpass").isEmpty)
       assert(authService.authenticate("carol", "newsecretpass123").isDefined)
     }
+
+  test("password changes revoke every user session for form and JSON requests, including persisted sessions"):
+    for isJson <- Seq(false, true) do
+      withContext { (directory, userStore, sessions, passwords, auth, _, _, app) =>
+        val hash = passwords.hash("old-password123")
+        userStore.add(User("alice", hash, Role.Viewer, id = "alice-id"))
+        userStore.add(User("bob", hash, Role.Viewer, id = "bob-id"))
+        val current = sessions.create("alice-id")
+        val otherDevice = sessions.create("alice-id")
+        val unrelated = sessions.create("bob-id")
+        def submit(currentPassword: String) =
+          val request = Request[IO](Method.POST, Uri.unsafeFromString("/change-password"))
+          val encoded = if isJson then
+            request.withEntity(io.circe.Json.obj(
+              "currentPassword" -> io.circe.Json.fromString(currentPassword),
+              "newPassword" -> io.circe.Json.fromString("new-password123"),
+              "confirmPassword" -> io.circe.Json.fromString("new-password123")
+            ).noSpaces).putHeaders(Header.Raw(CIString("Content-Type"), "application/json"))
+          else request.withEntity(UrlForm("currentPassword" -> currentPassword, "newPassword" -> "new-password123", "confirmPassword" -> "new-password123"))
+          app.run(encoded.putHeaders(Header.Raw(CIString("Cookie"), s"session=${current.id}"))).unsafeRunSync()
+
+        val rejected = submit("wrong-password")
+        assertEquals(rejected.status, if isJson then Status.BadRequest else Status.SeeOther)
+        assert(auth.authenticateSession(current.id).isRight)
+        assert(auth.authenticateSession(otherDevice.id).isRight)
+        assert(rejected.headers.get(CIString("Set-Cookie")).isEmpty)
+
+        val response = submit("old-password123")
+        assertEquals(response.status, if isJson then Status.Ok else Status.SeeOther)
+        val cookie = response.headers.get(CIString("Set-Cookie")).get.head.value
+        assert(cookie.contains("Max-Age=0"))
+        assert(cookie.contains("HttpOnly"))
+        assertEquals(response.headers.get(CIString("Cache-Control")).map(_.head.value), Some("no-store"))
+        if !isJson then assert(response.headers.get(CIString("Location")).get.head.value.startsWith("/login?msg="))
+        for oldSession <- Seq(current, otherDevice) do
+          assert(auth.authenticateSession(oldSession.id).isLeft)
+          val protectedResponse = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/protected"))
+            .putHeaders(Header.Raw(CIString("Cookie"), s"session=${oldSession.id}"))).unsafeRunSync()
+          assertEquals(protectedResponse.status, Status.Unauthorized)
+        assert(auth.authenticateSession(unrelated.id).isRight)
+        val restarted = new InMemJsonSessionStore(new FileHelper(directory), AuthConfig())
+        assert(restarted.find(current.id).isEmpty)
+        assert(restarted.find(otherDevice.id).isEmpty)
+        assert(restarted.find(unrelated.id).isDefined)
+        assert(auth.authenticate("alice", "old-password123").isEmpty)
+        assert(auth.authenticate("alice", "new-password123").isDefined)
+      }
+
+  test("failed password persistence reports failure and leaves sessions and password intact"):
+    for isJson <- Seq(false, true) do
+      withContext { (directory, userStore, sessions, passwords, auth, _, _, app) =>
+        val hash = passwords.hash("old-password123")
+        userStore.add(User("alice", hash, Role.Viewer, id = "alice-id"))
+        val current = sessions.create("alice-id")
+        val otherDevice = sessions.create("alice-id")
+        val path = directory / "admin" / "users.json"
+        os.remove(path)
+        os.makeDir.all(path)
+        os.write(path / "block-replacement", "blocked")
+        val request = Request[IO](Method.POST, Uri.unsafeFromString("/change-password"))
+        val encoded = if isJson then request
+          .withEntity("""{"currentPassword":"old-password123","newPassword":"new-password123"}""")
+          .putHeaders(Header.Raw(CIString("Content-Type"), "application/json"))
+        else request.withEntity(UrlForm("currentPassword" -> "old-password123", "newPassword" -> "new-password123", "confirmPassword" -> "new-password123"))
+        val response = app.run(encoded.putHeaders(Header.Raw(CIString("Cookie"), s"session=${current.id}"))).unsafeRunSync()
+        assertEquals(response.status, Status.InternalServerError)
+        assert(response.headers.get(CIString("Set-Cookie")).isEmpty)
+        assertEquals(userStore.findById("alice-id").get.passwordHash, hash)
+        assert(auth.authenticateSession(current.id).isRight)
+        assert(auth.authenticateSession(otherDevice.id).isRight)
+      }
 
 class TestProtectedEndpoints @Inject()(security: AuthSecurity) extends ApiEndpoints:
   private val protectedEndpoint =
