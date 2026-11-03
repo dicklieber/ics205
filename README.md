@@ -264,6 +264,19 @@ Inject `AuthSecurity` into your endpoint class.
 
 ## Deployment
 
+To publish a GitHub release, start the interactive Mill script from the repository root:
+
+```bash
+./mill --no-daemon Release.scala
+```
+
+This requires a clean Git working tree, an authenticated GitHub CLI (`gh`), and push
+access to `origin`. The script prompts for release and next development versions,
+then asks for confirmation. It tests and builds in an isolated temporary directory,
+verifies the packaged BuildInfo, publishes the JAR and SHA-256 checksum, and commits
+the next snapshot version. Before the release commit, failures restore `version.txt`;
+after that commit, failures leave the Git state available for recovery.
+
 ### 1. Build Fat JAR (Assembly)
 
 To build a standalone executable fat JAR containing all compiled classes, dependencies, and web assets:
