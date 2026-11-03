@@ -203,7 +203,9 @@ Sessions store **only** the `userId` and timestamp metadata; roles and permissio
 
 ### Creating the Initial User
 
-An initial user account must be provisioned before accessing protected features. If no users are defined in the database, navigating to the login page (or opening the application) automatically redirects to the user management page (`/admin/users`) with a notice prompting you to create the initial admin user directly through the web UI. Once the initial admin user is created, subsequent user administration is managed by authorized administrators via the web UI at `/admin/users`.
+An initial user account must be provisioned before accessing protected features. When the user database is empty, the app generates a random setup token and prints it to the server console with instructions to save it for the initial connection. Open the app, enter that token, and continue to the initial administrator form. No configuration is needed. The token becomes invalid when the first user is created, and concurrent setup requests can create only one administrator. Restarting before setup generates a new token; use the latest console output. Existing installations with users do not generate a token.
+
+Malformed or unreadable user databases stop startup; failed reloads preserve the existing in-memory users. Restore the user database from a trusted backup rather than deleting it to recover. User database writes use atomic replacement to avoid partially written files.
 
 ### User Login and Logout UI
 
@@ -382,7 +384,7 @@ A production-ready systemd service unit file is provided at `deploy/ics205.servi
    sudo systemctl enable --now ics205.service
    ```
 
-4. Create the initial admin user by opening `http://<server-ip>:8080/` (or port 80 if configured) in your web browser.
+4. Save the setup token printed to the service console (`journalctl -u ics205`), then create the initial admin user by opening `http://<server-ip>:8080/` (or port 80 if configured) in your web browser.
 
 ### 5. Service Management and Monitoring
 

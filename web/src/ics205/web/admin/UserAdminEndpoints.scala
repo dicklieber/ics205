@@ -58,21 +58,66 @@ class UserAdminEndpoints @Inject()(
       val newGroupOpt = formData.get("newGroup").map(GroupHelper.formatGroupName).filter(_.nonEmpty)
       (selectedGroups ++ newGroupOpt).map(GroupHelper.formatGroupName).filter(_.nonEmpty)
 
+  private val setupCookieName = "ics205-setup"
+
+  private def setupPage(error: Option[String] = None): String =
+    import scalatags.Text.all.*
+    doctype("html")(html(lang := "en")(
+      head(scalatags.Text.tags2.title("ICS-205 Initial Setup"), link(rel := "stylesheet", href := "/css/admin.css")),
+      body(div(cls := "admin-container")(
+        h1("Initial administrator setup"),
+        p("Enter the setup token printed to the application console when the server started."),
+        error.map(message => div(cls := "alert alert-error")(message)),
+        form(method := "post", action := "/admin/users/setup")(
+          label(attr("for") := "bootstrapToken")("Setup token"),
+          input(tpe := "password", id := "bootstrapToken", name := "bootstrapToken", required, autocomplete := "off"),
+          button(tpe := "submit", cls := "btn btn-primary")("Continue")
+        )
+      ))
+    )).render
+
+  private val setupEndpoint: ServerEndpoint[Any, IO] =
+    endpoint.post.in("admin" / "users" / "setup")
+      .in(formBody[Map[String, String]])
+      .out(statusCode.and(header[String]("Location")).and(setCookies))
+      .serverLogicSuccess[IO] { data =>
+        IO.blocking {
+          val token = data.getOrElse("bootstrapToken", "")
+          if userStore.canBootstrap(token) then
+            val cookie = sttp.model.headers.CookieWithMeta.unsafeApply(
+              name = setupCookieName,
+              value = token,
+              path = Some("/admin/users"),
+              maxAge = Some(600L),
+              expires = Some(java.time.Instant.now().plusSeconds(600)),
+              secure = security.config.secureCookie,
+              httpOnly = true,
+              sameSite = Some(sttp.model.headers.Cookie.SameSite.Lax)
+            )
+            (StatusCode.SeeOther, "/admin/users", List(cookie))
+          else
+            (StatusCode.SeeOther, "/admin/users?err=Invalid+or+expired+setup+token", Nil)
+        }
+      }
+
   private val viewUsersEndpoint: ServerEndpoint[Any, IO] =
     endpoint.get
       .in("admin" / "users")
       .in(cookie[Option[String]](security.config.cookieName))
+      .in(cookie[Option[String]](setupCookieName))
       .in(query[Option[String]]("edit"))
       .in(query[Option[String]]("msg"))
       .in(query[Option[String]]("err"))
       .errorOut(statusCode.and(stringBody))
       .out(htmlBodyUtf8)
-      .serverLogic[IO] { (sessionIdOpt, editId, msg, err) =>
+      .serverLogic[IO] { (sessionIdOpt, setupTokenOpt, editId, msg, err) =>
         IO.blocking {
           val users = userStore.all()
           val allEvents = store.listEvents()
           val knownGroups = GroupHelper.knownGroups(allEvents, users)
-          if users.isEmpty then
+          if users.isEmpty && !setupTokenOpt.exists(userStore.canBootstrap) then
+            Right(setupPage(err))
+          else if users.isEmpty then
             Right(
               UserAdminPage.render(
                 currentUser = None,
@@ -114,17 +159,21 @@ class UserAdminEndpoints @Inject()(
       .in("admin" / "users" / "create")
       .in(extractFromRequest(identity))
       .in(cookie[Option[String]](security.config.cookieName))
+      .in(cookie[Option[String]](setupCookieName))
       .in(formBody[Map[String, String]])
       .errorOut(statusCode.and(stringBody))
       .out(statusCode.and(header[String]("Location")))
-      .serverLogic[IO] { (serverRequest, sessionIdOpt, formData) =>
+      .serverLogic[IO] { (serverRequest, sessionIdOpt, setupTokenOpt, formData) =>
         IO.blocking {
           val ip = RequestUtils.clientIp(serverRequest)
           val users = userStore.all()
           val isInitial = users.isEmpty
+          val setupToken = setupTokenOpt.getOrElse(formData.getOrElse("bootstrapToken", ""))
 
           val authorized: Either[(StatusCode, String), Option[AuthenticatedUser]] =
-            if isInitial then Right(None)
+            if isInitial then
+              if userStore.canBootstrap(setupToken) then Right(None)
+              else Left((StatusCode.Forbidden, "Initial setup requires the valid token printed to the application console."))
             else
               sessionIdOpt match
                 case Some(sessionId) =>
@@ -144,7 +193,7 @@ class UserAdminEndpoints @Inject()(
               val confirmPassword = formData.getOrElse("confirmPassword", formData.getOrElse("confirm_password", ""))
               val defaultRole = if isInitial then "admin" else "user"
               val roleInput = formData.getOrElse("role", formData.getOrElse("roles", defaultRole)).trim
-              val role = Role.values.find(_.toString.equalsIgnoreCase(roleInput)).getOrElse(if isInitial then Role.Admin else Role.Viewer)
+              val role = if isInitial then Role.Admin else Role.values.find(_.toString.equalsIgnoreCase(roleInput)).getOrElse(Role.Viewer)
               val enabled = formData.get("enabled").contains("true") || isInitial
               val userGroups = parseUserGroups(formData, role)
 
@@ -165,7 +214,9 @@ class UserAdminEndpoints @Inject()(
                   enabled = enabled,
                   groups = userGroups
                 )
-                userStore.add(newUser) match
+                val result = if isInitial then userStore.initializeAdmin(newUser, setupToken)
+                  else userStore.add(newUser)
+                result match
                   case Right(_) =>
                     if isInitial then
                       logger.info(s"Initial admin user '$username' (id: '${newUser.id}', role: ${newUser.role}, enabled: ${newUser.enabled}) created from IP $ip")
@@ -265,6 +316,7 @@ class UserAdminEndpoints @Inject()(
 
   override val endpoints: List[ServerEndpoint[Any, IO]] =
     List(
+      setupEndpoint,
       viewUsersEndpoint,
       createUserEndpoint,
       editUserEndpoint,

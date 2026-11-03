@@ -19,7 +19,7 @@
 package ics205.store
 
 import com.typesafe.scalalogging.LazyLogging
-import ics205.auth.{AuthConfig, User, UserId}
+import ics205.auth.{AuthConfig, Role, User, UserId}
 import ics205.util.{FileHelper, Locus}
 import ics205.util.Ids.generateId
 import ics205.util.Locus.admin
@@ -33,7 +33,18 @@ import java.nio.file.NoSuchFileException
 @Singleton class UserStore @Inject()(fileHelper: FileHelper,
                                      config: AuthConfig) extends LazyLogging:
   private val fileName: String = config.userFileName
-  private var users: Seq[User] = loadFromDisk()
+  @volatile private var users: Seq[User] = loadFromDisk(allowMissing = true)
+
+  private var bootstrapToken: Option[String] =
+    if users.nonEmpty then None
+    else
+      val bytes = new Array[Byte](32)
+      new java.security.SecureRandom().nextBytes(bytes)
+      val token = java.util.HexFormat.of().formatHex(bytes)
+      System.err.println(s"Initial ICS-205 setup token: $token\nSave this token and enter it on your initial connection to create the administrator. It stops working once the first user is created. Restart before setup to generate a new token.")
+      Some(token)
+
+  private[ics205] def initialSetupToken: Option[String] = synchronized { bootstrapToken }
 
   def this(fileHelper: FileHelper) = this(fileHelper, AuthConfig())
 
@@ -46,6 +57,20 @@ import java.nio.file.NoSuchFileException
   def findByUsername(username: String): Option[User] =
     users.find(_.username.equalsIgnoreCase(username))
 
+  def canBootstrap(token: String): Boolean = synchronized {
+    users.isEmpty && bootstrapToken.exists { expected =>
+      java.security.MessageDigest.isEqual(
+        expected.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+        token.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+      )
+    }
+  }
+
+  def initializeAdmin(user: User, token: String): Either[String, User] = synchronized {
+    if !canBootstrap(token) then Left("Initial setup is unavailable or the bootstrap token is invalid.")
+    else add(user.copy(role = Role.Admin, enabled = true))
+  }
+
   def add(user: User): Either[String, User] = synchronized {
     if users.exists(_.id == user.id) then
       Left(s"User with id '${user.id}' already exists")
@@ -55,6 +80,7 @@ import java.nio.file.NoSuchFileException
       val updated = users :+ user
       persist(updated)
       users = updated
+      bootstrapToken = None
       logger.info(s"Added user '${user.username}' (id: '${user.id}', role: ${user.role}, enabled: ${user.enabled})")
       Right(user)
   }
@@ -77,7 +103,13 @@ import java.nio.file.NoSuchFileException
   }
 
   private def persist(usersToSave: Seq[User]): Unit = synchronized {
-    fileHelper.save(admin, fileName, Users(usersToSave))
+    val path = fileHelper.directory / admin.toString / fileName
+    val tempPath = path / os.up / s".$fileName.${generateId()}.tmp"
+    val json = Users(usersToSave).asJson.printWith(Printer.indented("  "))
+    os.makeDir.all(path / os.up)
+    os.write(tempPath, json, perms = "rw-------")
+    try os.move(tempPath, path, replaceExisting = true, atomicMove = true)
+    finally if os.exists(tempPath) then os.remove(tempPath)
   }
 
   def delete(id: UserId): Boolean = synchronized {
@@ -94,11 +126,20 @@ import java.nio.file.NoSuchFileException
   }
 
   def reload(): Unit = synchronized {
-    users = loadFromDisk()
+    users = loadFromDisk(allowMissing = false)
+    if users.nonEmpty then bootstrapToken = None
   }
 
-  private def loadFromDisk(): Seq[User] =
-    fileHelper.loadOrDefault[Users](admin, fileName)(Users()).users
+  private def loadFromDisk(allowMissing: Boolean): Seq[User] =
+    val path = fileHelper.directory / admin.toString / fileName
+    try
+      decode[Users](os.read(path)).fold(
+        error => throw new IllegalStateException(s"Invalid user database: $path", error),
+        _.users
+      )
+    catch
+      case _: NoSuchFileException if allowMissing => Seq.empty
+
   
 
 case class Users(users: Seq[User] = Seq.empty) derives Codec.AsObject

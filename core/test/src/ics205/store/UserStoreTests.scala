@@ -100,11 +100,10 @@ class UserStoreTests extends munit.FunSuite:
       assertEquals(freshStore.findById("user-1"), None)
     }
 
-  test("corrupted or malformed user JSON defaults gracefully to empty"):
+  test("corrupted or malformed user JSON prevents startup"):
     withDirectory { dir =>
       os.write(dir / "admin" / "users.json", "{ malformed json content }", createFolders = true)
-      val store = new UserStore(helper(dir))
-      assertEquals(store.all(), Seq.empty)
+      intercept[IllegalStateException](new UserStore(helper(dir)))
     }
 
   test("all returns users sorted by username case-insensitively"):
@@ -128,4 +127,75 @@ class UserStoreTests extends munit.FunSuite:
       val freshStore = new UserStore(helper(dir))
       val reloaded = freshStore.findById("u-op").get
       assertEquals(reloaded.groups, Set("Ares Operations", "North Team"))
+    }
+
+  test("failed reload preserves users and does not enable bootstrap"):
+    withDirectory { dir =>
+      val store = new UserStore(helper(dir), AuthConfig())
+      val token = store.initialSetupToken.get
+      store.add(testUser)
+      val path = dir / "admin" / "users.json"
+      for content <- Seq("{bad", "{}", "[]") do
+        os.write.over(path, content)
+        intercept[IllegalStateException](store.reload())
+        assertEquals(store.all(), Seq(testUser))
+        assert(!store.canBootstrap(token))
+      os.remove(path)
+      intercept[java.nio.file.NoSuchFileException](store.reload())
+      assertEquals(store.all(), Seq(testUser))
+    }
+
+  test("unreadable user database path prevents startup"):
+    withDirectory { dir =>
+      os.makeDir.all(dir / "admin" / "users.json")
+      intercept[java.io.IOException](new UserStore(helper(dir)))
+    }
+
+  test("generated token is required, forces admin role, and is consumed after setup"):
+    withDirectory { dir =>
+      val store = new UserStore(helper(dir), AuthConfig())
+      val token = store.initialSetupToken.get
+      assert(token.matches("[0-9a-f]{64}"))
+      assert(store.initializeAdmin(testUser, "").isLeft)
+      assert(store.initializeAdmin(testUser, "wrong").isLeft)
+      assertEquals(store.all(), Seq.empty)
+      val candidate = testUser.copy(role = Role.Viewer, enabled = false)
+      assertEquals(store.initializeAdmin(candidate, token), Right(testUser))
+      assert(store.initializeAdmin(testUser.copy(id = "second", username = "second"), token).isLeft)
+      assertEquals(store.initialSetupToken, None)
+      store.delete(testUser.id)
+      assert(!store.canBootstrap(token))
+    }
+
+  test("concurrent bootstrap requests can create only one administrator"):
+    withDirectory { dir =>
+      val store = new UserStore(helper(dir), AuthConfig())
+      val token = store.initialSetupToken.get
+      val start = new java.util.concurrent.CountDownLatch(1)
+      val executor = java.util.concurrent.Executors.newFixedThreadPool(2)
+      try
+        val futures = (1 to 2).map { n =>
+          executor.submit(new java.util.concurrent.Callable[Either[String, User]] {
+            def call(): Either[String, User] =
+              start.await()
+              store.initializeAdmin(testUser.copy(id = s"user-$n", username = s"admin$n"), token)
+          })
+        }
+        start.countDown()
+        val results = futures.map(_.get(10, java.util.concurrent.TimeUnit.SECONDS))
+        assertEquals(results.count(_.isRight), 1)
+        assertEquals(store.all().size, 1)
+        assertEquals(new UserStore(helper(dir)).all(), store.all())
+      finally executor.shutdownNow()
+    }
+
+  test("restart before setup rotates token and an existing administrator suppresses generation"):
+    withDirectory { dir =>
+      val first = new UserStore(helper(dir))
+      val oldToken = first.initialSetupToken.get
+      val restarted = new UserStore(helper(dir))
+      assert(restarted.initialSetupToken.get != oldToken)
+      assert(!restarted.canBootstrap(oldToken))
+      restarted.add(testUser)
+      assertEquals(new UserStore(helper(dir)).initialSetupToken, None)
     }

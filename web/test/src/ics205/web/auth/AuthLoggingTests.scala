@@ -172,7 +172,7 @@ class AuthLoggingTests extends munit.FunSuite:
       events.clear()
 
       // Initial admin creation
-      val formInit = UrlForm("username" -> "initialadmin", "password" -> "password123", "confirmPassword" -> "password123")
+      val formInit = UrlForm("bootstrapToken" -> userStore.initialSetupToken.get, "username" -> "initialadmin", "password" -> "password123", "confirmPassword" -> "password123")
       val reqInit = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
         .withEntity(formInit)
         .putHeaders(Header.Raw(CIString("X-Forwarded-For"), "172.16.0.10"))

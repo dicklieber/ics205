@@ -69,15 +69,16 @@ class UserAdminEndpointsTests extends munit.FunSuite:
         b <- r.as[String]
       yield (r, b)).unsafeRunSync()
       assertEquals(res.status, Status.Ok)
-      assert(body.contains("An initial admin user must be created."))
-      assert(body.contains("User Administration"))
-      assert(body.contains("No users found."))
+      assert(body.contains("Initial administrator setup"))
+      assert(body.contains("name=\"bootstrapToken\""))
+      assert(!body.contains("name=\"username\""))
     }
 
   test("POST /admin/users/create when no users exist creates initial admin user and redirects to /login"):
     withContext { (tempDir, userStore, _, passwordService, _, _, _, app) =>
       assert(!os.exists(tempDir / "admin" / "users.json"))
       val form = UrlForm(
+        "bootstrapToken" -> userStore.initialSetupToken.get,
         "username" -> "initialadmin",
         "password" -> "adminpass123",
         "confirmPassword" -> "adminpass123",
@@ -95,6 +96,45 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       assertEquals(created.role, Role.Admin)
       assertEquals(created.enabled, true)
       assert(passwordService.verify("adminpass123", created.passwordHash))
+    }
+
+  test("setup token gate redirects to admin creation and stops working after setup"):
+    withContext { (_, userStore, _, _, _, _, _, app) =>
+      val token = userStore.initialSetupToken.get
+      val invalid = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/setup"))
+        .withEntity(UrlForm("bootstrapToken" -> "wrong"))).unsafeRunSync()
+      assert(invalid.headers.get(CIString("Set-Cookie")).isEmpty)
+      val verified = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/setup"))
+        .withEntity(UrlForm("bootstrapToken" -> token))).unsafeRunSync()
+      assertEquals(verified.status, Status.SeeOther)
+      assertEquals(verified.headers.get(CIString("Location")).get.head.value, "/admin/users")
+      val setCookie = verified.headers.get(CIString("Set-Cookie")).get.head.value
+      assert(setCookie.toLowerCase.contains("httponly"))
+      assert(setCookie.toLowerCase.contains("samesite=lax"))
+      val cookie = Header.Raw(CIString("Cookie"), setCookie.takeWhile(_ != ';'))
+      val page = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/admin/users")).putHeaders(cookie)).unsafeRunSync()
+      val body = page.as[String].unsafeRunSync()
+      assert(body.contains("name=\"username\""))
+      assert(!body.contains(token))
+      val created = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+        .putHeaders(cookie)
+        .withEntity(UrlForm("username" -> "first", "password" -> "password123", "confirmPassword" -> "password123"))).unsafeRunSync()
+      assertEquals(created.status, Status.SeeOther)
+      assertEquals(userStore.all().size, 1)
+      val replay = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/setup"))
+        .withEntity(UrlForm("bootstrapToken" -> token))).unsafeRunSync()
+      assert(replay.headers.get(CIString("Set-Cookie")).isEmpty)
+      val locked = app.run(Request[IO](Method.GET, Uri.unsafeFromString("/admin/users")).putHeaders(cookie)).unsafeRunSync()
+      assertEquals(locked.status, Status.Unauthorized)
+    }
+
+  test("initial setup rejects absent and incorrect bootstrap tokens"):
+    withContext { (_, userStore, _, _, _, _, _, app) =>
+      for token <- Seq("", "incorrect") do
+        val response = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+          .withEntity(UrlForm("username" -> "attacker", "password" -> "password123", "confirmPassword" -> "password123", "bootstrapToken" -> token))).unsafeRunSync()
+        assertEquals(response.status, Status.Forbidden)
+        assertEquals(userStore.all(), Seq.empty)
     }
 
   test("GET /admin/users with user lacking EditUsers permission returns 403 Forbidden"):
