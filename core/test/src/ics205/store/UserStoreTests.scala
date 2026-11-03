@@ -155,7 +155,7 @@ class UserStoreTests extends munit.FunSuite:
     withDirectory { dir =>
       val store = new UserStore(helper(dir), AuthConfig())
       val token = store.initialSetupToken.get
-      assert(token.matches("[0-9a-f]{64}"))
+      assert(token.matches("[A-Za-z0-9_-]{16}"))
       assert(store.initializeAdmin(testUser, "").isLeft)
       assert(store.initializeAdmin(testUser, "wrong").isLeft)
       assertEquals(store.all(), Seq.empty)

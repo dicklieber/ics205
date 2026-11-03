@@ -38,9 +38,9 @@ import java.nio.file.NoSuchFileException
   private var bootstrapToken: Option[String] =
     if users.nonEmpty then None
     else
-      val bytes = new Array[Byte](32)
+      val bytes = new Array[Byte](12)
       new java.security.SecureRandom().nextBytes(bytes)
-      val token = java.util.HexFormat.of().formatHex(bytes)
+      val token = java.util.Base64.getUrlEncoder.withoutPadding().encodeToString(bytes)
       System.err.println(s"Initial ICS-205 setup token: $token\nSave this token and enter it on your initial connection to create the administrator. It stops working once the first user is created. Restart before setup to generate a new token.")
       Some(token)
 
