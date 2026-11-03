@@ -138,9 +138,15 @@ class IndexEndpoints @Inject() (
         val targetName = data.get("eventId").filter(_.nonEmpty)
           .orElse(data.get("eventName").filter(_.nonEmpty))
           .orElse(eventQueryOpt.filter(_.nonEmpty))
-        val (currentEventOpt, authorizedEvents) = resolveEvent(targetName, user)
+        val (_, authorizedEvents) = resolveEvent(None, user)
+        val currentEventOpt = targetName match
+          case Some(target) => store.findByName(target)
+          case None => resolveEvent(None, user)._1
+        val isMetadata = data.get("formType").contains("metadata")
 
         currentEventOpt match
+          case None if isMetadata || targetName.isDefined =>
+            (StatusCode.NotFound, None, "Event not found.")
           case None =>
             if !user.hasPermission(Permission.EditPlans) then
               (
@@ -208,6 +214,25 @@ class IndexEndpoints @Inject() (
                   availableEvents = authorizedEvents.map(_.eventName)
                 )
               )
+            else if isMetadata then
+              val newName = data.getOrElse("newEventName", currentEvent.eventName).trim
+              val incidentName = data.getOrElse("incidentName", "").trim
+              if newName.isEmpty then
+                (StatusCode.SeeOther, Some(s"/events/metadata?name=${encode(currentEvent.id)}&err=Event+name+cannot+be+empty"), "")
+              else
+                val updatedEvent = currentEvent.copy(
+                  ics205 = currentEvent.ics205.copy(incidentName = if incidentName.nonEmpty then incidentName else newName),
+                  group = GroupHelper.cleanGroupName(data.getOrElse("group", currentEvent.group))
+                )
+                store.save(updatedEvent, user)
+                Ics205ActivityLogger.logUpdate(
+                  username = user.username,
+                  eventName = updatedEvent.eventName,
+                  incidentName = Option(updatedEvent.ics205.incidentName).filter(_.nonEmpty),
+                  channelCount = Some(updatedEvent.ics205.channels.size),
+                  action = Some("metadata")
+                )
+                (StatusCode.SeeOther, Some(s"/events/metadata?name=${encode(currentEvent.id)}&msg=Metadata+updated+successfully"), "")
             else
               Ics205Form.decode(data, currentEvent.ics205) match
                 case Left(message) =>
@@ -439,52 +464,6 @@ class IndexEndpoints @Inject() (
       }
     }
 
-  private val postMetadataEndpoint: ServerEndpoint[Any, IO] = security.secureEndpoint
-    .post
-    .in("events" / "metadata")
-    .in(formBody[Map[String, String]])
-    .out(statusCode.and(header[String]("Location")).and(htmlBodyUtf8))
-    .serverLogicSuccess { user => formData =>
-      IO.blocking {
-        val origTarget = formData.get("eventId").filter(_.nonEmpty)
-          .orElse(formData.get("originalEventName").filter(_.nonEmpty))
-          .orElse(formData.get("eventName").filter(_.nonEmpty))
-          .getOrElse("").trim
-        val newName = formData.getOrElse("newEventName", origTarget).trim
-        val incidentName = formData.getOrElse("incidentName", "").trim
-        val group = GroupHelper.cleanGroupName(formData.getOrElse("group", "Default"))
-
-        store.findByName(origTarget) match
-          case None =>
-            (StatusCode.SeeOther, "/events?err=Event+not+found", "")
-          case Some(ev) =>
-            if !ev.editableBy(user) then
-              (StatusCode.Forbidden, "/events", "You do not have permission to edit metadata for this event.")
-            else if newName.isEmpty then
-              (StatusCode.SeeOther, s"/events/metadata?name=${encode(ev.id)}&err=Event+name+cannot+be+empty", "")
-            else
-              val updatedPlan = ev.ics205.copy(incidentName = if incidentName.nonEmpty then incidentName else newName)
-              val finalEvent = if !newName.equalsIgnoreCase(origTarget) && ev.id.equalsIgnoreCase(origTarget) then
-                store.deleteEvent(origTarget, user)
-                ev.copy(id = newName, ics205 = updatedPlan, group = group)
-              else
-                ev.copy(ics205 = updatedPlan, group = group)
-
-              store.save(finalEvent, user)
-              if !newName.equalsIgnoreCase(origTarget) && user.session.currentIcs205.contains(origTarget) then
-                sessionStore.save(user.session.copy(currentIcs205 = Some(finalEvent.id)))
-
-              Ics205ActivityLogger.logUpdate(
-                username = user.user.username,
-                eventName = finalEvent.eventName,
-                incidentName = Option(finalEvent.ics205.incidentName).filter(_.nonEmpty),
-                channelCount = Some(finalEvent.ics205.channels.size),
-                action = Some("metadata")
-              )
-              (StatusCode.SeeOther, s"/events/metadata?name=${encode(finalEvent.id)}&msg=Metadata+updated+successfully", "")
-      }
-    }
-
   private val exportEventEndpoint: ServerEndpoint[Any, IO] = security.secureEndpoint
     .get
     .in("events" / "export")
@@ -637,7 +616,6 @@ class IndexEndpoints @Inject() (
     selectEventEndpoint,
     createEventEndpoint,
     getMetadataEndpoint,
-    postMetadataEndpoint,
     deleteEventEndpoint,
     duplicateEventEndpoint,
     exportEventEndpoint,

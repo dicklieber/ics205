@@ -70,7 +70,8 @@ object EventMetadataPage:
               div(cls := "alert alert-error", attr("role") := "alert")(err)
             ),
 
-            form(method := "post", action := "/events/metadata")(
+            form(method := "post", action := "/")(
+              input(tpe := "hidden", name := "formType", value := "metadata"),
               input(tpe := "hidden", name := "eventId", value := event.id),
               input(tpe := "hidden", name := "originalEventName", value := event.eventName),
               input(tpe := "hidden", name := "eventName", value := event.eventName),

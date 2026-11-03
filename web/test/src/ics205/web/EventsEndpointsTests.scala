@@ -99,7 +99,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       assertEquals(sessionStore.get(session.id).flatMap(_.currentIcs205), Some("Campout"))
     }
 
-  test("GET and POST /events/metadata manages event permissions"):
+  test("GET metadata and shared POST manage event permissions"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
       val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
@@ -117,10 +117,11 @@ class EventsEndpointsTests extends munit.FunSuite:
       assert(getBody.contains("Airshow"))
 
       // POST metadata to update event group with capitalization normalization
-      val postReq = Request[IO](Method.POST, Uri.unsafeFromString("/events/metadata"))
+      val postReq = Request[IO](Method.POST, Uri.unsafeFromString("/"))
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}"))
         .withEntity(UrlForm(
-          "originalEventName" -> "Airshow",
+          "formType" -> "metadata",
+          "eventId" -> "Airshow",
           "newEventName" -> "Airshow",
           "incidentName" -> "Annual Airshow",
           "group" -> "air operations"
@@ -134,7 +135,7 @@ class EventsEndpointsTests extends munit.FunSuite:
       assertEquals(updatedEvent.ics205.incidentName, "Annual Airshow")
     }
 
-  test("POST /events/metadata renames event and updates incident name"):
+  test("shared POST updates metadata while preserving event ID"):
     withTestContext { (_, store, userStore, sessionStore, _, routes) =>
       val passwordService = new ScalaPassPasswordService
       val admin = userStore.add(User("admin", passwordService.hash("pass"), Role.Admin, enabled = true, id = "u-admin")).toOption.get
@@ -142,10 +143,11 @@ class EventsEndpointsTests extends munit.FunSuite:
 
       store.save(Ics205Plan("OldEvent", Ics205(incidentName = "Old Incident", operationalPeriod = OperationalPeriod(), channels = Seq.empty)))
 
-      val postReq = Request[IO](Method.POST, Uri.unsafeFromString("/events/metadata"))
+      val postReq = Request[IO](Method.POST, Uri.unsafeFromString("/"))
         .putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Cookie"), s"session=${session.id}"))
         .withEntity(UrlForm(
-          "originalEventName" -> "OldEvent",
+          "formType" -> "metadata",
+          "eventId" -> "OldEvent",
           "newEventName" -> "NewEvent",
           "incidentName" -> "New Incident"
         ))
@@ -153,13 +155,77 @@ class EventsEndpointsTests extends munit.FunSuite:
       val postRes = routes.orNotFound.run(postReq).unsafeRunSync()
       assertEquals(postRes.status, Status.SeeOther)
       val location = postRes.headers.get(org.typelevel.ci.CIString("Location")).map(_.head.value).getOrElse("")
-      assert(location.contains("name=NewEvent"))
+      assert(location.contains("name=OldEvent"))
 
-      assertEquals(store.getEvent("OldEvent"), None)
-      val renamed = store.getEvent("NewEvent")
+      assertEquals(store.getEvent("NewEvent"), None)
+      val renamed = store.getEvent("OldEvent")
       assert(renamed.isDefined)
       assertEquals(renamed.get.eventName, "New Incident")
       assertEquals(renamed.get.ics205.incidentName, "New Incident")
+    }
+
+  test("metadata rename cannot overwrite an event in another group"):
+    withTestContext { (tempDir, store, userStore, sessionStore, _, routes) =>
+      val editor = userStore.add(User("editor", "unused", Role.Editor, groups = Set("Ares Ops"))).toOption.get
+      val session = sessionStore.create(editor.id)
+      val source = Ics205Plan("source-id", Ics205(incidentName = "Source", operationalPeriod = OperationalPeriod(), channels = Seq.empty, specialInstructions = "Preserve these instructions"), group = "Ares Ops")
+      val protectedEvent = Ics205Plan("protected-id", Ics205(incidentName = "Protected", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Other Group")
+      store.save(source)
+      store.save(protectedEvent)
+      sessionStore.save(session.copy(currentIcs205 = Some(source.id)))
+      val protectedPath = tempDir / "events" / protectedEvent.fileName
+      val originalBytes = os.read.bytes(protectedPath).toSeq
+      val backupDir = tempDir / "events" / source.id / "bak"
+      os.makeDir.all(backupDir)
+      os.write(backupDir / "existing-backup", "preserve me")
+
+      val response = routes.orNotFound.run(
+        Request[IO](Method.POST, Uri.unsafeFromString("/"))
+          .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+          .withEntity(UrlForm(
+            "formType" -> "metadata",
+            "eventId" -> source.id,
+            "newEventName" -> protectedEvent.id,
+            "incidentName" -> "Renamed source",
+            "group" -> source.group
+          ))
+      ).unsafeRunSync()
+
+      assertEquals(response.status, Status.SeeOther)
+      assertEquals(store.getEvent(protectedEvent.id), Some(protectedEvent))
+      assertEquals(os.read.bytes(protectedPath).toSeq, originalBytes)
+      assertEquals(store.getEvent(source.id), Some(source.copy(ics205 = source.ics205.copy(incidentName = "Renamed source"))))
+      assertEquals(store.events().size, 2)
+      assertEquals(sessionStore.get(session.id).flatMap(_.currentIcs205), Some(source.id))
+      assertEquals(os.read(backupDir / "existing-backup"), "preserve me")
+      val reloaded = new Ics205Store(new FileHelper(tempDir))
+      assertEquals(reloaded.getEvent(protectedEvent.id), Some(protectedEvent))
+      assertEquals(reloaded.getEvent(source.id), store.getEvent(source.id))
+    }
+
+  test("shared metadata POST rejects unauthorized and unknown targets without modifying another event"):
+    withTestContext { (_, store, userStore, sessionStore, _, routes) =>
+      val editor = userStore.add(User("editor", "unused", Role.Editor, groups = Set("Allowed"))).toOption.get
+      val session = sessionStore.create(editor.id)
+      val allowed = Ics205Plan("allowed-id", Ics205(incidentName = "Allowed", operationalPeriod = OperationalPeriod(), channels = Seq.empty), group = "Allowed")
+      val protectedEvent = allowed.copy(id = "protected-id", group = "Other")
+      store.save(allowed)
+      store.save(protectedEvent)
+      def submit(target: String) = routes.orNotFound.run(
+        Request[IO](Method.POST, Uri.unsafeFromString("/"))
+          .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+          .withEntity(UrlForm("formType" -> "metadata", "eventId" -> target, "newEventName" -> "Changed"))
+      ).unsafeRunSync()
+      assertEquals(submit(protectedEvent.id).status, Status.Forbidden)
+      assertEquals(submit("missing-id").status, Status.NotFound)
+      assertEquals(store.getEvent(allowed.id), Some(allowed))
+      assertEquals(store.getEvent(protectedEvent.id), Some(protectedEvent))
+      val obsoleteRoute = routes.orNotFound.run(
+        Request[IO](Method.POST, Uri.unsafeFromString("/events/metadata"))
+          .putHeaders(org.http4s.Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+          .withEntity(UrlForm("eventId" -> allowed.id))
+      ).unsafeRunSync()
+      assertEquals(obsoleteRoute.status, Status.MethodNotAllowed)
     }
 
   test("Event permissions are checked directly on users"):
