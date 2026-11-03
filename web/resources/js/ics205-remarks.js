@@ -13,5 +13,6 @@
   });
   new MutationObserver(fitRemarks).observe(rows, { childList: true });
   new ResizeObserver(fitRemarks).observe(rows.closest('table').parentElement);
+  rows.closest('table').addEventListener('columnresize', fitRemarks);
   fitRemarks();
 })();

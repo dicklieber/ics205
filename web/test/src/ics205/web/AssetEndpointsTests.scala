@@ -83,7 +83,8 @@ class AssetEndpointsTests extends munit.FunSuite:
     Seq(
       "ics205-export.js" -> "getEditorIcs205",
       "ics205-editor.js" -> "applyChannelNumbers",
-      "ics205-remarks.js" -> "fitRemarks"
+      "ics205-remarks.js" -> "fitRemarks",
+      "table-resize.js" -> "column-resize-handle"
     ).foreach { (fileName, expected) =>
       val req = Request[IO](Method.GET, Uri.unsafeFromString(s"/js/$fileName"))
       val resp = app.run(req).unsafeRunSync()

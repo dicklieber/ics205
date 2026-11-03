@@ -284,7 +284,8 @@ object NavigationBar:
           )
         )
       ),
-      aboutDialog(fileHelper, startTime, currentUser, zoneId)
+      aboutDialog(fileHelper, startTime, currentUser, zoneId),
+      script(src := "/js/table-resize.js", defer := "defer")
     )
 
   private val zBuildTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss 'Z'").withZone(ZoneOffset.UTC)

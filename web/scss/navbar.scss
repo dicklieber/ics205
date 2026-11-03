@@ -296,20 +296,22 @@
   }
 
   dt {
-    width: 32%;
-    min-width: 220px;
+    flex: 0 0 32%;
+    min-width: 0;
+    box-sizing: border-box;
     font-weight: 500;
     color: vars.$color-text-muted;
     margin: 0;
     padding: 6px 10px;
     border-right: 1px solid vars.$color-border;
     background-color: vars.$color-bg-subtle;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   dd {
-    width: 68%;
     flex: 1;
+    min-width: 0;
     margin: 0;
     padding: 6px 10px;
     color: vars.$color-text-main;
@@ -358,4 +360,57 @@
   .about-dialog {
     display: none !important;
   }
+}
+
+/* One shared control for every interactive table, including About field lists. */
+@media screen {
+  .column-resize-cell {
+    position: relative;
+  }
+
+  .column-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    bottom: 0;
+    width: 9px;
+    z-index: 2;
+    cursor: col-resize;
+    touch-action: none;
+
+    &:hover,
+    &:focus-visible {
+      background: vars.$color-primary;
+      outline: 2px solid vars.$color-primary;
+    }
+  }
+
+  .resizing-columns,
+  .resizing-columns * {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
+
+  table.columns-resized {
+    table-layout: fixed;
+
+    > colgroup:not(.resize-columns) { display: none; }
+    > .resize-columns > col { width: var(--column-width); }
+    th, td {
+      min-width: 0;
+      max-width: none;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    th { width: auto !important; }
+  }
+
+  .about-field dt {
+    flex-basis: var(--label-width, 32%);
+  }
+}
+
+@media print {
+  .column-resize-handle,
+  .resize-columns { display: none !important; }
 }
