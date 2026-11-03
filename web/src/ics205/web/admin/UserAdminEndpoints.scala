@@ -222,7 +222,7 @@ class UserAdminEndpoints @Inject()(
                       logger.info(s"Initial admin user '$username' (id: '${newUser.id}', role: ${newUser.role}, enabled: ${newUser.enabled}) created from IP $ip")
                       Right((StatusCode.SeeOther, s"/login?msg=${urlEncode(s"User '$username' created successfully. Please log in.")}"))
                     else
-                      val adminName = adminOpt.map(_.user).getOrElse("unknown")
+                      val adminName = adminOpt.map(_.username).getOrElse("unknown")
                       logger.info(s"Admin '$adminName' created user '$username' (id: '${newUser.id}', role: ${newUser.role}, groups: [${userGroups.mkString(",")}], enabled: ${newUser.enabled}) from IP $ip")
                       Right((StatusCode.SeeOther, s"/admin/users?msg=${urlEncode(s"User '$username' created successfully.")}"))
                   case Left(err) =>
@@ -282,7 +282,7 @@ class UserAdminEndpoints @Inject()(
                 userStore.save(updated) match
                   case Right(_) =>
                     val changesSummary = if changedFields.nonEmpty then changedFields.mkString(", ") else "none"
-                    logger.info(s"Admin '${adminUser.user}' updated user '${existing.username}' (id: '$id') from IP $ip - changed fields: [$changesSummary]")
+                    logger.info(s"Admin '${adminUser.username}' updated user '${existing.username}' (id: '$id') from IP $ip - changed fields: [$changesSummary]")
                     if password.nonEmpty || existing.role != role || !enabled then
                       sessionStore.deleteAllForUser(existing.id)
                     (StatusCode.SeeOther, s"/admin/users?msg=${urlEncode(s"User '$username' updated successfully.")}")
@@ -307,7 +307,7 @@ class UserAdminEndpoints @Inject()(
             sessionStore.deleteAllForUser(id)
             userStore.delete(id)
             val username = userOpt.map(_.username).getOrElse(id)
-            logger.info(s"Admin '${adminUser.user}' deleted user '$username' (id: '$id') from IP $ip")
+            logger.info(s"Admin '${adminUser.username}' deleted user '$username' (id: '$id') from IP $ip")
             (StatusCode.SeeOther, s"/admin/users?msg=${urlEncode("User deleted successfully.")}")
           else
             (StatusCode.SeeOther, s"/admin/users?err=${urlEncode("User ID is missing.")}")

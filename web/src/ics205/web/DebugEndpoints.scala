@@ -55,7 +55,7 @@ class DebugEndpoints @Inject()(
       .out(statusCode.and(header[Option[String]]("Location")).and(stringBody))
       .serverLogicSuccess { currentUser => (returnUrlOpt, refererOpt) =>
         IO.blocking {
-          logger.info(s"User '${currentUser.user}' requested reloading all files.")
+          logger.info(s"User '${currentUser.username}' requested reloading all files.")
           store.reload()
           userStore.reload()
           sessionStore.reload()
@@ -74,7 +74,7 @@ class DebugEndpoints @Inject()(
       .out(statusCode.and(header[Option[String]]("Location")).and(stringBody))
       .serverLogicSuccess { currentUser => (returnUrlOpt, refererOpt) =>
         IO.blocking {
-          logger.info(s"User '${currentUser.user}' requested reloading all files via POST.")
+          logger.info(s"User '${currentUser.username}' requested reloading all files via POST.")
           store.reload()
           userStore.reload()
           sessionStore.reload()
@@ -95,7 +95,7 @@ class DebugEndpoints @Inject()(
         .and(byteArrayBody))
       .serverLogicSuccess { currentUser => _ =>
         IO.blocking {
-          logger.info(s"User '${currentUser.user}' requested downloading zip of FileHelper.directory (${fileHelper.directory}).")
+          logger.info(s"User '${currentUser.username}' requested downloading zip of FileHelper.directory (${fileHelper.directory}).")
           val zipBytes = fileHelper.zipDirectory()
           val zipFileName = s"ics205-${UtcFormatter.format()}.zip"
           (

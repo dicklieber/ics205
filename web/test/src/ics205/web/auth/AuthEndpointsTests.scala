@@ -187,7 +187,7 @@ class AuthEndpointsTests extends munit.FunSuite:
       assert(cookieStr.contains("Max-Age=0") || cookieStr.contains("Expires="))
     }
 
-  test("successful login returns 200, sets session cookie with proper flags, and returns AuthenticatedUser"):
+  test("successful login returns public identity and keeps password hash and session token out of JSON"):
     withContext { (_, userStore, sessionStore, passwordService, _, _, _, app) =>
       val hash = passwordService.hash("mypassword")
       userStore.add(User("alice", hash, Role.Admin, enabled = true, id = "u1"))
@@ -212,8 +212,13 @@ class AuthEndpointsTests extends munit.FunSuite:
       assert(cookieStr.contains("Path=/"))
 
       val json = parse(body).toOption.get
-      assertEquals(json.hcursor.downField("user").downField("user").downField("username").as[String], Right("alice"))
-      assert(json.hcursor.downField("user").downField("user").downField("role").as[String] == Right("Admin"))
+      assertEquals(json.hcursor.downField("user").downField("username").as[String], Right("alice"))
+      assert(json.hcursor.downField("user").downField("role").as[String] == Right("Admin"))
+      assertEquals(json.hcursor.downField("user").downField("id").as[String], Right("u1"))
+      assert(!body.contains("passwordHash"))
+      assert(!body.contains(userStore.findByUsername("alice").get.passwordHash))
+      assert(!body.contains(sessionStore.all().head.id))
+      assert(!body.contains("session"))
     }
 
   test("failed login with bad username or password returns 401 without cookie"):

@@ -66,6 +66,10 @@ class AuthLoggingTests extends munit.FunSuite:
       val httpApp = Http4sServerInterpreter[IO]().toRoutes(authEndpoints.endpoints ++ adminEndpoints.endpoints).orNotFound
 
       test(userStore, sessionStore, passwordService, authService, authEndpoints, adminEndpoints, httpApp, appender.events)
+      val messages = appender.events.map(_.getMessage.getFormattedMessage).mkString("\n")
+      assert(!messages.contains("$argon2"), "Password hashes must not appear in logs")
+      userStore.all().foreach(user => assert(!messages.contains(user.passwordHash), "Stored password hash must not appear in logs"))
+      sessionStore.all().foreach(session => assert(!messages.contains(session.id), "Session token must not appear in logs"))
     finally
       config.getRootLogger.removeAppender("AuthLoggingTestAppender")
       ctx.updateLoggers()
@@ -315,4 +319,31 @@ class AuthLoggingTests extends munit.FunSuite:
       assert(!msg2.contains("password: changed"), s"Password should not be listed as changed in: $msg2")
       assert(msg2.contains("role"), s"Expected role change in: $msg2")
       assert(msg2.contains("enabled"), s"Expected enabled change in: $msg2")
+    }
+
+  test("JSON login logs identity without hashes, session tokens, or submitted passwords"):
+    withContext { (userStore, _, passwordService, _, _, _, app, events) =>
+      val password = "json-login-secret123"
+      userStore.add(User("json-user", passwordService.hash(password), Role.Admin))
+      events.clear()
+      val response = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/login"))
+        .withEntity(s"""{"username":"json-user","password":"$password"}""")
+        .putHeaders(Header.Raw(CIString("Content-Type"), "application/json"))).unsafeRunSync()
+      assertEquals(response.status, Status.Ok)
+      val messages = events.map(_.getMessage.getFormattedMessage).mkString("\n")
+      assert(messages.contains("Login successful for user 'json-user'"))
+      assert(messages.contains("role: Admin"))
+      assert(!messages.contains(password))
+    }
+
+  test("invalid JSON login does not log the submitted body"):
+    withContext { (_, _, _, _, _, _, app, events) =>
+      val secret = "malformed-login-secret123"
+      val response = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/login"))
+        .withEntity(s"""{"username":"alice","password":"$secret" invalid}""")
+        .putHeaders(Header.Raw(CIString("Content-Type"), "application/json"))).unsafeRunSync()
+      assertEquals(response.status, Status.BadRequest)
+      val messages = events.map(_.getMessage.getFormattedMessage).mkString("\n")
+      assert(messages.contains("Invalid JSON"))
+      assert(!messages.contains(secret))
     }

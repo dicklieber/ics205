@@ -188,6 +188,8 @@ User and session databases are stored in the application data directory (resolve
 
 Session lifetime is configurable via `auth.sessionLifetime` (defaults to 24 hours). Expired sessions are cleaned opportunistically on access and filtered on application startup.
 
+JSON login responses contain only public user identity fields (`id`, `username`, `role`, and `groups`) under `user`, plus a `message`. Password hashes and session details are excluded; the session token is returned through the HTTP-only session cookie.
+
 ### Cookie Behavior
 
 Session tokens are transmitted using an HTTP-only cookie named `session` (configurable via `auth.cookieName`):

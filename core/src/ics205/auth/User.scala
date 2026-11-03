@@ -33,6 +33,8 @@ case class User(
                  id: UserId = Ids.generateId(),
                  groups: Set[String] = Set.empty
 ) extends UserContext:
+  override def toString: String = s"User($username,[redacted],$role,$enabled,$id,$groups)"
+
   def hasPermission(permission: Permission): Boolean = role.hasPermission(permission)
 
   def canAccessGroup(groupName: String): Boolean =

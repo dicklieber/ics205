@@ -29,3 +29,11 @@ class UserTests extends munit.FunSuite:
     val sorted = users.sorted
 
     assertEquals(sorted.map(_.username), Seq("alice", "Bob", "charlie", "DAVID"))
+
+  test("User string representation redacts password hash without changing persistence"):
+    import io.circe.syntax.*
+    val user = User("alice", "sensitive-password-hash", Role.Admin)
+    assert(!user.toString.contains(user.passwordHash))
+    assert(!AuthenticatedUser(user).toString.contains(user.passwordHash))
+    assertEquals(user.asJson.hcursor.get[String]("passwordHash"), Right(user.passwordHash))
+    assertEquals(user.asJson.as[User], Right(user))

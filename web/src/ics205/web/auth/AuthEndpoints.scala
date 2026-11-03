@@ -20,7 +20,7 @@ package ics205.web.auth
 
 import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
-import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, PasswordService, ScalaPassPasswordService}
+import ics205.auth.{AuthConfig, AuthenticatedUser, AuthenticationService, PasswordService, Role, ScalaPassPasswordService}
 import ics205.store.{SessionStore, UserStore}
 import ics205.web.ApiEndpoints
 import ics205.web.util.RequestUtils
@@ -46,9 +46,16 @@ object LoginRequest:
   private given Configuration = Configuration.default.withDefaults
   given Codec.AsObject[LoginRequest] = ConfiguredCodec.derived[LoginRequest]
 
+/** Public login identity; persistence models and session secrets stay server-side. */
+case class LoginUser(id: String, username: String, role: Role, groups: Set[String])
+
+object LoginUser:
+  private given Configuration = Configuration.default
+  given Codec.AsObject[LoginUser] = ConfiguredCodec.derived[LoginUser]
+
 case class LoginResponse(
   message: String,
-  user: AuthenticatedUser
+  user: LoginUser
 )
 
 object LoginResponse:
@@ -147,8 +154,8 @@ class AuthEndpoints @Inject()(
           val isJson = contentType.exists(_.toLowerCase.contains("application/json"))
           if isJson then
             io.circe.parser.decode[LoginRequest](body) match
-              case Left(err) =>
-                logger.info(s"Login failed from IP $ip (User-Agent: $userAgent): Invalid JSON body - ${err.getMessage}")
+              case Left(_) =>
+                logger.info(s"Login failed from IP $ip (User-Agent: $userAgent): Invalid JSON body")
                 Left((StatusCode.BadRequest, None, Some("text/plain; charset=utf-8"), "Invalid JSON body"))
               case Right(req) =>
                 val username = req.username.trim
@@ -167,8 +174,8 @@ class AuthEndpoints @Inject()(
                     val cookieMeta = security.sessionCookieWithMeta(session.id)
                     authService.authenticateSession(session.id) match
                       case Right(authUser) =>
-                        logger.info(s"Login successful for user '${authUser.user}' (id: '${authUser.id}', role: ${authUser.session}) from IP $ip (User-Agent: $userAgent)")
-                        val respJson = LoginResponse("Login successful", authUser).asJson.noSpaces
+                        logger.info(s"Login successful for user '${authUser.username}' (id: '${authUser.id}', role: ${authUser.role}) from IP $ip (User-Agent: $userAgent)")
+                        val respJson = LoginResponse("Login successful", LoginUser(authUser.id, authUser.username, authUser.role, authUser.user.groups)).asJson.noSpaces
                         Right((StatusCode.Ok, None, List(cookieMeta), Some("application/json"), respJson))
                       case Left(err) =>
                         logger.info(s"Login failed for user '$username' from IP $ip (User-Agent: $userAgent): ${err.message}")
@@ -299,7 +306,7 @@ class AuthEndpoints @Inject()(
                             else
                               val newHash = passwordService.hash(newPassword)
                               userStore.save(storedUser.copy(passwordHash = newHash))
-                              logger.info(s"User '${authUser.user}' (id: '${authUser.id}') changed their password from IP $ip")
+                              logger.info(s"User '${authUser.username}' (id: '${authUser.id}') changed their password from IP $ip")
                               val respJson = ChangePasswordResponse("Password changed successfully.").asJson.noSpaces
                               Right((StatusCode.Ok, None, Some("application/json"), respJson))
                       else
@@ -321,7 +328,7 @@ class AuthEndpoints @Inject()(
                         else
                           val newHash = passwordService.hash(newPassword)
                           userStore.save(storedUser.copy(passwordHash = newHash))
-                          logger.info(s"User '${authUser.user}' (id: '${authUser.id}') changed their password from IP $ip")
+                          logger.info(s"User '${authUser.username}' (id: '${authUser.id}') changed their password from IP $ip")
                           Right((StatusCode.SeeOther, Some(s"/change-password?msg=${urlEncode("Password changed successfully.")}"), None, ""))
                     case None =>
                       if isJson then
