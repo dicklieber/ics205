@@ -192,6 +192,8 @@ A successful password change revokes every session for that user, including the 
 
 Initial-admin creation, adding users, and editing users share one form and `POST /admin/users` handler. Validation failures return the populated form; password fields are cleared. Initial setup requires its setup token, while subsequent changes require an authenticated administrator. The separate `/admin/users/setup` step verifies the initial token before showing the shared form.
 
+Login attempts are limited to 5 per account and 30 per connection IP address in a one-minute window. Both form and JSON logins share the limits; blocked requests return HTTP 429 and a `Retry-After` header before password verification. Limits include successful attempts and expire automatically. Only the connection IP is trusted for throttling, so clients behind a reverse proxy share its IP budget. Counters are bounded and kept in memory per server process; restarting resets them, and multiple server instances have independent limits.
+
 JSON login responses contain only public user identity fields (`id`, `username`, `role`, and `groups`) under `user`, plus a `message`. Password hashes and session details are excluded; the session token is returned through the HTTP-only session cookie.
 
 ### Cookie Behavior

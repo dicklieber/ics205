@@ -607,6 +607,46 @@ class AuthEndpointsTests extends munit.FunSuite:
         assert(auth.authenticateSession(otherDevice.id).isRight)
       }
 
+  test("login throttles before password verification across JSON, forms, username aliases, and spoofed IP headers"):
+    withContext { (_, userStore, sessionStore, _, auth, security, _, _) =>
+      var checks = 0
+      val passwords = new PasswordService:
+        def hash(password: String): String = "hash"
+        def verify(password: String, hash: String): Boolean =
+          checks += 1
+          false
+      userStore.add(User("I-user", "hash", Role.Viewer, id = "limited-user"))
+      val endpoints = new AuthEndpoints(auth, sessionStore, security, security.config, userStore, passwords)
+      val app = Http4sServerInterpreter[IO]().toRoutes(endpoints.endpoints).orNotFound
+      for n <- 1 to 6 do
+        val username = if n % 2 == 0 then "ı-user" else "I-user"
+        val request = Request[IO](Method.POST, Uri.unsafeFromString("/login"))
+        val encoded = if n % 2 == 0 then request
+          .withEntity(io.circe.Json.obj("username" -> io.circe.Json.fromString(username), "password" -> io.circe.Json.fromString("wrong")).noSpaces)
+          .putHeaders(Header.Raw(CIString("Content-Type"), "application/json"))
+        else request.withEntity(UrlForm("username" -> username, "password" -> "wrong"))
+        val response = app.run(encoded.putHeaders(Header.Raw(CIString("X-Forwarded-For"), s"192.0.2.$n"))).unsafeRunSync()
+        if n <= 5 then assert(response.status != Status.TooManyRequests)
+        else
+          assertEquals(response.status, Status.TooManyRequests)
+          assert(response.headers.get(CIString("Retry-After")).isDefined)
+          assert(response.headers.get(CIString("Set-Cookie")).isEmpty)
+      assertEquals(checks, 5)
+      assertEquals(sessionStore.all().size, 0)
+    }
+
+  test("peer login limit prevents rotating usernames and forwarded addresses from bypassing throttling"):
+    withContext { (_, _, _, _, _, _, _, app) =>
+      for n <- 1 to 31 do
+        val response = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/login"))
+          .withEntity(UrlForm("username" -> s"unknown$n", "password" -> "wrong"))
+          .putHeaders(Header.Raw(CIString("X-Forwarded-For"), s"192.0.2.$n"), Header.Raw(CIString("X-Real-IP"), s"198.51.100.$n"))).unsafeRunSync()
+        assertEquals(response.status, if n <= 30 then Status.SeeOther else Status.TooManyRequests)
+        if n == 31 then
+          assert(response.as[String].unsafeRunSync().contains("Too many login attempts"))
+          assert(response.headers.get(CIString("Retry-After")).isDefined)
+    }
+
 class TestProtectedEndpoints @Inject()(security: AuthSecurity) extends ApiEndpoints:
   private val protectedEndpoint =
     security.secureEndpoint

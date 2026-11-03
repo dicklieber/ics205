@@ -139,82 +139,74 @@ class AuthEndpoints @Inject()(
         }
       }
 
+  private val loginRateLimiter = new LoginRateLimiter()
+
   private val loginPostEndpoint: ServerEndpoint[Any, IO] =
     endpoint.post
       .in("login")
       .in(extractFromRequest(identity))
       .in(header[Option[String]]("Content-Type"))
       .in(stringBody)
-      .errorOut(statusCode.and(header[Option[String]]("Location")).and(header[Option[String]]("Content-Type")).and(stringBody))
+      .errorOut(statusCode.and(header[Option[String]]("Location")).and(header[Option[String]]("Content-Type")).and(stringBody).and(header[Option[Long]]("Retry-After")))
       .out(statusCode.and(header[Option[String]]("Location")).and(setCookies).and(header[Option[String]]("Content-Type")).and(stringBody))
+      .out(header("Cache-Control", "no-store"))
       .serverLogic[IO] { (serverRequest, contentType, body) =>
         IO.blocking {
           val ip = RequestUtils.clientIp(serverRequest)
+          // Only the actual connection address is trusted; forwarded headers are client-controlled.
+          val peer = serverRequest.connectionInfo.remote.map { address =>
+            Option(address.getAddress).map(_.getHostAddress).getOrElse(address.getHostString)
+          }.getOrElse("unknown")
           val userAgent = serverRequest.header("User-Agent").getOrElse("unknown")
           val isJson = contentType.exists(_.toLowerCase.contains("application/json"))
-          if isJson then
-            io.circe.parser.decode[LoginRequest](body) match
-              case Left(_) =>
-                logger.info(s"Login failed from IP $ip (User-Agent: $userAgent): Invalid JSON body")
-                Left((StatusCode.BadRequest, None, Some("text/plain; charset=utf-8"), "Invalid JSON body"))
-              case Right(req) =>
-                val username = req.username.trim
-                userStore.findByUsername(username) match
-                  case None =>
-                    logger.info(s"Login failed for user '$username' from IP $ip (User-Agent: $userAgent): User does not exist")
-                    Left((StatusCode.Unauthorized, None, Some("text/plain; charset=utf-8"), "Invalid username or password"))
-                  case Some(user) if !user.enabled =>
-                    logger.info(s"Login failed for user '$username' (id: '${user.id}') from IP $ip (User-Agent: $userAgent): User is disabled")
-                    Left((StatusCode.Unauthorized, None, Some("text/plain; charset=utf-8"), "Invalid username or password"))
-                  case Some(user) if !passwordService.verify(req.password, user.passwordHash) =>
-                    logger.info(s"Login failed for user '$username' (id: '${user.id}') from IP $ip (User-Agent: $userAgent): Incorrect password")
-                    Left((StatusCode.Unauthorized, None, Some("text/plain; charset=utf-8"), "Invalid username or password"))
-                  case Some(user) =>
-                    val session = sessionStore.create(user.id)
-                    val cookieMeta = security.sessionCookieWithMeta(session.id)
-                    authService.authenticateSession(session.id) match
-                      case Right(authUser) =>
-                        logger.info(s"Login successful for user '${authUser.username}' (id: '${authUser.id}', role: ${authUser.role}) from IP $ip (User-Agent: $userAgent)")
-                        val respJson = LoginResponse("Login successful", LoginUser(authUser.id, authUser.username, authUser.role, authUser.user.groups)).asJson.noSpaces
-                        Right((StatusCode.Ok, None, List(cookieMeta), Some("application/json"), respJson))
-                      case Left(err) =>
-                        logger.info(s"Login failed for user '$username' from IP $ip (User-Agent: $userAgent): ${err.message}")
-                        Left((StatusCode(err.status), None, Some("text/plain; charset=utf-8"), err.message))
+          val parsed = if isJson then
+            io.circe.parser.decode[LoginRequest](body).map(req => (req, None)).left.map(_ => "Invalid JSON body")
           else
-            val formData = parseFormData(body)
-            val username = formData.getOrElse("username", "").trim
-            val password = formData.getOrElse("password", "")
-            val redirect = formData.get("redirect").flatMap(RequestUtils.localRedirect)
-            val redirectInfo = redirect.map(r => s", redirect: '$r'").getOrElse("")
-
-            if username.isEmpty || password.isEmpty then
-              logger.info(s"Login failed from IP $ip (User-Agent: $userAgent$redirectInfo): Empty username or password provided (username: '$username')")
-              val redirectParam = redirect.map(r => s"&redirect=${urlEncode(r)}").getOrElse("")
-              val target = s"/login?err=${urlEncode("Invalid username or password")}$redirectParam"
-              Left((StatusCode.SeeOther, Some(target), None, ""))
-            else
-              userStore.findByUsername(username) match
-                case None =>
-                  logger.info(s"Login failed for user '$username' from IP $ip (User-Agent: $userAgent$redirectInfo): User does not exist")
-                  val redirectParam = redirect.map(r => s"&redirect=${urlEncode(r)}").getOrElse("")
-                  val target = s"/login?err=${urlEncode("Invalid username or password")}$redirectParam"
-                  Left((StatusCode.SeeOther, Some(target), None, ""))
-                case Some(user) if !user.enabled =>
-                  logger.info(s"Login failed for user '$username' (id: '${user.id}') from IP $ip (User-Agent: $userAgent$redirectInfo): User is disabled")
-                  val redirectParam = redirect.map(r => s"&redirect=${urlEncode(r)}").getOrElse("")
-                  val target = s"/login?err=${urlEncode("Invalid username or password")}$redirectParam"
-                  Left((StatusCode.SeeOther, Some(target), None, ""))
-                case Some(user) if !passwordService.verify(password, user.passwordHash) =>
-                  logger.info(s"Login failed for user '$username' (id: '${user.id}') from IP $ip (User-Agent: $userAgent$redirectInfo): Incorrect password")
-                  val redirectParam = redirect.map(r => s"&redirect=${urlEncode(r)}").getOrElse("")
-                  val target = s"/login?err=${urlEncode("Invalid username or password")}$redirectParam"
-                  Left((StatusCode.SeeOther, Some(target), None, ""))
-                case Some(user) =>
-                  val session = sessionStore.create(user.id)
-                  val cookieMeta = security.sessionCookieWithMeta(session.id)
-                  val target = redirect.getOrElse("/")
-                  logger.info(s"Login successful for user '${user.username}' (id: '${user.id}', role: ${user.role}) from IP $ip (User-Agent: $userAgent$redirectInfo)")
-                  Right((StatusCode.SeeOther, Some(target), List(cookieMeta), None, ""))
+            scala.util.Try {
+              val data = parseFormData(body)
+              (LoginRequest(data.getOrElse("username", ""), data.getOrElse("password", "")), data.get("redirect").flatMap(RequestUtils.localRedirect))
+            }.toEither.left.map(_ => "Invalid form body")
+          val username = parsed.toOption.map(_._1.username.trim)
+          val storedUser = username.flatMap(userStore.findByUsername)
+          val account = storedUser.map(user => s"id:${user.id}").orElse(username.map(name => s"name:$name"))
+          loginRateLimiter.acquire(peer, account) match
+            case Some(waitSeconds) =>
+              val message = s"Too many login attempts. Please try again in $waitSeconds seconds."
+              logger.info(s"Login throttled from IP $ip (connection: $peer)")
+              val responseBody = if isJson then message else LoginPage.render(error = Some(message), redirect = parsed.toOption.flatMap(_._2))
+              Left((StatusCode.TooManyRequests, None, Some(if isJson then "text/plain; charset=utf-8" else "text/html; charset=utf-8"), responseBody, Some(waitSeconds)))
+            case None =>
+              parsed match
+                case Left(message) =>
+                  logger.info(s"Login failed from IP $ip (User-Agent: $userAgent): $message")
+                  Left((StatusCode.BadRequest, None, Some("text/plain; charset=utf-8"), message, None))
+                case Right((req, redirect)) =>
+                  val name = req.username.trim
+                  val failureReason =
+                    if name.isEmpty || req.password.isEmpty then Some("Empty username or password provided")
+                    else storedUser match
+                      case None => Some("User does not exist")
+                      case Some(user) if !user.enabled => Some("User is disabled")
+                      case Some(user) if !passwordService.verify(req.password, user.passwordHash) => Some("Incorrect password")
+                      case _ => None
+                  failureReason match
+                    case Some(reason) =>
+                      logger.info(s"Login failed for user '$name' from IP $ip (User-Agent: $userAgent): $reason")
+                      if isJson then
+                        Left((StatusCode.Unauthorized, None, Some("text/plain; charset=utf-8"), "Invalid username or password", None))
+                      else
+                        val redirectParam = redirect.map(r => s"&redirect=${urlEncode(r)}").getOrElse("")
+                        Left((StatusCode.SeeOther, Some(s"/login?err=${urlEncode("Invalid username or password")}$redirectParam"), None, "", None))
+                    case None =>
+                      val user = storedUser.get
+                      val session = sessionStore.create(user.id)
+                      val cookie = security.sessionCookieWithMeta(session.id)
+                      logger.info(s"Login successful for user '${user.username}' (id: '${user.id}', role: ${user.role}) from IP $ip (User-Agent: $userAgent)")
+                      if isJson then
+                        val json = LoginResponse("Login successful", LoginUser(user.id, user.username, user.role, user.groups)).asJson.noSpaces
+                        Right((StatusCode.Ok, None, List(cookie), Some("application/json"), json))
+                      else
+                        Right((StatusCode.SeeOther, Some(redirect.getOrElse("/")), List(cookie), None, ""))
         }
       }
 
