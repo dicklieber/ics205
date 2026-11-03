@@ -1,17 +1,17 @@
 /*
  * Copyright (c) 2026. Dick Lieber, WA9NNN
  *
- * This program is free software: you can redistribute it and/or modify 
- * it under the terms of the GNU General Public License as published by 
- * the Free Software Foundation, either version 3 of the License, or    
- * (at your option) any later version.                                  
- *                                                                      
- * This program is distributed in the hope that it will be useful,      
- * but WITHOUT ANY WARRANTY; without even the implied warranty of       
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the        
- * GNU General Public License for more details.                         
- *                                                                      
- * You should have received a copy of the GNU General Public License    
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
@@ -154,25 +154,27 @@ class UserAdminEndpoints @Inject()(
         }
       }
 
-  private val createUserEndpoint: ServerEndpoint[Any, IO] =
+  private val saveUserEndpoint: ServerEndpoint[Any, IO] =
     endpoint.post
-      .in("admin" / "users" / "create")
+      .in("admin" / "users")
       .in(extractFromRequest(identity))
       .in(cookie[Option[String]](security.config.cookieName))
       .in(cookie[Option[String]](setupCookieName))
       .in(formBody[Map[String, String]])
       .errorOut(statusCode.and(stringBody))
-      .out(statusCode.and(header[String]("Location")))
+      .out(statusCode.and(header[Option[String]]("Location")).and(htmlBodyUtf8))
+      .out(header("Cache-Control", "no-store"))
       .serverLogic[IO] { (serverRequest, sessionIdOpt, setupTokenOpt, formData) =>
         IO.blocking {
           val ip = RequestUtils.clientIp(serverRequest)
-          val users = userStore.all()
-          val isInitial = users.isEmpty
+          val editingId =
+            if formData.get("operation").contains("edit") || formData.contains("id") then Some(formData.getOrElse("id", ""))
+            else None
+          val isInitial = userStore.all().isEmpty
           val setupToken = setupTokenOpt.getOrElse(formData.getOrElse("bootstrapToken", ""))
-
           val authorized: Either[(StatusCode, String), Option[AuthenticatedUser]] =
             if isInitial then
-              if userStore.canBootstrap(setupToken) then Right(None)
+              if editingId.isEmpty && userStore.canBootstrap(setupToken) then Right(None)
               else Left((StatusCode.Forbidden, "Initial setup requires the valid token printed to the application console."))
             else
               sessionIdOpt match
@@ -191,103 +193,71 @@ class UserAdminEndpoints @Inject()(
               val username = formData.getOrElse("username", "").trim
               val password = formData.getOrElse("password", "")
               val confirmPassword = formData.getOrElse("confirmPassword", formData.getOrElse("confirm_password", ""))
-              val defaultRole = if isInitial then "admin" else "user"
-              val roleInput = formData.getOrElse("role", formData.getOrElse("roles", defaultRole)).trim
+              val roleInput = formData.getOrElse("role", formData.getOrElse("roles", "viewer")).trim
               val role = if isInitial then Role.Admin else Role.values.find(_.toString.equalsIgnoreCase(roleInput)).getOrElse(Role.Viewer)
-              val enabled = formData.get("enabled").contains("true") || isInitial
+              val enabled = isInitial || formData.get("enabled").contains("true")
               val userGroups = parseUserGroups(formData, role)
+              val existing = editingId.flatMap(userStore.findById)
 
-              if username.isEmpty then
-                Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Username cannot be empty.")}"))
-              else if password.isEmpty then
-                Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Password cannot be empty.")}"))
-              else if password.length < 8 then
-                Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Password must be at least 8 characters.")}"))
-              else if password != confirmPassword then
-                Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode("Passwords do not match.")}"))
-              else
-                val passwordHash = passwordService.hash(password)
-                val newUser = User(
-                  username = username,
-                  passwordHash = passwordHash,
-                  role = role,
-                  enabled = enabled,
-                  groups = userGroups
-                )
-                val result = if isInitial then userStore.initializeAdmin(newUser, setupToken)
-                  else userStore.add(newUser)
-                result match
-                  case Right(_) =>
-                    if isInitial then
-                      logger.info(s"Initial admin user '$username' (id: '${newUser.id}', role: ${newUser.role}, enabled: ${newUser.enabled}) created from IP $ip")
-                      Right((StatusCode.SeeOther, s"/login?msg=${urlEncode(s"User '$username' created successfully. Please log in.")}"))
-                    else
-                      val adminName = adminOpt.map(_.username).getOrElse("unknown")
-                      logger.info(s"Admin '$adminName' created user '$username' (id: '${newUser.id}', role: ${newUser.role}, groups: [${userGroups.mkString(",")}], enabled: ${newUser.enabled}) from IP $ip")
-                      Right((StatusCode.SeeOther, s"/admin/users?msg=${urlEncode(s"User '$username' created successfully.")}"))
-                  case Left(err) =>
-                    Right((StatusCode.SeeOther, s"/admin/users?err=${urlEncode(err)}"))
-        }
-      }
+              def failed(message: String, status: StatusCode = StatusCode.UnprocessableEntity): (StatusCode, Option[String], String) =
+                val users = userStore.all()
+                (status, None, UserAdminPage.render(
+                  currentUser = adminOpt,
+                  users = users,
+                  editingUserId = editingId,
+                  error = Some(message),
+                  knownGroups = GroupHelper.knownGroups(store.listEvents(), users),
+                  submitted = Some(formData -- Seq("password", "confirmPassword", "confirm_password", "bootstrapToken"))
+                ))
 
-  private val editUserEndpoint: ServerEndpoint[Any, IO] =
-    security.authorizedEndpoint(Permission.EditUsers)
-      .post
-      .in("admin" / "users" / "edit")
-      .in(extractFromRequest(identity))
-      .in(formBody[Map[String, String]])
-      .out(statusCode.and(header[String]("Location")))
-      .serverLogicSuccess { adminUser => (serverRequest, formData) =>
-        IO.blocking {
-          val ip = RequestUtils.clientIp(serverRequest)
-          val id = formData.getOrElse("id", "")
-          val username = formData.getOrElse("username", "").trim
-          val password = formData.getOrElse("password", "")
-          val confirmPassword = formData.getOrElse("confirmPassword", formData.getOrElse("confirm_password", ""))
-          val roleInput = formData.getOrElse("role", formData.getOrElse("roles", "user")).trim
-          val role = Role.values.find(_.toString.equalsIgnoreCase(roleInput)).getOrElse(Role.Viewer)
-          val enabled = formData.get("enabled").contains("true")
-          val userGroups = parseUserGroups(formData, role)
+              val validationError =
+                if editingId.contains("") then Some("User ID is missing.")
+                else if editingId.isDefined && existing.isEmpty then Some("User not found.")
+                else if username.isEmpty then Some("Username cannot be empty.")
+                else if editingId.isEmpty && password.isEmpty then Some("Password cannot be empty.")
+                else if password.nonEmpty && password.length < 8 then Some("Password must be at least 8 characters.")
+                else if password != confirmPassword then Some("Passwords do not match.")
+                else None
 
-          if id.isEmpty then
-            (StatusCode.SeeOther, s"/admin/users?err=${urlEncode("User ID is missing.")}")
-          else if username.isEmpty then
-            (StatusCode.SeeOther, s"/admin/users?edit=${urlEncode(id)}&err=${urlEncode("Username cannot be empty.")}")
-          else if password.nonEmpty && password.length < 8 then
-            (StatusCode.SeeOther, s"/admin/users?edit=${urlEncode(id)}&err=${urlEncode("Password must be at least 8 characters.")}")
-          else if (password.nonEmpty || confirmPassword.nonEmpty) && password != confirmPassword then
-            (StatusCode.SeeOther, s"/admin/users?edit=${urlEncode(id)}&err=${urlEncode("Passwords do not match.")}")
-          else
-            userStore.findById(id) match
-              case None =>
-                (StatusCode.SeeOther, s"/admin/users?err=${urlEncode("User not found.")}")
-              case Some(existing) =>
-                val passwordChanged = password.nonEmpty
-                val passwordHash = if passwordChanged then passwordService.hash(password) else existing.passwordHash
-                val updated = existing.copy(
-                  username = username,
-                  passwordHash = passwordHash,
-                  role = role,
-                  enabled = enabled,
-                  groups = userGroups
-                )
-                val changedFields = List(
-                  if existing.username != username then Some(s"username: '${existing.username}' -> '$username'") else None,
-                  if existing.role != role then Some(s"role: ${existing.role} -> $role") else None,
-                  if existing.enabled != enabled then Some(s"enabled: ${existing.enabled} -> $enabled") else None,
-                  if existing.groups != userGroups then Some(s"groups: [${existing.groups.mkString(",")}] -> [${userGroups.mkString(",")}]") else None,
-                  if passwordChanged then Some("password: changed") else None
-                ).flatten
-
-                userStore.save(updated) match
-                  case Right(_) =>
-                    val changesSummary = if changedFields.nonEmpty then changedFields.mkString(", ") else "none"
-                    logger.info(s"Admin '${adminUser.username}' updated user '${existing.username}' (id: '$id') from IP $ip - changed fields: [$changesSummary]")
-                    if password.nonEmpty || existing.role != role || !enabled then
-                      sessionStore.deleteAllForUser(existing.id)
-                    (StatusCode.SeeOther, s"/admin/users?msg=${urlEncode(s"User '$username' updated successfully.")}")
-                  case Left(err) =>
-                    (StatusCode.SeeOther, s"/admin/users?edit=${urlEncode(id)}&err=${urlEncode(err)}")
+              validationError match
+                case Some(message) => Right(failed(message))
+                case None =>
+                  try
+                    val passwordHash = if password.nonEmpty then passwordService.hash(password) else existing.get.passwordHash
+                    val user = existing match
+                      case Some(original) => original.copy(username = username, passwordHash = passwordHash, role = role, enabled = enabled, groups = userGroups)
+                      case None => User(username = username, passwordHash = passwordHash, role = role, enabled = enabled, groups = userGroups)
+                    val result =
+                      if existing.isDefined then userStore.save(user)
+                      else if isInitial then userStore.initializeAdmin(user, setupToken)
+                      else userStore.add(user)
+                    result match
+                      case Left(message) => Right(failed(message))
+                      case Right(saved) =>
+                        val adminName = adminOpt.map(_.username).getOrElse("unknown")
+                        existing match
+                          case Some(original) =>
+                            val changedFields = List(
+                              Option.when(original.username != username)(s"username: '${original.username}' -> '$username'"),
+                              Option.when(original.role != role)(s"role: ${original.role} -> $role"),
+                              Option.when(original.enabled != enabled)(s"enabled: ${original.enabled} -> $enabled"),
+                              Option.when(original.groups != userGroups)(s"groups: [${original.groups.mkString(",")}] -> [${userGroups.mkString(",")}]"),
+                              Option.when(password.nonEmpty)("password: changed")
+                            ).flatten
+                            val changesSummary = if changedFields.nonEmpty then changedFields.mkString(", ") else "none"
+                            logger.info(s"Admin '$adminName' updated user '${original.username}' (id: '${saved.id}') from IP $ip - changed fields: [$changesSummary]")
+                            if password.nonEmpty || original.role != role || !enabled then sessionStore.deleteAllForUser(saved.id)
+                          case None if isInitial =>
+                            logger.info(s"Initial admin user '$username' (id: '${saved.id}', role: ${saved.role}, enabled: ${saved.enabled}) created from IP $ip")
+                          case None =>
+                            logger.info(s"Admin '$adminName' created user '$username' (id: '${saved.id}', role: ${saved.role}, groups: [${userGroups.mkString(",")}], enabled: ${saved.enabled}) from IP $ip")
+                        val message = if existing.isDefined then s"User '$username' updated successfully."
+                          else s"User '$username' created successfully.${if isInitial then " Please log in." else ""}"
+                        val destination = if isInitial then "/login" else "/admin/users"
+                        Right((StatusCode.SeeOther, Some(s"$destination?msg=${urlEncode(message)}"), ""))
+                  catch
+                    case scala.util.control.NonFatal(_) =>
+                      Right(failed("The user could not be saved. Please try again.", StatusCode.InternalServerError))
         }
       }
 
@@ -318,7 +288,6 @@ class UserAdminEndpoints @Inject()(
     List(
       setupEndpoint,
       viewUsersEndpoint,
-      createUserEndpoint,
-      editUserEndpoint,
+      saveUserEndpoint,
       deleteUserEndpoint
     )

@@ -44,10 +44,18 @@ object UserAdminPage:
     editingUserId: Option[String] = None,
     message: Option[String] = None,
     error: Option[String] = None,
-    knownGroups: Set[String] = Set("Default")
+    knownGroups: Set[String] = Set("Default"),
+    submitted: Option[Map[String, String]] = None
   ): String =
     val editingUser = editingUserId.flatMap(id => users.find(_.id == id))
-    val isEdit = editingUser.isDefined
+    val isEdit = editingUserId.isDefined
+    def field(key: String, default: String = ""): String = submitted.fold(default)(_.getOrElse(key, ""))
+    val selectedRole = submitted.map(data => data.getOrElse("role", data.getOrElse("roles", "viewer")))
+      .getOrElse(editingUser.fold(if users.isEmpty then "admin" else "viewer")(_.role.toString.toLowerCase))
+    def selectedGroup(group: String): Boolean = submitted.fold(editingUser.exists(_.groups.contains(group))) { data =>
+      data.get(s"group_$group").exists(Set("true", "1", "on")) || data.get("groups").contains(group)
+    }
+    val groupChoices = knownGroups ++ submitted.toSeq.flatMap(_.keys.collect { case key if key.startsWith("group_") => key.stripPrefix("group_") })
 
     doctype("html")(
       html(lang := "en")(
@@ -130,12 +138,13 @@ object UserAdminPage:
               ),
 
               div(cls := "card", id := "user-form")(
-                h2(if isEdit then s"Edit User: ${editingUser.get.username}" else "Add New User"),
+                h2(if isEdit then s"Edit User: ${editingUser.map(_.username).getOrElse(field("username"))}" else "Add New User"),
                 form(
                   method := "post",
-                  action := (if isEdit then "/admin/users/edit" else "/admin/users/create")
+                  action := "/admin/users"
                 )(
-                  editingUser.map(u => input(tpe := "hidden", name := "id", value := u.id)),
+                  input(tpe := "hidden", name := "operation", value := (if isEdit then "edit" else "create")),
+                  if isEdit then input(tpe := "hidden", name := "id", value := field("id", editingUser.fold("")(_.id))) else frag(),
 
                   div(cls := "form-group")(
                     label(attr("for") := "username")("Username"),
@@ -144,7 +153,7 @@ object UserAdminPage:
                       id := "username",
                       name := "username",
                       required,
-                      value := editingUser.map(_.username).getOrElse("")
+                      value := field("username", editingUser.map(_.username).getOrElse(""))
                     )
                   ),
 
@@ -185,7 +194,7 @@ object UserAdminPage:
                       Role.values.map { r =>
                         option(
                           value := r.toString.toLowerCase,
-                          if editingUser.exists(_.role == r) || (editingUser.isEmpty && r == (if users.isEmpty then Role.Admin else Role.Viewer)) then selected else cls := ""
+                          if r.toString.equalsIgnoreCase(selectedRole) then selected else cls := ""
                         )(r.toString)
                       }
                     ),
@@ -209,13 +218,13 @@ object UserAdminPage:
                       "Assign this user to zero or more groups (non-admin users only)."
                     ),
                     div(cls := "groups-checkbox-list", style := "display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px;")(
-                      knownGroups.toSeq.sorted.map { g =>
+                      groupChoices.toSeq.sorted.map { g =>
                         label(cls := "checkbox-inline", style := "display: inline-flex; align-items: center; gap: 4px; margin-right: 8px;")(
                           input(
                             tpe := "checkbox",
                             name := s"group_$g",
                             value := "true",
-                            if editingUser.exists(_.groups.contains(g)) then checked else cls := ""
+                            if selectedGroup(g) then checked else cls := ""
                           ),
                           span(g)
                         )
@@ -227,6 +236,7 @@ object UserAdminPage:
                         tpe := "text",
                         id := "newGroup",
                         name := "newGroup",
+                        value := field("newGroup"),
                         placeholder := "e.g. Field Operations"
                       ),
                       p(cls := "form-help")(
@@ -241,7 +251,7 @@ object UserAdminPage:
                         tpe := "checkbox",
                         name := "enabled",
                         value := "true",
-                        if editingUser.forall(_.enabled) then checked else cls := ""
+                        if submitted.fold(editingUser.forall(_.enabled))(_.get("enabled").contains("true")) then checked else cls := ""
                       ),
                       span(" Account is enabled (can log in)")
                     )

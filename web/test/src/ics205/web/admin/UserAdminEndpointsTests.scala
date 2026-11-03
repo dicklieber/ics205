@@ -74,7 +74,43 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       assert(!body.contains("name=\"username\""))
     }
 
-  test("POST /admin/users/create when no users exist creates initial admin user and redirects to /login"):
+  test("shared user save enforces setup and administrator authorization for both operations"):
+    withContext { (_, userStore, sessionStore, _, _, _, _, app) =>
+      def save(fields: Map[String, String], cookie: Option[String] = None) =
+        val request = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
+          .withEntity(UrlForm(fields.toSeq*))
+        app.run(cookie.fold(request)(value => request.putHeaders(Header.Raw(CIString("Cookie"), value)))).unsafeRunSync()
+      val token = userStore.initialSetupToken.get
+      assertEquals(save(Map("operation" -> "create", "username" -> "attacker")).status, Status.Forbidden)
+      assertEquals(save(Map("operation" -> "edit", "id" -> "missing", "bootstrapToken" -> token)).status, Status.Forbidden)
+      assertEquals(userStore.all().size, 0)
+      val viewer = User("viewer", "hash", Role.Viewer, id = "viewer-id")
+      userStore.add(viewer)
+      val session = sessionStore.create(viewer.id)
+      for operation <- Seq("create", "edit") do
+        val fields = Map("operation" -> operation, "username" -> "changed", "bootstrapToken" -> token) ++
+          (if operation == "edit" then Map("id" -> viewer.id) else Map.empty[String, String])
+        assertEquals(save(fields).status, Status.Unauthorized)
+        assertEquals(save(fields, Some(s"session=${session.id}")).status, Status.Forbidden)
+      assertEquals(userStore.all(), Seq(viewer))
+    }
+
+  test("initial setup validation uses the same populated create form"):
+    withContext { (_, userStore, _, _, _, _, _, app) =>
+      val token = userStore.initialSetupToken.get
+      val response = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"ics205-setup=$token"))
+        .withEntity(UrlForm("operation" -> "create", "username" -> "first-admin", "password" -> "short", "confirmPassword" -> "short", "role" -> "admin"))).unsafeRunSync()
+      assertEquals(response.status, Status.UnprocessableEntity)
+      val html = response.as[String].unsafeRunSync()
+      assert(html.contains("value=\"first-admin\""))
+      assert(html.contains("action=\"/admin/users\""))
+      assert(html.contains("Password must be at least 8 characters."))
+      assert(!html.contains(token))
+      assertEquals(userStore.all().size, 0)
+    }
+
+  test("POST /admin/users when no users exist creates initial admin user and redirects to /login"):
     withContext { (tempDir, userStore, _, passwordService, _, _, _, app) =>
       assert(!os.exists(tempDir / "admin" / "users.json"))
       val form = UrlForm(
@@ -84,7 +120,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
         "confirmPassword" -> "adminpass123",
         "role" -> "admin"
       )
-      val req = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+      val req = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(form)
       val res = app.run(req).unsafeRunSync()
       assertEquals(res.status, Status.SeeOther)
@@ -116,7 +152,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       val body = page.as[String].unsafeRunSync()
       assert(body.contains("name=\"username\""))
       assert(!body.contains(token))
-      val created = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+      val created = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .putHeaders(cookie)
         .withEntity(UrlForm("username" -> "first", "password" -> "password123", "confirmPassword" -> "password123"))).unsafeRunSync()
       assertEquals(created.status, Status.SeeOther)
@@ -131,7 +167,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
   test("initial setup rejects absent and incorrect bootstrap tokens"):
     withContext { (_, userStore, _, _, _, _, _, app) =>
       for token <- Seq("", "incorrect") do
-        val response = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+        val response = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
           .withEntity(UrlForm("username" -> "attacker", "password" -> "password123", "confirmPassword" -> "password123", "bootstrapToken" -> token))).unsafeRunSync()
         assertEquals(response.status, Status.Forbidden)
         assertEquals(userStore.all(), Seq.empty)
@@ -193,7 +229,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
 
       assertEquals(res.status, Status.Ok)
       assert(body.contains("Edit User: targetuser"))
-      assert(body.contains("action=\"/admin/users/edit\""))
+      assert(body.contains("action=\"/admin/users\""))
       assert(body.contains("value=\"targetuser\""))
       assert(body.contains("id=\"password\""))
       assert(body.contains("id=\"confirmPassword\""))
@@ -201,7 +237,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       assert(body.contains("selected"))
     }
 
-  test("POST /admin/users/create creates a new user and hashes password"):
+  test("POST /admin/users creates a new user and hashes password"):
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("adminpass")
       userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
@@ -216,7 +252,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
           "role" -> "editor",
           "enabled" -> "true"
         )
-        val req = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+        val req = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
           .withEntity(form)
           .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
 
@@ -236,46 +272,80 @@ class UserAdminEndpointsTests extends munit.FunSuite:
         ics205.util.Ids.revertToRandom()
     }
 
-  test("POST /admin/users/create rejects empty username or password"):
+  test("POST /admin/users rejects empty username or password"):
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("adminpass")
       userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
       val session = authService.authenticate("admin", "adminpass").get
 
       val formNoUser = UrlForm("username" -> "", "password" -> "secret123")
-      val req1 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+      val req1 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(formNoUser)
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       val res1 = app.run(req1).unsafeRunSync()
-      assertEquals(res1.status, Status.SeeOther)
-      assert(res1.headers.get(CIString("Location")).get.head.value.contains("err="))
+      assertEquals(res1.status, Status.UnprocessableEntity)
+      assert(res1.as[String].unsafeRunSync().contains("Username cannot be empty."))
 
       val formNoPass = UrlForm("username" -> "testuser", "password" -> "")
-      val req2 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+      val req2 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(formNoPass)
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       val res2 = app.run(req2).unsafeRunSync()
-      assertEquals(res2.status, Status.SeeOther)
-      assert(res2.headers.get(CIString("Location")).get.head.value.contains("err="))
+      assertEquals(res2.status, Status.UnprocessableEntity)
+      assert(res2.as[String].unsafeRunSync().contains("Password cannot be empty."))
 
       val formShortPass = UrlForm("username" -> "testuser", "password" -> "short", "confirmPassword" -> "short")
-      val req3 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+      val req3 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(formShortPass)
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       val res3 = app.run(req3).unsafeRunSync()
-      assertEquals(res3.status, Status.SeeOther)
-      assert(res3.headers.get(CIString("Location")).get.head.value.contains("err="))
+      assertEquals(res3.status, Status.UnprocessableEntity)
+      assert(res3.as[String].unsafeRunSync().contains("Password must be at least 8 characters."))
 
       val formMismatchPass = UrlForm("username" -> "testuser", "password" -> "password123", "confirmPassword" -> "different123")
-      val req4 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+      val req4 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(formMismatchPass)
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       val res4 = app.run(req4).unsafeRunSync()
-      assertEquals(res4.status, Status.SeeOther)
-      assert(res4.headers.get(CIString("Location")).get.head.value.contains("Passwords+do+not+match"))
+      assertEquals(res4.status, Status.UnprocessableEntity)
+      assert(res4.as[String].unsafeRunSync().contains("Passwords do not match."))
     }
 
-  test("POST /admin/users/edit rejects short or mismatched passwords when updated"):
+  test("failed new-user creation preserves entered username, role, groups, and enabled state"):
+    withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
+      userStore.add(User("admin", passwordService.hash("admin-password"), Role.Admin, id = "admin-id"))
+      val session = authService.authenticate("admin", "admin-password").get
+      for (username, password, confirmation, enabled) <- Seq(
+        ("rob", "x", "x", true),
+        ("rob", "password123", "different123", false),
+        ("admin", "password123", "password123", true)
+      ) do
+        val fields = Map("username" -> username, "password" -> password, "confirmPassword" -> confirmation,
+          "role" -> "editor", "group_Cmt7" -> "true", "group_Default" -> "true", "newGroup" -> "new team") ++
+          (if enabled then Map("enabled" -> "true") else Map.empty[String, String])
+        val response = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
+          .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+          .withEntity(UrlForm(fields.toSeq*))).unsafeRunSync()
+        assertEquals(response.status, Status.UnprocessableEntity)
+        assert(response.headers.get(CIString("Location")).isEmpty)
+        assertEquals(response.headers.get(CIString("Cache-Control")).map(_.head.value), Some("no-store"))
+        val html = response.as[String].unsafeRunSync()
+        def input(name: String): String =
+          ("<input[^>]*name=\"" + java.util.regex.Pattern.quote(name) + "\"[^>]*>").r.findFirstIn(html).get
+        assert(input("username").contains(s"value=\"$username\""))
+        assert(html.contains("value=\"editor\" selected"))
+        assert(input("group_Cmt7").contains("checked"))
+        assert(input("group_Default").contains("checked"))
+        assertEquals(input("enabled").contains("checked"), enabled)
+        assert(input("newGroup").contains("value=\"new team\""))
+        assert(html.contains("action=\"/admin/users\""))
+        assert(html.contains("Add New User"))
+        assert(!html.contains("Update User"))
+        assert(!input("password").contains("value="))
+        assertEquals(userStore.all().size, 1)
+    }
+
+  test("POST /admin/users rejects short or mismatched passwords when updated"):
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("originalpass")
       userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
@@ -290,12 +360,12 @@ class UserAdminEndpointsTests extends munit.FunSuite:
         "role" -> "user",
         "enabled" -> "true"
       )
-      val req1 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
+      val req1 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(editFormShort)
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       val res1 = app.run(req1).unsafeRunSync()
-      assertEquals(res1.status, Status.SeeOther)
-      assert(res1.headers.get(CIString("Location")).get.head.value.contains("err="))
+      assertEquals(res1.status, Status.UnprocessableEntity)
+      assert(res1.as[String].unsafeRunSync().contains("Password must be at least 8 characters."))
 
       val editFormMismatch = UrlForm(
         "id" -> "u-edit",
@@ -305,15 +375,75 @@ class UserAdminEndpointsTests extends munit.FunSuite:
         "role" -> "user",
         "enabled" -> "true"
       )
-      val req2 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
+      val req2 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(editFormMismatch)
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       val res2 = app.run(req2).unsafeRunSync()
-      assertEquals(res2.status, Status.SeeOther)
-      assert(res2.headers.get(CIString("Location")).get.head.value.contains("Passwords+do+not+match"))
+      assertEquals(res2.status, Status.UnprocessableEntity)
+      assert(res2.as[String].unsafeRunSync().contains("Passwords do not match."))
     }
 
-  test("POST /admin/users/edit updates user roles, enabled state, and optionally password, revoking active sessions"):
+  test("failed user edits preserve submitted fields without reflecting passwords or changing stored users"):
+    withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
+      val admin = User("admin", passwordService.hash("admin-password"), Role.Admin, id = "admin-id")
+      val target = User("original", "original-hash", Role.Viewer, id = "target-id", groups = Set("Old Group"))
+      userStore.add(admin)
+      userStore.add(target)
+      val session = authService.authenticate("admin", "admin-password").get
+      val cases = Seq(
+        ("renamed", "tiny", "tiny", "Password must be at least 8 characters."),
+        ("renamed", "first-password", "other-password", "Passwords do not match."),
+        ("", "", "", "Username cannot be empty."),
+        ("admin", "", "", "already taken")
+      )
+      for (username, password, confirmation, error) <- cases do
+        val response = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
+          .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+          .withEntity(UrlForm(
+            "id" -> target.id, "username" -> username,
+            "password" -> password, "confirmPassword" -> confirmation,
+            "role" -> "editor", "group_New Group" -> "true", "newGroup" -> "another group"
+          ))).unsafeRunSync()
+        assertEquals(response.status, Status.UnprocessableEntity)
+        assert(response.headers.get(CIString("Location")).isEmpty)
+        assertEquals(response.headers.get(CIString("Cache-Control")).map(_.head.value), Some("no-store"))
+        val html = response.as[String].unsafeRunSync()
+        assert(html.contains(error))
+        def input(name: String): String =
+          ("<input[^>]*name=\"" + java.util.regex.Pattern.quote(name) + "\"[^>]*>").r.findFirstIn(html).get
+        assert(input("username").contains(s"value=\"$username\""))
+        assert(html.contains("value=\"editor\" selected"))
+        assert(input("group_New Group").contains("checked"))
+        assert(!input("group_Old Group").contains("checked"))
+        assert(!input("enabled").contains("checked"))
+        assert(html.contains("name=\"newGroup\" value=\"another group\""))
+        assert(!html.contains("original-hash"))
+        if password.nonEmpty then assert(!html.contains(s"value=\"$password\""))
+        assertEquals(userStore.findById(target.id), Some(target))
+    }
+
+  test("user save IO errors preserve submitted fields and show a recoverable error"):
+    withContext { (directory, userStore, _, passwordService, authService, _, _, app) =>
+      userStore.add(User("admin", passwordService.hash("admin-password"), Role.Admin, id = "admin-id"))
+      val original = User("original", "hash", Role.Viewer, id = "target-id")
+      userStore.add(original)
+      val session = authService.authenticate("admin", "admin-password").get
+      val path = directory / "admin" / "users.json"
+      os.remove(path)
+      os.makeDir.all(path)
+      os.write(path / "block-replacement", "blocked")
+      val response = app.run(Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
+        .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
+        .withEntity(UrlForm("id" -> original.id, "username" -> "kept-name", "role" -> "editor", "enabled" -> "true", "newGroup" -> "kept group"))).unsafeRunSync()
+      assertEquals(response.status, Status.InternalServerError)
+      val html = response.as[String].unsafeRunSync()
+      assert(html.contains("The user could not be saved. Please try again."))
+      assert(html.contains("value=\"kept-name\""))
+      assert(html.contains("value=\"kept group\""))
+      assertEquals(userStore.findById(original.id), Some(original))
+    }
+
+  test("POST /admin/users updates user roles, enabled state, and optionally password, revoking active sessions"):
     withContext { (_, userStore, sessionStore, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("originalpass")
       userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
@@ -331,7 +461,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
         "role" -> "editor"
         // enabled omitted -> false
       )
-      val req1 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
+      val req1 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(editForm1)
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${adminSession.id}"))
       val res1 = app.run(req1).unsafeRunSync()
@@ -358,7 +488,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
         "role" -> "admin",
         "enabled" -> "true"
       )
-      val req2 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
+      val req2 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(editForm2)
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${adminSession.id}"))
       val res2 = app.run(req2).unsafeRunSync()
@@ -392,7 +522,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
       assertEquals(sessionStore.find(delSession.id), None)
     }
 
-  test("POST /admin/users/create and /edit assign groups and correct capitalization to Caps words"):
+  test("POST /admin/users and /edit assign groups and correct capitalization to Caps words"):
     withContext { (_, userStore, _, passwordService, authService, _, _, app) =>
       val hash = passwordService.hash("password")
       userStore.add(User("admin", hash, Role.Admin, enabled = true, id = "u-admin"))
@@ -407,7 +537,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
         "group_Default" -> "true",
         "newGroup" -> "hello world"
       )
-      val req1 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+      val req1 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(createForm)
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       val res1 = app.run(req1).unsafeRunSync()
@@ -424,7 +554,7 @@ class UserAdminEndpointsTests extends munit.FunSuite:
         "group_Hello World" -> "true",
         "newGroup" -> "ARES OPERATIONS"
       )
-      val req2 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
+      val req2 = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(editForm)
         .putHeaders(Header.Raw(CIString("Cookie"), s"session=${session.id}"))
       val res2 = app.run(req2).unsafeRunSync()

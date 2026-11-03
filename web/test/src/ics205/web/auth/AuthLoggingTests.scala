@@ -177,7 +177,7 @@ class AuthLoggingTests extends munit.FunSuite:
 
       // Initial admin creation
       val formInit = UrlForm("bootstrapToken" -> userStore.initialSetupToken.get, "username" -> "initialadmin", "password" -> "password123", "confirmPassword" -> "password123")
-      val reqInit = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+      val reqInit = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(formInit)
         .putHeaders(Header.Raw(CIString("X-Forwarded-For"), "172.16.0.10"))
       val resInit = app.run(reqInit).unsafeRunSync()
@@ -193,7 +193,7 @@ class AuthLoggingTests extends munit.FunSuite:
       events.clear()
 
       val formAdd = UrlForm("username" -> "operator1", "password" -> "pass123456", "confirmPassword" -> "pass123456", "role" -> "editor", "enabled" -> "true")
-      val reqAdd = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/create"))
+      val reqAdd = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(formAdd)
         .putHeaders(
           Header.Raw(CIString("Cookie"), s"session=${session.id}"),
@@ -274,7 +274,7 @@ class AuthLoggingTests extends munit.FunSuite:
         "role" -> "editor",
         "enabled" -> "true"
       )
-      val reqEdit = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
+      val reqEdit = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(formEdit)
         .putHeaders(
           Header.Raw(CIString("Cookie"), s"session=${session.id}"),
@@ -304,7 +304,7 @@ class AuthLoggingTests extends munit.FunSuite:
         "role" -> "admin",
         "enabled" -> "false"
       )
-      val reqEditNoPass = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users/edit"))
+      val reqEditNoPass = Request[IO](Method.POST, Uri.unsafeFromString("/admin/users"))
         .withEntity(formEditNoPass)
         .putHeaders(
           Header.Raw(CIString("Cookie"), s"session=${session.id}"),
