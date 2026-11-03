@@ -96,7 +96,14 @@ if [[ -z "${TARGET_HOST}" ]]; then
 fi
 
 # Configure SSH options
-SSH_OPTS=()
+# Bound connection setup and detect an unresponsive server after connecting.
+# Keep interactive authentication available for password-based SSH accounts.
+SSH_OPTS=(
+  -o ConnectTimeout=10
+  -o ConnectionAttempts=1
+  -o ServerAliveInterval=5
+  -o ServerAliveCountMax=2
+)
 if [[ -n "${SSH_PORT}" ]]; then
   SSH_OPTS+=("-p" "${SSH_PORT}")
 fi
@@ -112,7 +119,13 @@ echo "=================================================="
 
 # 1. Test SSH connectivity
 echo "--> Testing SSH connection to ${TARGET_HOST}..."
-ssh "${SSH_OPTS[@]}" "${TARGET_HOST}" "uname -s" >/dev/null
+if ! ssh "${SSH_OPTS[@]}" -n "${TARGET_HOST}" "uname -s" >/dev/null; then
+  echo "Error: SSH connection test failed for ${TARGET_HOST}. No uninstall was performed." >&2
+  echo "Check the host, SSH port, network/VPN connection, and SSH credentials." >&2
+  echo "For connection details, retry SSH with -vvv (and the same -p/-i options, if used)." >&2
+  exit 1
+fi
+echo "--> SSH connection successful."
 
 LOCAL_REMOTE_SCRIPT=$(mktemp)
 cat << 'REMOTESCRIPT' > "${LOCAL_REMOTE_SCRIPT}"
