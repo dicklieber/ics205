@@ -76,9 +76,9 @@ object core extends ScalaModule with BuildInfo with ScoverageModule:
     mvn"net.java.dev.jna:jna:5.16.0",
     mvn"com.lihaoyi::os-lib:0.11.6",
     mvn"com.typesafe.scala-logging::scala-logging:3.9.5",
-    mvn"org.apache.logging.log4j:log4j-slf4j2-impl:2.25.3",
-    mvn"org.apache.logging.log4j:log4j-core:2.25.3",
-    mvn"org.apache.commons:commons-lang3:3.17.0",
+    mvn"org.apache.logging.log4j:log4j-slf4j2-impl:2.25.5",
+    mvn"org.apache.logging.log4j:log4j-core:2.25.5",
+    mvn"org.apache.commons:commons-lang3:3.18.0",
     mvn"com.github.andyglow::typesafe-config-scala:2.0.0",
     mvn"io.github.classgraph:classgraph:4.8.195"
   )
@@ -107,13 +107,17 @@ object web extends ScalaModule with ScoverageModule:
     mvn"net.codingwell::scala-guice:7.0.0",
     mvn"com.google.inject:guice:7.0.0",
     mvn"com.google.inject.extensions:guice-assistedinject:7.0.0",
+    // Override Guice's older transitive Guava (CVE-2023-2976).
+    mvn"com.google.guava:guava:32.0.1-jre",
     mvn"io.github.classgraph:classgraph:4.8.195",
     mvn"com.softwaremill.sttp.tapir::tapir-http4s-server:1.11.44",
     mvn"com.softwaremill.sttp.tapir::tapir-json-circe:1.11.44",
     mvn"com.softwaremill.sttp.tapir::tapir-swagger-ui-bundle:1.11.44",
-    mvn"org.http4s::http4s-ember-server:0.23.30",
-    mvn"com.fasterxml.jackson.core:jackson-databind:2.20.1",
-    mvn"com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.20.1",
+    mvn"org.http4s::http4s-ember-server:0.23.38",
+    mvn"com.fasterxml.jackson.core:jackson-databind:2.21.8",
+    mvn"com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.21.8",
+    // Align the XML module pulled in transitively by profig with Databind.
+    mvn"com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.21.8",
     mvn"com.lihaoyi::scalatags:0.13.1"
   )
   def mainClass = Some("ics205.web.Main")
