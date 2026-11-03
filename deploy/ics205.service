@@ -1,6 +1,6 @@
 [Unit]
 Description=ICS-205 Incident Radio Communications Plan Service
-Documentation=https://github.com/dlieber/ics205
+Documentation=https://github.com/dicklieber/ics205
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=60s
